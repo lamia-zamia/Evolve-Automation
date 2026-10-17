@@ -27,7 +27,13 @@ function makeGame({ root, onCap = {} } = {}) {
       if (method !== "on_cap") return { ok: false, reason: "unknown-method" };
       state.invoked.push(handle.elementId);
       const override = onCap[handle.elementId];
-      if (override !== undefined) return { ok: true, value: override() };
+      if (override !== undefined) {
+        try {
+          return { ok: true, value: override() };
+        } catch {
+          return { ok: false, reason: "threw" };
+        }
+      }
       // The upstream default: `global[action][type].count`, read live.
       const address = state.addresses.get(handle.elementId);
       return {
@@ -210,6 +216,25 @@ function makeCatalog(switches) {
   const { state, reader } = makeGame({
     root: { city: { factory: { count: 4, on: 2 } } },
     onCap: { "city-factory": () => "🥚" },
+  });
+  state.addresses = new Map([
+    ["city-factory", { region: "city", type: "factory" }],
+  ]);
+  state.generations.set("city-factory", 1);
+  assert.equal(
+    reader.read(makeCatalog([["city-factory", "city", "factory"]])).size,
+    0,
+  );
+}
+// A thrown native method is the same unavailable observation as a failed control invocation.
+{
+  const { state, reader } = makeGame({
+    root: { city: { factory: { count: 4, on: 2 } } },
+    onCap: {
+      "city-factory": () => {
+        throw new Error("native row unavailable");
+      },
+    },
   });
   state.addresses = new Map([
     ["city-factory", { region: "city", type: "factory" }],

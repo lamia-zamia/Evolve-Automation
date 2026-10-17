@@ -403,6 +403,8 @@ const cityAndSpace = {
   buildingUnlocks: {
     unlocked: new Set(["city-farm", "city-mine", "space-titan_spaceport"]),
     regions: new Set(["city", "space"]),
+  },
+  buildingSwitches: {
     switches: new Set(["city-mine"]),
     // Native `city-mine` has a switch; the other two actions do not.
     states: new Map([["city-mine", { on: 4, off: 1 }]]),
@@ -552,6 +554,8 @@ assert.equal(
     buildingUnlocks: {
       unlocked: new Set(["city-mine"]),
       regions: new Set(["city"]),
+    },
+    buildingSwitches: {
       switches: new Set(["city-mine"]),
       states: new Map(),
     },

@@ -12322,7 +12322,7 @@
         "research.observation.invalidated.root-replacement"
       ), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample(), resetBuildControlCoverageReader();
     });
-    let readBuildingUnlocks = (regions) => {
+    let readBuildingOffers = (regions) => {
       let key = buildingOfferScopeKey(regions), catalog = buildingUnlocks.read(regions);
       if (catalog === void 0) {
         for (let [establishedKey, sample] of establishedBuildingOffers)
@@ -12338,11 +12338,9 @@
         })
       ), Object.freeze({
         unlocked: catalog.unlocked,
-        regions: catalog.regions,
-        switches: new Set(catalog.switches.keys()),
-        states: buildingSwitchStates.read(catalog)
+        regions: catalog.regions
       });
-    }, readEstablishedBuildingUnlocks = (regions) => {
+    }, readEstablishedBuildingCatalog = (regions) => {
       let candidates = [...establishedBuildingOffers.values()].reverse(), currentEpoch = epoch.read();
       for (let exactOnly of [!0, !1])
         for (let sample of candidates) {
@@ -12350,14 +12348,18 @@
           if (requestedRegions.size === regions.size !== exactOnly || [...regions].some((region) => !requestedRegions.has(region)) || sample.epoch !== currentEpoch) continue;
           let catalog = sample.catalog;
           if ([...regions].every((region) => catalog.regions.has(region)))
-            return Object.freeze({
-              unlocked: catalog.unlocked,
-              regions: catalog.regions,
-              switches: new Set(catalog.switches.keys()),
-              states: buildingSwitchStates.read(catalog)
-            });
+            return catalog;
         }
-    }, readCapturedBuildingUnlocked = (actionId, region) => readEstablishedBuildingUnlocks(/* @__PURE__ */ new Set([region]))?.unlocked.has(actionId), readBuildingCapacity = (actionIds) => {
+    }, readEstablishedBuildingOffers = (regions) => {
+      let catalog = readEstablishedBuildingCatalog(regions);
+      return catalog === void 0 ? void 0 : Object.freeze({ unlocked: catalog.unlocked, regions: catalog.regions });
+    }, readEstablishedBuildingSwitches = (regions) => {
+      let catalog = readEstablishedBuildingCatalog(regions);
+      return catalog === void 0 ? void 0 : Object.freeze({
+        switches: new Set(catalog.switches.keys()),
+        states: buildingSwitchStates.read(catalog)
+      });
+    }, readCapturedBuildingUnlocked = (actionId, region) => readEstablishedBuildingOffers(/* @__PURE__ */ new Set([region]))?.unlocked.has(actionId), readBuildingCapacity = (actionIds) => {
       let result = /* @__PURE__ */ new Map();
       for (let actionId of actionIds)
         result.set(actionId, buildCapacity?.canBuildAnother(actionId));
@@ -12375,13 +12377,13 @@
       readKnowledge,
       ...dependencies.costs === void 0 ? {} : { costs: dependencies.costs },
       ...onSkipped === void 0 ? {} : { onSkipped }
-    }), readPolicy = getBuildingManager === void 0 ? createProgressionCapturedPolicy(readBuildingUnlocks) : createScriptBuildPolicyReader({
+    }), readPolicy = getBuildingManager === void 0 ? createProgressionCapturedPolicy(readBuildingOffers) : createScriptBuildPolicyReader({
       getBuildingManager,
       getSettings: readSettings,
       ...onSkipped === void 0 ? {} : { onSkipped }
     }), readEstablishedBuildPolicy = getBuildingManager === void 0 ? () => {
       let establishedOffersAvailable = !0, policy = createProgressionCapturedPolicy((regions) => {
-        let catalog = readEstablishedBuildingUnlocks(regions);
+        let catalog = readEstablishedBuildingOffers(regions);
         return establishedOffersAvailable = catalog !== void 0, catalog;
       })();
       return establishedOffersAvailable ? policy : void 0;
@@ -12470,7 +12472,7 @@
       if (policy === void 0) return;
       let targets = policy.buildings;
       if (getBuildingManager === void 0 || targets.length === 0) return targets;
-      let regions = new Set(targets.map((target) => target.region)), offers = readEstablishedBuildingUnlocks(regions);
+      let regions = new Set(targets.map((target) => target.region)), offers = readEstablishedBuildingOffers(regions);
       if (offers !== void 0)
         return Object.freeze(
           targets.filter(
@@ -12483,7 +12485,7 @@
         return Object.freeze([]);
       ensureBuildControls();
       let targets = readPolicy().buildings;
-      return getBuildingManager !== void 0 && targets.length > 0 && readBuildingUnlocks(new Set(targets.map((target) => target.region))), readEstablishedStorageBuildTargets() ?? Object.freeze([]);
+      return getBuildingManager !== void 0 && targets.length > 0 && readBuildingOffers(new Set(targets.map((target) => target.region))), readEstablishedStorageBuildTargets() ?? Object.freeze([]);
     };
     function readCanExpandMechBay() {
       return readCapturedMechBayExpansion(!1);
@@ -12496,9 +12498,7 @@
       if (!isRecord(settings)) return;
       if (settings.autoBuild !== !0 || settings.mechBaysFirst !== !0)
         return !1;
-      let targets = establishedOnly ? readEstablishedStorageBuildTargets() : readManagedBuildTargets(), offers = establishedOnly ? readEstablishedBuildingUnlocks(
-        /* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region])
-      ) : readBuildingUnlocks(/* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region]));
+      let targets = establishedOnly ? readEstablishedStorageBuildTargets() : readManagedBuildTargets(), offers = establishedOnly ? readEstablishedBuildingOffers(/* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region])) : readBuildingOffers(/* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region]));
       if (targets === void 0 || offers === void 0 || !offers.regions.has(CAPTURED_MECH_BUILDINGS.region))
         return;
       let root = rootState.readRoot();
@@ -12531,7 +12531,11 @@
         pool: purifierPrice.pool
       });
       if (purifierFits !== !0) return purifierFits;
-      let purifierSwitch = offers.states.get(CAPTURED_MECH_BUILDINGS.purifier);
+      let purifierSwitch = readEstablishedBuildingSwitches(
+        /* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region])
+      )?.states.get(
+        CAPTURED_MECH_BUILDINGS.purifier
+      );
       return purifierSwitch === void 0 ? void 0 : purifierSwitch.off === 0;
     }
     return Object.freeze({
@@ -12554,8 +12558,9 @@
       readProjects: readProjects2,
       readEstablishedProjects,
       resetProjectSample,
-      readBuildingUnlocks,
-      readEstablishedBuildingUnlocks,
+      readBuildingOffers,
+      readEstablishedBuildingOffers,
+      readEstablishedBuildingSwitches,
       readCapturedBuildingUnlocked,
       readBuildingCapacity,
       resetBuildingUnlockSample,
@@ -19435,9 +19440,11 @@
     if (typeof argument != "string") return;
     let parts = splitActionId(argument);
     if (parts === void 0) return;
-    let sample = context?.buildingUnlocks;
-    if (!(sample === void 0 || !sample.regions.has(parts.region)) && sample.unlocked.has(argument) && !(sample.switches?.has(argument) && !sample.states.has(argument)))
-      return sample.states.get(argument)?.[half] ?? 0;
+    let offers = context?.buildingUnlocks;
+    if (offers === void 0 || !offers.regions.has(parts.region) || !offers.unlocked.has(argument)) return;
+    let sample = context?.buildingSwitches;
+    if (sample !== void 0)
+      return sample.switches.has(argument) ? sample.states.get(argument)?.[half] : 0;
   }
   function factorySlots(root) {
     return readCapturedFactoryCapacity(root);
@@ -30487,6 +30494,7 @@
     readGrantedTechs: readConditionGrantedTechs,
     readProjects: readConditionProjects,
     readBuildingUnlocks: readConditionBuildingUnlocks,
+    readBuildingSwitches: readConditionBuildingSwitches,
     readBuildingCapacity: readConditionBuildingCapacity,
     readDemandSample: readConditionDemandSample,
     readTechKnowledge: readConditionTechKnowledge,
@@ -30504,7 +30512,9 @@
           let parts = splitActionId(requirement.argument);
           parts !== void 0 && buildingRegions.add(parts.region);
         }
-        let buildingUnlocks = buildingRegions.size === 0 ? void 0 : readConditionBuildingUnlocks?.(buildingRegions), buildingCosts = /* @__PURE__ */ new Map();
+        let buildingUnlocks = buildingRegions.size === 0 ? void 0 : readConditionBuildingUnlocks?.(buildingRegions), buildingSwitches = !requirements.some(
+          ({ type }) => type === "BuildingEnabled" || type === "BuildingDisabled"
+        ) || buildingUnlocks === void 0 ? void 0 : readConditionBuildingSwitches?.(buildingRegions), buildingCosts = /* @__PURE__ */ new Map();
         for (let requirement of requirements) {
           let buildingId = capturedConditionCostBuildingId(requirement);
           if (buildingId === void 0 || buildingCosts.has(buildingId))
@@ -30524,6 +30534,7 @@
           ...grantedTechs === void 0 ? {} : { grantedTechs },
           ...unlockedProjectIds === void 0 ? {} : { unlockedProjects: unlockedProjectIds },
           ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
+          ...buildingSwitches === void 0 ? {} : { buildingSwitches },
           ...buildingCosts.size === 0 ? {} : { buildingCosts },
           ...buildingCapacity === void 0 ? {} : { buildingCapacity },
           ...storedSettings === void 0 ? {} : { settings: storedSettings },
@@ -30603,6 +30614,7 @@
       readGrantedTechs: dependencies.readGrantedTechs,
       readProjects: dependencies.readOfferedProjects,
       readBuildingUnlocks: dependencies.readBuildingUnlocks,
+      readBuildingSwitches: dependencies.readBuildingSwitches,
       readBuildingCapacity: dependencies.readBuildingCapacity,
       readDemandSample: dependencies.readDemandSample,
       readTechKnowledge: dependencies.readTechKnowledge,
@@ -60163,7 +60175,8 @@ Only continue if you trust the source. Injected code:
       readOfferedTechs: () => progression.sampleOfferedTechs("condition-context"),
       readGrantedTechs: progression.readGrantedTechs,
       readProjects: progression.readProjects,
-      readBuildingUnlocks: progression.readBuildingUnlocks,
+      readBuildingUnlocks: progression.readBuildingOffers,
+      readBuildingSwitches: progression.readEstablishedBuildingSwitches,
       readBuildingCapacity: progression.readBuildingCapacity,
       readDemandSample: () => triggersNeedDemandSample(settingsStore.readRaw()) ? readTriggerDemand() : void 0,
       readTechKnowledge: progression.readKnowledgeRequiredByTechs,
@@ -60197,7 +60210,8 @@ Only continue if you trust the source. Injected code:
       readOfferedTechs: () => progression.sampleOfferedTechs("triggers"),
       readGrantedTechs: progression.readGrantedTechs,
       readOfferedProjects: progression.readProjects,
-      readBuildingUnlocks: progression.readBuildingUnlocks,
+      readBuildingUnlocks: progression.readBuildingOffers,
+      readBuildingSwitches: progression.readEstablishedBuildingSwitches,
       readBuildingCapacity: progression.readBuildingCapacity,
       // The demand-reading conditions need the commitments without the trigger targets; the
       // cycle's own sample includes them, and the conditions are evaluated inside the sampling
@@ -60704,7 +60718,7 @@ Only continue if you trust the source. Injected code:
           endingDay
         );
       },
-      readBuildingResetActions: (regions) => progression.readBuildingUnlocks(new Set(regions))?.unlocked,
+      readBuildingResetActions: (regions) => progression.readBuildingOffers(new Set(regions))?.unlocked,
       closeBioseedModal,
       loadQueuedSettings: queuedSettings.loadQueuedSettings
     }), ensureGeneticsControl = (control, key, minimumLevel) => {

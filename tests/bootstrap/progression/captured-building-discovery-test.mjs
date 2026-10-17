@@ -205,7 +205,13 @@ function makeGame({
     /** One automation cycle's building read, with the per-cycle memo cleared like `runCycle` does. */
     cycle: (...regionKeys) => {
       control.resetBuildingUnlockSample();
-      return control.readBuildingUnlocks(new Set(regionKeys));
+      return control.readBuildingOffers(new Set(regionKeys));
+    },
+    switchCycle: (...regionKeys) => {
+      const regions = new Set(regionKeys);
+      control.resetBuildingUnlockSample();
+      control.readBuildingOffers(regions);
+      return control.readEstablishedBuildingSwitches(regions);
     },
     coverage: (index) =>
       readCapturedBuildControlCoverage(root, index, controls, mechanics),
@@ -508,8 +514,10 @@ for (const rendererCase of [
 
   const first = game.cycle("city");
   assert.deepEqual([...first.unlocked].sort(), ["city-factory", "city-farm"]);
-  assert.deepEqual(first.states.get("city-factory"), { on: 2, off: 3 });
-  assert.equal(first.states.has("city-farm"), false);
+  assert.deepEqual(game.switchCycle("city").states.get("city-factory"), {
+    on: 2,
+    off: 3,
+  });
   assert.equal(game.draws.length, bootstrapDraws);
   assert.equal(
     game.readCounters().domActionReads,
@@ -523,7 +531,7 @@ for (const rendererCase of [
   // Every owning read takes a current native semantic sample, with no panel or DOM-row work.
   for (let cycle = 0; cycle < 5; cycle += 1) {
     game.advance(100);
-    assert.deepEqual(game.cycle("city").states.get("city-factory"), {
+    assert.deepEqual(game.switchCycle("city").states.get("city-factory"), {
       on: 2,
       off: 3,
     });
@@ -533,13 +541,13 @@ for (const rendererCase of [
   // Power moving is not a reason to draw, and neither is the built count moving.
   game.root.city.factory.on = 5;
   game.advance(100);
-  assert.deepEqual(game.cycle("city").states.get("city-factory"), {
+  assert.deepEqual(game.switchCycle("city").states.get("city-factory"), {
     on: 5,
     off: 0,
   });
   game.root.city.factory.count = 9;
   game.advance(100);
-  assert.deepEqual(game.cycle("city").states.get("city-factory"), {
+  assert.deepEqual(game.switchCycle("city").states.get("city-factory"), {
     on: 5,
     off: 4,
   });
@@ -677,7 +685,7 @@ for (const rendererCase of [
   game.root.city.factory = { count: 4, on: 1 };
   game.root.settings.showCity = true;
   game.control.ensureBuildControls();
-  assert.deepEqual(game.cycle("city").states.get("city-factory"), {
+  assert.deepEqual(game.switchCycle("city").states.get("city-factory"), {
     on: 1,
     off: 3,
   });
@@ -688,7 +696,7 @@ for (const rendererCase of [
   game.control.ensureBuildControls();
   game.draws.length = 0;
   game.advance(200);
-  assert.deepEqual(game.cycle("city").states.get("city-factory"), {
+  assert.deepEqual(game.switchCycle("city").states.get("city-factory"), {
     on: 1,
     off: 3,
   });

@@ -56,8 +56,9 @@ import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type {
+  BuildingOfferSample,
+  BuildingSwitchSample,
   BuildingUnlockCatalog,
-  BuildingUnlockSample,
 } from "../ports/game-building-unlocks.ts";
 import { createCapturedBuildingUnlocks } from "../adapters/evolve/progression/build/captured-building-unlocks.ts";
 import { createCapturedBuildingSwitchStates } from "../adapters/evolve/progression/build/captured-building-switch-states.ts";
@@ -217,13 +218,13 @@ export interface CapturedProgressionControl {
    * Reads native semantic availability for the named regions and establishes that current offer
    * observation. It does not draw a panel.
    */
-  readonly readBuildingUnlocks: (
+  readonly readBuildingOffers: (
     regions: ReadonlySet<string>,
-  ) => Readonly<BuildingUnlockSample> | undefined;
-  /** One fresh catalog covering all requested regions; never discovers or joins samples. */
-  readonly readEstablishedBuildingUnlocks: (
+  ) => Readonly<BuildingOfferSample> | undefined;
+  /** Reads the live native switch observation for a compatible established offer sample. */
+  readonly readEstablishedBuildingSwitches: (
     regions: ReadonlySet<string>,
-  ) => Readonly<BuildingUnlockSample> | undefined;
+  ) => Readonly<BuildingSwitchSample> | undefined;
   /** Existing fresh catalog availability; never draws a tab to answer Power. */
   readonly readCapturedBuildingUnlocked: (
     actionId: string,
@@ -834,7 +835,7 @@ export function createCapturedProgressionControl(
     resetBuildingUnlockSample();
     resetBuildControlCoverageReader();
   });
-  const readBuildingUnlocks = (regions: ReadonlySet<string>) => {
+  const readBuildingOffers = (regions: ReadonlySet<string>) => {
     const key = buildingOfferScopeKey(regions);
     const catalog = buildingUnlocks.read(regions);
     if (catalog === undefined) {
@@ -859,11 +860,9 @@ export function createCapturedProgressionControl(
     return Object.freeze({
       unlocked: catalog.unlocked,
       regions: catalog.regions,
-      switches: new Set(catalog.switches.keys()),
-      states: buildingSwitchStates.read(catalog),
     });
   };
-  const readEstablishedBuildingUnlocks = (regions: ReadonlySet<string>) => {
+  const readEstablishedBuildingCatalog = (regions: ReadonlySet<string>) => {
     const candidates = [...establishedBuildingOffers.values()].reverse();
     const currentEpoch = epoch.read();
     // One semantic observation answers one compatible region set; independently sampled regions
@@ -879,19 +878,29 @@ export function createCapturedProgressionControl(
         if (sample.epoch !== currentEpoch) continue;
         const catalog = sample.catalog;
         if ([...regions].every((region) => catalog.regions.has(region))) {
-          return Object.freeze({
-            unlocked: catalog.unlocked,
-            regions: catalog.regions,
-            switches: new Set(catalog.switches.keys()),
-            states: buildingSwitchStates.read(catalog),
-          });
+          return catalog;
         }
       }
     }
     return undefined;
   };
+  const readEstablishedBuildingOffers = (regions: ReadonlySet<string>) => {
+    const catalog = readEstablishedBuildingCatalog(regions);
+    return catalog === undefined
+      ? undefined
+      : Object.freeze({ unlocked: catalog.unlocked, regions: catalog.regions });
+  };
+  const readEstablishedBuildingSwitches = (regions: ReadonlySet<string>) => {
+    const catalog = readEstablishedBuildingCatalog(regions);
+    return catalog === undefined
+      ? undefined
+      : Object.freeze({
+          switches: new Set(catalog.switches.keys()),
+          states: buildingSwitchStates.read(catalog),
+        });
+  };
   const readCapturedBuildingUnlocked = (actionId: string, region: string) =>
-    readEstablishedBuildingUnlocks(new Set([region]))?.unlocked.has(actionId);
+    readEstablishedBuildingOffers(new Set([region]))?.unlocked.has(actionId);
   const readBuildingCapacity = (actionIds: ReadonlySet<string>) => {
     const result = new Map<string, boolean | undefined>();
     for (const actionId of actionIds) {
@@ -921,7 +930,7 @@ export function createCapturedProgressionControl(
     });
   const readPolicy =
     getBuildingManager === undefined
-      ? createProgressionCapturedPolicy(readBuildingUnlocks)
+      ? createProgressionCapturedPolicy(readBuildingOffers)
       : createScriptBuildPolicyReader({
           getBuildingManager,
           getSettings: readSettings,
@@ -932,7 +941,7 @@ export function createCapturedProgressionControl(
       ? () => {
           let establishedOffersAvailable = true;
           const policy = createProgressionCapturedPolicy((regions) => {
-            const catalog = readEstablishedBuildingUnlocks(regions);
+            const catalog = readEstablishedBuildingOffers(regions);
             establishedOffersAvailable = catalog !== undefined;
             return catalog;
           })();
@@ -1096,7 +1105,7 @@ export function createCapturedProgressionControl(
     if (getBuildingManager === undefined) return targets;
     if (targets.length === 0) return targets;
     const regions = new Set(targets.map((target) => target.region));
-    const offers = readEstablishedBuildingUnlocks(regions);
+    const offers = readEstablishedBuildingOffers(regions);
     if (offers === undefined) return undefined;
     return Object.freeze(
       targets.filter(
@@ -1118,7 +1127,7 @@ export function createCapturedProgressionControl(
     // The captured policy needs every candidate region at once; a narrower semantic sample would
     // leave later established reads without compatible coverage.
     if (getBuildingManager !== undefined && targets.length > 0)
-      readBuildingUnlocks(new Set(targets.map((target) => target.region)));
+      readBuildingOffers(new Set(targets.map((target) => target.region)));
     return readEstablishedStorageBuildTargets() ?? Object.freeze([]);
   };
 
@@ -1148,10 +1157,8 @@ export function createCapturedProgressionControl(
       ? readEstablishedStorageBuildTargets()
       : readManagedBuildTargets();
     const offers = establishedOnly
-      ? readEstablishedBuildingUnlocks(
-          new Set([CAPTURED_MECH_BUILDINGS.region]),
-        )
-      : readBuildingUnlocks(new Set([CAPTURED_MECH_BUILDINGS.region]));
+      ? readEstablishedBuildingOffers(new Set([CAPTURED_MECH_BUILDINGS.region]))
+      : readBuildingOffers(new Set([CAPTURED_MECH_BUILDINGS.region]));
     if (
       targets === undefined ||
       offers === undefined ||
@@ -1193,7 +1200,12 @@ export function createCapturedProgressionControl(
       pool: purifierPrice.pool,
     });
     if (purifierFits !== true) return purifierFits;
-    const purifierSwitch = offers.states.get(CAPTURED_MECH_BUILDINGS.purifier);
+    const switchSample = readEstablishedBuildingSwitches(
+      new Set([CAPTURED_MECH_BUILDINGS.region]),
+    );
+    const purifierSwitch = switchSample?.states.get(
+      CAPTURED_MECH_BUILDINGS.purifier,
+    );
     return purifierSwitch === undefined ? undefined : purifierSwitch.off === 0;
   }
 
@@ -1240,8 +1252,9 @@ export function createCapturedProgressionControl(
     readProjects,
     readEstablishedProjects,
     resetProjectSample,
-    readBuildingUnlocks,
-    readEstablishedBuildingUnlocks,
+    readBuildingOffers,
+    readEstablishedBuildingOffers,
+    readEstablishedBuildingSwitches,
     readCapturedBuildingUnlocked,
     readBuildingCapacity,
     resetBuildingUnlockSample,

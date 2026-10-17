@@ -3701,7 +3701,8 @@ export function startCapturedRuntime({
     readOfferedTechs: () => progression.sampleOfferedTechs("condition-context"),
     readGrantedTechs: progression.readGrantedTechs,
     readProjects: progression.readProjects,
-    readBuildingUnlocks: progression.readBuildingUnlocks,
+    readBuildingUnlocks: progression.readBuildingOffers,
+    readBuildingSwitches: progression.readEstablishedBuildingSwitches,
     readBuildingCapacity: progression.readBuildingCapacity,
     readDemandSample: () =>
       triggersNeedDemandSample(settingsStore.readRaw())
@@ -3748,7 +3749,8 @@ export function startCapturedRuntime({
     readOfferedTechs: () => progression.sampleOfferedTechs("triggers"),
     readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
-    readBuildingUnlocks: progression.readBuildingUnlocks,
+    readBuildingUnlocks: progression.readBuildingOffers,
+    readBuildingSwitches: progression.readEstablishedBuildingSwitches,
     readBuildingCapacity: progression.readBuildingCapacity,
     // The demand-reading conditions need the commitments without the trigger targets; the
     // cycle's own sample includes them, and the conditions are evaluated inside the sampling
@@ -4743,7 +4745,7 @@ export function startCapturedRuntime({
       );
     },
     readBuildingResetActions: (regions) =>
-      progression.readBuildingUnlocks(new Set(regions))?.unlocked,
+      progression.readBuildingOffers(new Set(regions))?.unlocked,
     closeBioseedModal,
     loadQueuedSettings: queuedSettings.loadQueuedSettings,
   });

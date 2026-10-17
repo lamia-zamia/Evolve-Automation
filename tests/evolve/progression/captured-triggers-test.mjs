@@ -82,6 +82,7 @@ function triggers({
   projects = PROJECTS,
   readOfferedProjects,
   readBuildingUnlocks,
+  readBuildingSwitches,
   readBuildingCapacity,
   demandSample,
   techKnowledge,
@@ -109,6 +110,7 @@ function triggers({
     readGrantedTechs: () => granted,
     readOfferedProjects: readOfferedProjects ?? (() => offeredProjects),
     ...(readBuildingUnlocks === undefined ? {} : { readBuildingUnlocks }),
+    ...(readBuildingSwitches === undefined ? {} : { readBuildingSwitches }),
     ...(readBuildingCapacity === undefined ? {} : { readBuildingCapacity }),
     ...(demandSample === undefined
       ? {}
@@ -1067,7 +1069,7 @@ assert.deepEqual(
   ]);
 }
 
-// Switch operands use the same semantic region snapshot as BuildingUnlocked.
+// Switch operands sample native state only when a condition requests it.
 {
   const asked = [];
   assert.deepEqual(
@@ -1085,6 +1087,11 @@ assert.deepEqual(
         return {
           unlocked: new Set(["portal-carport"]),
           regions: new Set(["portal"]),
+        };
+      },
+      readBuildingSwitches: (regions) => {
+        assert.deepEqual([...regions], ["portal"]);
+        return {
           switches: new Set(["portal-carport"]),
           states: new Map([["portal-carport", { on: 2, off: 3 }]]),
         };
@@ -1095,8 +1102,7 @@ assert.deepEqual(
   assert.deepEqual(asked, [["portal"]]);
 }
 
-// An offered action without native switch state reads zero for BuildingDisabled, so a trigger
-// waiting for an idle copy does not fire.
+// An offered action with no native switch reads zero for BuildingDisabled.
 assert.deepEqual(
   triggers({
     triggers: [
@@ -1110,9 +1116,8 @@ assert.deepEqual(
     readBuildingUnlocks: () => ({
       unlocked: new Set(["city-farm"]),
       regions: new Set(["city"]),
-      switches: new Set(),
-      states: new Map(),
     }),
+    readBuildingSwitches: () => ({ switches: new Set(), states: new Map() }),
   }).read(),
   [],
 );

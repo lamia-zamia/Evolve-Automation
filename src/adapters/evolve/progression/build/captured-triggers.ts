@@ -31,7 +31,10 @@ import type {
   GameActionCostReader,
   GameActionPrice,
 } from "../../../../ports/game-action-costs.ts";
-import type { BuildingUnlockSample } from "../../../../ports/game-building-unlocks.ts";
+import type {
+  BuildingOfferSample,
+  BuildingSwitchSample,
+} from "../../../../ports/game-building-unlocks.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -117,7 +120,10 @@ export interface CapturedTriggersDependencies {
    */
   readonly readBuildingUnlocks?: (
     regions: ReadonlySet<string>,
-  ) => Readonly<BuildingUnlockSample> | undefined;
+  ) => Readonly<BuildingOfferSample> | undefined;
+  readonly readBuildingSwitches?: (
+    regions: ReadonlySet<string>,
+  ) => Readonly<BuildingSwitchSample> | undefined;
   /** Reads the game's semantic queue-capacity answer for named building actions. */
   readonly readBuildingCapacity?: (
     actionIds: ReadonlySet<string>,
@@ -282,6 +288,7 @@ export function createCapturedTriggers(
     readGrantedTechs: dependencies.readGrantedTechs,
     readProjects: dependencies.readOfferedProjects,
     readBuildingUnlocks: dependencies.readBuildingUnlocks,
+    readBuildingSwitches: dependencies.readBuildingSwitches,
     readBuildingCapacity: dependencies.readBuildingCapacity,
     readDemandSample: dependencies.readDemandSample,
     readTechKnowledge: dependencies.readTechKnowledge,

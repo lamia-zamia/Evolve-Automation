@@ -16,6 +16,10 @@ import type {
 } from "../../ports/game-action-costs.ts";
 import type { OfferedProject } from "../../ports/game-project-catalog.ts";
 import type { OfferedTech } from "../../ports/game-tech-catalog.ts";
+import type {
+  BuildingOfferSample,
+  BuildingSwitchSample,
+} from "../../ports/game-building-unlocks.ts";
 import { isRecord, splitActionId } from "../validation.ts";
 
 export interface CapturedConditionContextRequirement {
@@ -49,7 +53,12 @@ export interface CapturedConditionContextReaderDependencies {
   readonly readBuildingUnlocks?:
     | ((
         regions: ReadonlySet<string>,
-      ) => CapturedConditionContext["buildingUnlocks"] | undefined)
+      ) => Readonly<BuildingOfferSample> | undefined)
+    | undefined;
+  readonly readBuildingSwitches?:
+    | ((
+        regions: ReadonlySet<string>,
+      ) => Readonly<BuildingSwitchSample> | undefined)
     | undefined;
   readonly readBuildingCapacity?:
     | ((
@@ -125,6 +134,7 @@ export function createCapturedConditionContextReader({
   readGrantedTechs: readConditionGrantedTechs,
   readProjects: readConditionProjects,
   readBuildingUnlocks: readConditionBuildingUnlocks,
+  readBuildingSwitches: readConditionBuildingSwitches,
   readBuildingCapacity: readConditionBuildingCapacity,
   readDemandSample: readConditionDemandSample,
   readTechKnowledge: readConditionTechKnowledge,
@@ -171,6 +181,13 @@ export function createCapturedConditionContextReader({
         buildingRegions.size === 0
           ? undefined
           : readConditionBuildingUnlocks?.(buildingRegions);
+      const needsBuildingSwitches = requirements.some(
+        ({ type }) => type === "BuildingEnabled" || type === "BuildingDisabled",
+      );
+      const buildingSwitches =
+        !needsBuildingSwitches || buildingUnlocks === undefined
+          ? undefined
+          : readConditionBuildingSwitches?.(buildingRegions);
 
       const buildingCosts = new Map<string, GameActionPrice>();
       for (const requirement of requirements) {
@@ -230,6 +247,7 @@ export function createCapturedConditionContextReader({
           ? {}
           : { unlockedProjects: unlockedProjectIds }),
         ...(buildingUnlocks === undefined ? {} : { buildingUnlocks }),
+        ...(buildingSwitches === undefined ? {} : { buildingSwitches }),
         ...(buildingCosts.size === 0 ? {} : { buildingCosts }),
         ...(buildingCapacity === undefined ? {} : { buildingCapacity }),
         ...(storedSettings === undefined ? {} : { settings: storedSettings }),

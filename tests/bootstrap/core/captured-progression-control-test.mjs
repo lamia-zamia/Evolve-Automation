@@ -548,7 +548,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     race: {},
     tech: { currency: 1 },
     city: {
-      foundry: { count: 0 },
+      foundry: { count: 0, on: 0 },
       metal_refinery: { count: 0 },
       library: { count: 0 },
       bank: { count: 0 },
@@ -563,6 +563,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   const buildRootListeners = [];
   let buildingCatalogDraws = 0;
   let semanticAvailabilityReads = 0;
+  let buildingSwitchInvocations = 0;
   let invalidNativeAnswer = false;
   const buildIds = [
     "civTabs",
@@ -597,7 +598,11 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         generation: 1,
         data: { act: buildActs.get(elementId) },
       }),
-      invoke: () => ({ ok: true, value: undefined }),
+      invoke: (handle, method) => {
+        if (method !== "on_cap") return { ok: false, reason: "unknown-method" };
+        buildingSwitchInvocations += 1;
+        return { ok: true, value: buildActs.get(handle.elementId)?.count };
+      },
       capturedElementIds: () => buildIds,
     }),
     bindings: inertBindings,
@@ -691,8 +696,20 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
   const broadBuildingRegions = new Set(["city", "space", "interstellar"]);
   const broadBuildingSample =
-    buildControl.readBuildingUnlocks(broadBuildingRegions);
-  const narrowBuildingSample = buildControl.readBuildingUnlocks(
+    buildControl.readBuildingOffers(broadBuildingRegions);
+  assert.equal(
+    buildingSwitchInvocations,
+    0,
+    "offer availability does not invoke native on_cap",
+  );
+  const switches =
+    buildControl.readEstablishedBuildingSwitches(broadBuildingRegions);
+  assert.ok(switches !== undefined);
+  assert.ok(
+    buildingSwitchInvocations > 0,
+    "switch-state observation invokes native on_cap",
+  );
+  const narrowBuildingSample = buildControl.readBuildingOffers(
     new Set(["city"]),
   );
   buildIds.push("space-relay", "interstellar-relay");
@@ -707,22 +724,22 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   const drawsBeforeEstablishedLookup = buildingCatalogDraws;
   const availabilityReadsBeforeEstablishedLookup = semanticAvailabilityReads;
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions).unlocked,
+    buildControl.readEstablishedBuildingOffers(broadBuildingRegions).unlocked,
     broadBuildingSample.unlocked,
     "a narrow trigger sample preserves the original broad authority",
   );
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(new Set(["city"])).unlocked,
+    buildControl.readEstablishedBuildingOffers(new Set(["city"])).unlocked,
     narrowBuildingSample.unlocked,
     "an exact fresh region set is preferred to the broad superset",
   );
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(new Set(["space"])).unlocked,
+    buildControl.readEstablishedBuildingOffers(new Set(["space"])).unlocked,
     broadBuildingSample.unlocked,
     "one fresh superset can answer a region without an exact sample",
   );
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(new Set(["city", "portal"])),
+    buildControl.readEstablishedBuildingOffers(new Set(["city", "portal"])),
     undefined,
     "unsampled coverage is unavailable",
   );
@@ -732,9 +749,9 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     availabilityReadsBeforeEstablishedLookup,
   );
   invalidNativeAnswer = true;
-  assert.equal(buildControl.readBuildingUnlocks(new Set(["city"])), undefined);
+  assert.equal(buildControl.readBuildingOffers(new Set(["city"])), undefined);
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions),
+    buildControl.readEstablishedBuildingOffers(broadBuildingRegions),
     undefined,
     "an invalid current read cannot fall back to an older compatible superset",
   );
@@ -742,17 +759,17 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   const readsBeforeMissingSnapshot = semanticAvailabilityReads;
   buildControl.resetBuildingUnlockSample();
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions),
+    buildControl.readEstablishedBuildingOffers(broadBuildingRegions),
     undefined,
     "an established read never creates a missing semantic sample",
   );
   assert.equal(semanticAvailabilityReads, readsBeforeMissingSnapshot);
   assert.equal(buildingCatalogDraws, drawsBeforeEstablishedLookup);
   const refreshedBroadBuildingSample =
-    buildControl.readBuildingUnlocks(broadBuildingRegions);
+    buildControl.readBuildingOffers(broadBuildingRegions);
   const readsBeforeEstablishedSuperset = semanticAvailabilityReads;
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(new Set(["city"])).unlocked,
+    buildControl.readEstablishedBuildingOffers(new Set(["city"])).unlocked,
     refreshedBroadBuildingSample.unlocked,
     "one fresh semantic superset can answer a narrower request",
   );
@@ -767,18 +784,23 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   buildIds.pop();
   buildControl.resetBuildingUnlockSample();
   assert.equal(buildControl.readEstablishedStorageBuildTargets(), undefined);
-  buildControl.readBuildingUnlocks(new Set(["city"]));
-  buildControl.readBuildingUnlocks(new Set(["space"]));
+  buildControl.readBuildingOffers(new Set(["city"]));
+  buildControl.readBuildingOffers(new Set(["space"]));
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(new Set(["city", "space"])),
+    buildControl.readEstablishedBuildingOffers(new Set(["city", "space"])),
     undefined,
     "independent scopes are never combined into a synthetic catalog",
   );
   buildRoot.tech.currency = 0;
   for (const listener of buildRootListeners) listener();
   assert.equal(
-    buildControl.readEstablishedBuildingUnlocks(new Set(["city"])),
+    buildControl.readEstablishedBuildingOffers(new Set(["city"])),
     undefined,
+  );
+  assert.equal(
+    buildControl.readEstablishedBuildingSwitches(new Set(["city"])),
+    undefined,
+    "root replacement invalidates established switch observations",
   );
   assert.equal(
     buildControl.readCapturedBuildingUnlocked("city-foundry", "city"),
@@ -786,7 +808,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
   assert.deepEqual(
     buildControl
-      .readBuildingUnlocks(new Set(["city"]))
+      .readBuildingOffers(new Set(["city"]))
       .unlocked.has("city-foundry"),
     false,
     "a fresh native sample observes changed root facts without a panel draw",
@@ -797,6 +819,68 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       .map(({ elementId }) => elementId),
     ["city-metal_refinery"],
   );
+}
+
+// Mech asks for switch counts only after the bay cannot fit and a purifier can; the purifier's
+// switch answer still comes from its captured native on_cap and current root `on` value.
+{
+  const mechRoot = {
+    settings: { civTabs: 3, autoBuild: true, mechBaysFirst: true },
+    race: {},
+    genes: {},
+    tech: { high_tech: 2 },
+    city: {},
+    portal: {
+      mechbay: { count: 0, on: 0 },
+      purifier: { count: 2, on: 2 },
+    },
+    resource: { Money: { amount: 20, max: 20, display: true } },
+  };
+  const mechIds = ["portal-mechbay", "portal-purifier"];
+  const onCapCalls = [];
+  const mechControl = createCapturedProgressionControl({
+    rootState: {
+      readRoot: () => mechRoot,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: withControlCaptureAuthority({
+      resolve: (elementId) => ({
+        elementId,
+        generation: 1,
+        methods: ["on_cap"],
+      }),
+      invoke: (handle, method) => {
+        if (method !== "on_cap") return { ok: false, reason: "unknown-method" };
+        onCapCalls.push(handle.elementId);
+        return {
+          ok: true,
+          value: mechRoot.portal[handle.elementId.slice(7)].count,
+        };
+      },
+      capturedElementIds: () => mechIds,
+    }),
+    bindings: inertBindings,
+    mountSuppression: { available: false, withoutMounting: () => undefined },
+    panels: { open: () => ({ release: () => {}, isIntact: () => true }) },
+    drawnActions: { read: () => [], count: () => 0, exists: () => false },
+    mechanics: makeCapturedBuildingMechanics(mechRoot, {
+      availability: (_root, binding) => ({
+        kind: "value",
+        value: mechIds.includes(binding),
+      }),
+    }),
+    arpa: emptyArpaMechanics,
+    costs: {
+      readCost: (actionId) => ({
+        cost: { Money: actionId === "portal-mechbay" ? 100 : 10 },
+        pool: undefined,
+      }),
+    },
+    readSettings: () => mechRoot.settings,
+    nowMs: () => 0,
+  });
+  assert.equal(mechControl.readCanExpandMechBay(), true);
+  assert.deepEqual(onCapCalls, ["portal-mechbay", "portal-purifier"]);
 }
 
 // Pinned truepath.js: the first space-titan_quarters increments only structure count; that
@@ -882,7 +966,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     ["space-titan_quarters"],
   );
   assert.deepEqual(
-    [...titanControl.readBuildingUnlocks(regions).unlocked],
+    [...titanControl.readBuildingOffers(regions).unlocked],
     ["space-titan_quarters"],
   );
   assert.equal(titanDraws, 0, "Building offers do not read drawn action rows");
@@ -895,8 +979,8 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     1,
     "Construction keeps unrelated Research discovery cached",
   );
-  assert.equal(titanControl.readEstablishedBuildingUnlocks(regions), undefined);
-  const postBuild = titanControl.readBuildingUnlocks(regions);
+  assert.equal(titanControl.readEstablishedBuildingOffers(regions), undefined);
+  const postBuild = titanControl.readBuildingOffers(regions);
   assert.equal(
     titanDraws,
     0,

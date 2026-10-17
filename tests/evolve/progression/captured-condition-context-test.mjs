@@ -6,8 +6,8 @@ const calls = [];
 const buildingUnlocks = {
   unlocked: new Set(["city-cottage"]),
   regions: new Set(["city"]),
-  states: new Map(),
 };
+const buildingSwitches = { switches: new Set(), states: new Map() };
 const contextReader = createCapturedConditionContextReader({
   costs: {
     readCost: (id) => {
@@ -24,6 +24,10 @@ const contextReader = createCapturedConditionContextReader({
   readBuildingUnlocks: (regions) => {
     calls.push(`building-regions:${[...regions].join(",")}`);
     return buildingUnlocks;
+  },
+  readBuildingSwitches: (regions) => {
+    calls.push(`building-switches:${[...regions].join(",")}`);
+    return buildingSwitches;
   },
   readBuildingCapacity: (ids) => {
     calls.push(`capacity:${[...ids].join(",")}`);
@@ -71,6 +75,14 @@ assert.deepEqual(calls, [
   "capacity:city-cottage",
   "demand",
 ]);
+
+calls.length = 0;
+const switched = contextReader.read(
+  [{ type: "BuildingDisabled", argument: "city-cottage" }],
+  storedSettings,
+);
+assert.equal(switched.context.buildingSwitches, buildingSwitches);
+assert.deepEqual(calls, ["building-regions:city", "building-switches:city"]);
 
 calls.length = 0;
 contextReader.read([{ type: "Boolean", argument: true }], storedSettings);

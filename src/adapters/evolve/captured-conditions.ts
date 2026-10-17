@@ -51,6 +51,10 @@ import {
 } from "../validation.ts";
 import { costFitsNow, costFitsStorage } from "./captured-affordability.ts";
 import type { GameActionPrice } from "../../ports/game-action-costs.ts";
+import type {
+  BuildingOfferSample,
+  BuildingSwitchSample,
+} from "../../ports/game-building-unlocks.ts";
 import { readCapturedAscensionLevel } from "./ascension-level.ts";
 import { readCapturedFactoryCapacity } from "./economy/production/captured-factory-capacity.ts";
 
@@ -73,17 +77,9 @@ export interface CapturedConditionContext {
    * Offered native Building actions, with the regions the semantic sample speaks for. Both halves
    * travel together so an unavailable action remains distinct from an unsampled region.
    */
-  readonly buildingUnlocks?: {
-    readonly unlocked: ReadonlySet<string>;
-    readonly regions: ReadonlySet<string>;
-    /**
-     * Native switchable actions, independent of whether their captured `on_cap()` control can
-     * currently be invoked.
-     */
-    readonly switches: ReadonlySet<string>;
-    /** Live counts when `on_cap()` is currently available; absence is unanswered for a switch. */
-    readonly states: ReadonlyMap<string, Readonly<{ on: number; off: number }>>;
-  };
+  readonly buildingUnlocks?: Readonly<BuildingOfferSample>;
+  /** Present only when a condition in this sample asks for live switch counts. */
+  readonly buildingSwitches?: Readonly<BuildingSwitchSample>;
   /**
    * The game's current adjusted price for each building a condition asked about, with the supply
    * pool that would pay it. A building absent from the map was not priced, which leaves its cost
@@ -396,17 +392,17 @@ function switchedCount(
   if (typeof argument !== "string") return undefined;
   const parts = splitActionId(argument);
   if (parts === undefined) return undefined;
-  const sample = context?.buildingUnlocks;
-  if (sample === undefined || !sample.regions.has(parts.region)) {
+  const offers = context?.buildingUnlocks;
+  if (offers === undefined || !offers.regions.has(parts.region)) {
     return undefined;
   }
-  if (!sample.unlocked.has(argument)) return undefined;
+  if (!offers.unlocked.has(argument)) return undefined;
+  const sample = context?.buildingSwitches;
+  if (sample === undefined) return undefined;
+  if (!sample.switches.has(argument)) return 0;
   // A native switch with no current count means its separate on_cap capability is unavailable;
   // do not report that as an unswitched (zero) building.
-  if (sample.switches?.has(argument) && !sample.states.has(argument)) {
-    return undefined;
-  }
-  return sample.states.get(argument)?.[half] ?? 0;
+  return sample.states.get(argument)?.[half];
 }
 
 /**

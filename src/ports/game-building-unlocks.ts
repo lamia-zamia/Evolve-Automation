@@ -9,7 +9,7 @@ export interface BuildingSwitchState {
 }
 
 /** Offered Building ids and the requested regions the sample can answer. */
-export interface BuildingUnlockSample {
+export interface BuildingOfferSample {
   /** Automation-owned native action ids currently offered, e.g. `city-farm`. */
   readonly unlocked: ReadonlySet<string>;
   /**
@@ -17,6 +17,10 @@ export interface BuildingUnlockSample {
    * action is absent from `unlocked`; a region with an invalid or unjoined action is absent here.
    */
   readonly regions: ReadonlySet<string>;
+}
+
+/** Native switch membership and current counts, sampled only for consumers that need them. */
+export interface BuildingSwitchSample {
   /** Offered structures whose native definition reports a switch, independent of control capture. */
   readonly switches: ReadonlySet<string>;
   /**
@@ -30,6 +34,10 @@ export interface BuildingUnlockSample {
    */
   readonly states: ReadonlyMap<string, Readonly<BuildingSwitchState>>;
 }
+
+/** A complete offer and live switch-state observation. */
+export interface BuildingUnlockSample
+  extends BuildingOfferSample, BuildingSwitchSample {}
 
 /**
  * Where one switchable building keeps its live state under the game root.
