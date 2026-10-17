@@ -80,10 +80,10 @@ function bindingsFor(regions) {
 }
 
 function inspect(rootValue, bindings) {
-  let stateAddressReads = 0;
+  let rootRegionReads = 0;
   const countedRoot = new Proxy(rootValue, {
     get(target, key, receiver) {
-      if (typeof key === "string" && key in target) stateAddressReads += 1;
+      if (typeof key === "string" && key in target) rootRegionReads += 1;
       return Reflect.get(target, key, receiver);
     },
   });
@@ -92,7 +92,7 @@ function inspect(rootValue, bindings) {
     structuresByBinding,
     bindings,
   );
-  return { records, stateAddressReads };
+  return { records, rootRegionReads };
 }
 
 const report = {
@@ -113,14 +113,14 @@ for (const scenario of scenarios) {
   const startFull = performance.now();
   let fullReads = 0;
   for (let index = 0; index < observations; index += 1) {
-    fullReads += inspect(root, new Set(allBindings)).stateAddressReads;
+    fullReads += inspect(root, new Set(allBindings)).rootRegionReads;
   }
   const fullMs = performance.now() - startFull;
 
   const startNarrow = performance.now();
   let narrowReads = 0;
   for (let index = 0; index < observations; index += 1) {
-    narrowReads += inspect(root, requestedBindings).stateAddressReads;
+    narrowReads += inspect(root, requestedBindings).rootRegionReads;
   }
   const narrowMs = performance.now() - startNarrow;
 
@@ -167,9 +167,9 @@ for (const scenario of scenarios) {
       allRegions: full.records.size,
       requestedRegions: narrow.records.size,
     },
-    stateAddressReadsPerObservation: {
-      allRegions: full.stateAddressReads,
-      requestedRegions: narrow.stateAddressReads,
+    rootRegionReadsPerObservation: {
+      allRegions: full.rootRegionReads,
+      requestedRegions: narrow.rootRegionReads,
     },
     availabilityEvaluationsPerObservation:
       availabilityEvaluations / observations,
