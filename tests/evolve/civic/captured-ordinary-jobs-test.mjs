@@ -99,6 +99,43 @@ assert.deepEqual(calls, [
   { elementId: "civ-farmer", method: "setDefault", args: ["farmer"] },
 ]);
 
+const noOpRoot = structuredClone(root);
+noOpRoot.civic.d_job = "unemployed";
+noOpRoot.civic.unemployed.workers = 3;
+noOpRoot.civic.unemployed.assigned = 3;
+noOpRoot.civic.farmer.workers = 0;
+noOpRoot.civic.farmer.assigned = 0;
+const noOpCalls = [];
+const noOpAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => noOpRoot },
+  controls: {
+    ...controls,
+    invoke: (handle, method, args = []) => {
+      noOpCalls.push({ elementId: handle.elementId, method, args });
+      return { ok: true, value: undefined };
+    },
+  },
+  readSettings: () => ({
+    ...resetBreakpoints,
+    job_unemployed: true,
+    job_farmer: true,
+    jobSetDefault: true,
+  }),
+});
+const noOpInput = noOpAutomation.reader.readCycle(false);
+const noOpDecision = planJobs(noOpInput);
+assert.ok(noOpDecision);
+const noOpOutcome = noOpAutomation.executor.execute(noOpDecision);
+assert.equal(noOpOutcome.status, "rejected");
+assert.equal(noOpOutcome.failure.code, "ordinary-jobs-postcondition-failed");
+assert.ok(noOpCalls.length > 0, "the native action reports success");
+assert.equal(noOpRoot.civic.farmer.workers, 0);
+assert.equal(
+  noOpRoot.civic.d_job,
+  "unemployed",
+  "a successful native return without the requested state stays a genuine postcondition failure",
+);
+
 const partialSettingsRoot = structuredClone(root);
 partialSettingsRoot.civic.farmer.workers = 0;
 partialSettingsRoot.civic.unemployed.workers = 3;
@@ -518,6 +555,36 @@ assert.equal(
   0,
   "a proven zero contribution does not retain an Entertainer",
 );
+const strandedDefaultInput = {
+  ...provenZeroInput,
+  population: 1,
+  defaultJobToken: 3,
+  minimumDefault: 0,
+  setDefault: false,
+  jobs: provenZeroInput.jobs.map((job) => ({
+    ...job,
+    workers: job.token === 3 ? 1 : 0,
+    servants: 0,
+    smartMaximum: job.token === 3 ? 0 : 0,
+    farmerMinimum: job.token === 3 ? 0 : job.farmerMinimum,
+  })),
+  defaultPreference: [],
+};
+const strandedDefaultDecision = planJobs(strandedDefaultInput);
+assert.equal(
+  strandedDefaultDecision.assignments.find(({ jobToken }) => jobToken === 3)
+    ?.workers,
+  1,
+  "the plan retains an unallocatable native worker in the default pool",
+);
+assert.equal(
+  strandedDefaultDecision.assignments.reduce(
+    (total, assignment) => total + assignment.workers,
+    0,
+  ),
+  1,
+  "a plan cannot discard the only worker when every managed job is capped",
+);
 const authorityDisabledDecision = planJobs({
   ...provenZeroInput,
   authority: { ...provenZeroInput.authority, enabled: false, previousCap: 1 },
@@ -934,8 +1001,8 @@ fullControlFailure = {
 };
 assert.equal(
   weightedPrepared.execution.execute().status,
-  "rejected",
-  "a missing later skilled-servant control rejects the whole full decision",
+  "deferred",
+  "a missing later skilled-servant control defers the whole full decision",
 );
 assert.deepEqual(
   fullCalls,
@@ -944,7 +1011,7 @@ assert.deepEqual(
 );
 assert.deepEqual(fullRoot, fullStateBeforePreflight);
 
-// The full executor must not commit lastPopulation/lastFarmer history when preflight rejects.
+// The full executor must not commit lastPopulation/lastFarmer history when preflight defers.
 fullRoot.resource.Population.amount = fullDecision.lastPopulationCount + 2;
 fullRoot.civic.farmer.workers = fullDecision.lastFarmerCount + 2;
 const afterRejectedHistoryPrepared = fullAutomation.prepare();
@@ -968,8 +1035,8 @@ const retryPrepared = fullAutomation.prepare();
 assert.equal(retryPrepared.status, "ready");
 assert.equal(
   retryPrepared.execution.execute().status,
-  "rejected",
-  "an existing captured handle without the required method also rejects before mutation",
+  "deferred",
+  "an existing captured handle without the required method also defers before mutation",
 );
 assert.deepEqual(fullCalls, []);
 assert.deepEqual(fullRoot, fullStateBeforePreflight);
@@ -1040,9 +1107,9 @@ for (const method of ["add", "sub", "setDefault"]) {
   };
   const callsBeforeMissingCapability = fullCalls.length;
   assert.equal(
-    missingPrepared.execution.execute().failure?.code,
-    "full-jobs-controls-incomplete",
-    `missing ${method} must reject before the first mutation`,
+    missingPrepared.execution.execute().status,
+    "deferred",
+    `missing ${method} must defer before the first mutation`,
   );
   assert.equal(fullCalls.length, callsBeforeMissingCapability);
   assert.deepEqual(fullRoot, fullStateBeforePreflight);
