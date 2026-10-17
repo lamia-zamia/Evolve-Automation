@@ -25,6 +25,7 @@ const game = fromRoot(
 );
 const periods = Number(option("periods", "1000"));
 const warmup = Number(option("warmup", "600"));
+const expectedWorkTicks = Number(option("expected-workticks", "125"));
 const settings = JSON.parse(await readFile(fromRoot(settingsPath), "utf8"));
 settings.autoPrestige = false;
 
@@ -183,6 +184,11 @@ try {
     await session.advance(periods);
     const probe = await session.evaluate(() => window.__EA_P4_NATIVE_PROBE__);
     const diagnostics = await session.diagnostics();
+    if (probe.tickDurations.length !== expectedWorkTicks) {
+      throw new Error(
+        `Measured interval had ${probe.tickDurations.length} workticks; expected ${expectedWorkTicks}`,
+      );
+    }
     const buckets = new Map();
     for (const call of probe.calls) {
       const key = call.period;
@@ -208,11 +214,13 @@ try {
       seed: 42,
       measurementStartPeriod: baselinePeriod,
       measurementEndPeriod: await session.periods(),
+      expectedWorkTicks,
+      measuredWorkTicks: probe.tickDurations.length,
       totalOnCapInvocations: probe.calls.length,
       callsPerWorkTick:
-        diagnostics.workTicks === 0
+        probe.tickDurations.length === 0
           ? undefined
-          : probe.calls.length / diagnostics.workTicks,
+          : probe.calls.length / probe.tickDurations.length,
       totalUnavailableControls: probe.failures.filter(
         (row) => row.reason === "control-unavailable",
       ).length,
