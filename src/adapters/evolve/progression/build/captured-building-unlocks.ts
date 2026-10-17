@@ -86,6 +86,11 @@ export function createCapturedBuildingUnlocks(
       }
 
       const nativeStructuresByBinding = readStructuresByBinding(structures);
+      const requestedBindings = new Set<string>();
+      for (const region of regions) {
+        for (const binding of bindingsByRegion.get(region) ?? [])
+          requestedBindings.add(binding);
+      }
       let stateRecords: ReadonlyMap<
         string,
         Readonly<{ entryKey: string; state: Readonly<Record<string, unknown>> }>
@@ -94,6 +99,7 @@ export function createCapturedBuildingUnlocks(
         stateRecords = readCapturedBuildingUnlockStateRecords(
           root,
           nativeStructuresByBinding,
+          requestedBindings,
         );
       } catch {
         reportSkipped("*", "the native structure state catalog is invalid");

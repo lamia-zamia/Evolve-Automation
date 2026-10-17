@@ -229,7 +229,8 @@ try {
       consoleCounts: diagnostics.counts,
       diagnosticEvents: diagnostics.events,
       pageFailures: diagnostics.events.filter(
-        ({ kind }) => kind === "error" || kind === "pageerror" || kind === "rejection",
+        ({ kind }) =>
+          kind === "error" || kind === "pageerror" || kind === "rejection",
       ),
       workTicks: diagnostics.workTicks,
       perfSummaries: diagnostics.perfSummaries,

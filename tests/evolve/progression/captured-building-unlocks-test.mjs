@@ -10,6 +10,7 @@ import {
 } from "../../../src/adapters/evolve/progression/build/captured-building-metadata.ts";
 import { CAPTURED_AUTOMATION_BUILDING_BINDINGS } from "../../../src/adapters/evolve/progression/build/captured-building-bindings.generated.ts";
 import { readCapturedBuildingState } from "../../../src/adapters/evolve/progression/build/captured-building-state.ts";
+import { readCapturedBuildingUnlockStateRecords } from "../../../src/adapters/evolve/progression/build/captured-building-unlock-observation.ts";
 import {
   makeCapturedBuildingMechanics,
   availableWhenBindings,
@@ -171,6 +172,66 @@ function assertUnlockMatchesGenericCatalog(root, regions, mechanics, reader) {
   );
 }
 
+// The observation only resolves current records for requested bindings. Native structure order
+// and full entry-key identity still choose the first current record for each selected binding.
+{
+  const inspectedRegions = [];
+  const currentRoot = new Proxy(
+    { ...root, city: { farm: { count: 0 }, farm_alias: { count: 1 } } },
+    {
+      get(target, key, receiver) {
+        if (
+          typeof key === "string" &&
+          key !== "settings" &&
+          key !== "race" &&
+          key !== "genes" &&
+          key !== "tech"
+        )
+          inspectedRegions.push(key);
+        return Reflect.get(target, key, receiver);
+      },
+    },
+  );
+  const structuresByBinding = new Map([
+    [
+      "city-farm",
+      [
+        {
+          actionId: "city-farm",
+          entryKey: "city:farm",
+          region: "city",
+          struct: "farm",
+        },
+        {
+          actionId: "city-farm",
+          entryKey: "city:farm-alias",
+          region: "city",
+          struct: "farm_alias",
+        },
+      ],
+    ],
+    [
+      "space-satellite",
+      [
+        {
+          actionId: "space-satellite",
+          entryKey: "space:satellite",
+          region: "space",
+          struct: "satellite",
+        },
+      ],
+    ],
+  ]);
+  const records = readCapturedBuildingUnlockStateRecords(
+    currentRoot,
+    structuresByBinding,
+    new Set(["city-farm"]),
+  );
+  assert.deepEqual(inspectedRegions, ["city"]);
+  assert.equal(records.get("city-farm").entryKey, "city:farm");
+  assert.equal(records.has("space-satellite"), false);
+}
+
 // A native true is an offer before the action has ever acquired a rendered control or DOM row.
 {
   const currentRoot = { ...root, city: { farm: { count: 0, on: 0 } } };
@@ -187,6 +248,8 @@ function assertUnlockMatchesGenericCatalog(root, regions, mechanics, reader) {
 {
   const mechanics = makeCapturedBuildingMechanics(root);
   const reader = makeUnlockReader({ mechanics });
+  const broad = reader.read(CAPTURED_BUILD_REGIONS);
+  assert.deepEqual([...broad.regions], [...CAPTURED_BUILD_REGIONS]);
   const all = reader.read(new Set(["city", "space", "portal"]));
   assertUnlockMatchesGenericCatalog(
     root,
@@ -475,11 +538,12 @@ function assertUnlockMatchesGenericCatalog(root, regions, mechanics, reader) {
       ],
     ]),
   });
-  const catalog = makeUnlockReader({
+  const reader = makeUnlockReader({
     currentRoot,
     mechanics,
     gameControls: controls(),
-  }).read(new Set(["city"]));
+  });
+  const catalog = reader.read(new Set(["city"]));
   assert.ok(
     catalog,
     "native City availability should complete without Building controls or DOM rows",
@@ -519,11 +583,9 @@ function assertUnlockMatchesGenericCatalog(root, regions, mechanics, reader) {
 
   chrysotileOffered = false;
   assert.equal(
-    makeUnlockReader({ currentRoot, mechanics, gameControls: controls() })
-      .read(new Set(["city"]))
-      .unlocked.has("city-chrysotile"),
+    reader.read(new Set(["city"])).unlocked.has("city-chrysotile"),
     false,
-    "the native availability closure remains the offer authority",
+    "a fresh observation sees native availability changes without a tech epoch",
   );
 }
 

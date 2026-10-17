@@ -19,12 +19,17 @@ export function readCapturedBuildingUnlockStateRecords(
     string,
     readonly CapturedGameStructureDefinition[]
   >,
+  requestedBindings: ReadonlySet<string>,
 ): ReadonlyMap<string, Readonly<CapturedBuildingUnlockStateRecord>> {
   const records = new Map<
     string,
     Readonly<CapturedBuildingUnlockStateRecord>
   >();
-  for (const [binding, structures] of structuresByBinding) {
+  // Scope by requested action binding, not structure.region: native state addresses may live in
+  // another root region than the action prefix that owns the offer.
+  for (const binding of requestedBindings) {
+    const structures = structuresByBinding.get(binding);
+    if (structures === undefined) continue;
     for (const structure of structures) {
       const state = readProperty(
         readProperty(root, structure.region),
