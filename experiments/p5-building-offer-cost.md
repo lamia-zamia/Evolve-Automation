@@ -10,9 +10,32 @@ Candidate bundle SHA-256: `af0ad938233af6b92b1cc68f399a9ba7015aaa6021274e37b7d8a
 
 ## Decision
 
-The bounded production change limits current state-record resolution to action bindings in the requested regions. It keeps a fresh root read, a fresh native structure read, and native availability evaluation for every requested action on every observation. It adds no price or availability cache.
+**Recommendation: squash-merge P5 as a correctness-preserving structural simplification, explicitly without a demonstrated end-to-end CPU saving.** The production-representative late and mid fixtures made only narrow requests and reduced state-record resolution attempts by 73.5% weighted across actual observations. Exact exports and native control usage remain unchanged. A broad request was not observed; a bounded microbenchmark indicates its large Set construction would cost more than the five root lookups it avoids, so broad-request behavior is not a performance rationale for the change.
 
-The deterministic fixture shows substantial fewer root-state lookups for narrow requests (85% fewer for City; 36% fewer for City, Space, Interstellar, and Portal together). Broad all-supported requests reduce the state scan by only five of 429 bindings. These operation counts justify review of this narrow traversal change; the synthetic timing does not establish renderer savings. **Production CPU effect remains unresolved. Do not merge as a demonstrated CPU improvement.** Keep the candidate isolated for independent review.
+The reader still takes a fresh root and native structure snapshot and evaluates native availability for every requested action on every observation. No price or availability cache was added. This recommendation is about reducing unnecessary address resolution in the observed workload, not claiming lower renderer CPU.
+
+## Production-representative scope trace
+
+`experiments/p5-building-offer-observations.mjs` builds the candidate source with a test-only observer injected in memory during esbuild. No production instrumentation was added. It ran the pinned DeadSpace snapshot `db38e2af`, seed 42, `autoPrestige=false`, 600 warmup periods, then 1,000 measured periods per fixture. Requested regions were recorded at every actual `buildingUnlocks.read()` and grouped by the enclosing application phase. The original full-map traversal resolves 429 bindings on each observation.
+
+| Fixture | Originating phase                             | Exact requested regions | Frequency | Selected bindings | Avoided lookups / observation | Avoided lookups total |
+| ------- | --------------------------------------------- | ----------------------- | --------: | ----------------: | ----------------------------: | --------------------: |
+| Late    | construction demand preparation               | City, Space             |       125 |               158 |                           271 |                33,875 |
+| Late    | construction saving discovery                 | City, Space             |       250 |               158 |                           271 |                67,750 |
+| Late    | autoStorage                                   | City, Space             |       125 |               158 |                           271 |                33,875 |
+| Late    | autoBuild                                     | City, Space             |       250 |               158 |                           271 |                67,750 |
+| Late    | autoFactory                                   | City, Space             |       125 |               158 |                           271 |                33,875 |
+| Late    | autoJobs with autoCraftsmen                   | City, Space             |       125 |               158 |                           271 |                33,875 |
+| Mid     | construction demand preparation               | City                    |       125 |                63 |                           366 |                45,750 |
+| Mid     | construction saving discovery                 | City                    |       250 |                63 |                           366 |                91,500 |
+| Mid     | autoStorage                                   | City                    |       125 |                63 |                           366 |                45,750 |
+| Mid     | autoBuild                                     | City                    |       250 |                63 |                           366 |                91,500 |
+| Mid     | autoJobs with autoCraftsmen                   | City                    |       125 |                63 |                           366 |                45,750 |
+| Mid     | post-research construction demand preparation | City                    |         3 |                63 |                           366 |                 1,098 |
+
+Across 1,878 actual observations, the full traversal would resolve 805,662 binding addresses. The scoped reader resolved 213,314, avoiding **592,348 lookups (73.5%)**. Late avoided 271,000 of 429,000; mid avoided 321,348 of 376,662. No broad or all-supported request occurred in either fixture. The exact-runner exports stayed byte-identical to the prior parity report and both runs had zero page errors.
+
+The broad-request case selects 424 bindings from the 429-entry catalog to avoid only five root-state lookups. A bounded Node microbenchmark (7 rounds × 10,000 iterations) measured Set construction/addition for 424 bindings at a median 0.00839 ms per observation, versus 0.000110 ms for the five omitted root-address lookups (about 76.3×). This is a controlled operation-cost probe, not production CPU timing. It shows that broad requests plausibly have higher total cost after selection overhead; the measured fixtures did not use that scope.
 
 ## Cost decomposition
 
@@ -51,7 +74,7 @@ Exact-runner comparison used the pinned snapshot and established late/mid fixtur
 | Fixture | Save SHA-256                                                       | Baseline export SHA-256                                            | Candidate export SHA-256                                           | Export / native-control parity |
 | ------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------ |
 | Late    | `e2c9d1d4bb5656e9808a68df68455a7edc8fbe4d5b24933efd71520ffbbaefc3` | `77b357153516ad5268e7fae7c5d47eae48b384a16f831951a639882f53d6cdd2` | `77b357153516ad5268e7fae7c5d47eae48b384a16f831951a639882f53d6cdd2` | exact / exact                  |
-| Mid     | `7c25f5cec06c88316675665d521bfc368d60c0c4a72ea0a2bde35bcc7d3069a3` | `82292f32e3b3073838c90359f54eed8358fa42aeab359f2c09b20eb6c2eb0bab` | `82292f32e3b3073838c90359f54eed8358fa42aeab359f2c09b20eb6c2eb`     | exact / exact                  |
+| Mid     | `7c25f5cec06c88316675665d521bfc368d60c0c4a72ea0a2bde35bcc7d3069a3` | `82292f32e3b3073838c90359f54eed8358fa42aeab359f2c09b20eb6c2eb0bab` | `82292f32e3b3073838c90359f54eed8358fa42aeab359f2c09b20eb6c2eb0bab` | exact / exact                  |
 
 The focused Building regressions cover City, Space, Interstellar, Portal and the supported region set; narrow and broad requests; root-state/action-prefix mismatch; first-current-record order and complete entry identity; duplicate/ambiguous entries; absent state; invalid availability; fail-closed region completeness; root replacement; Research grant changes; same-epoch native availability mutation; and current control regeneration through the existing captured-progression/build-policy regression. The same-reader availability mutation confirms a new observation sees the changed native answer without an epoch change.
 
