@@ -76,6 +76,9 @@ export function installPageCapture(
   const installed = readInstalledCapture(pageWindow);
   if (installed !== undefined) return installed;
 
+  // DeadSpace loads Vue synchronously before its main module. Owning the Vue global before it is
+  // assigned proves this capture precedes vars.js's private false multiplier-latch initialization.
+  const beforePageVue = readProperty(pageWindow, "Vue") === undefined;
   const vue = installVueCapture(pageWindow, options);
   const worker = installWorkerCapture(pageWindow, options);
   const mechanics = installCapturedGameMechanics(
@@ -88,6 +91,7 @@ export function installPageCapture(
     () => readProperty(pageWindow, "document"),
     {
       roots: vue.rootState,
+      initialLatchesAreClear: beforePageVue,
       // The captured root is the only settings authority available before the game's own modules run.
       readMultiplierMapping: (name) =>
         readCapturedMultiplierMapping(vue.rootState.readRoot(), name),

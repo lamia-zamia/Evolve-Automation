@@ -179,4 +179,56 @@ assert.doesNotThrow(() => unavailable.uninstall());
   assert.equal(latch.readMultiplierLatch("x10"), undefined);
 }
 
+// An early document-start capture can establish vars.js's initial false latches when its first
+// game root appears without any intervening input. Late captures and captures that missed input
+// remain unknown, and replacing the root revokes the initial page's authority.
+{
+  let root;
+  const rootListeners = new Set();
+  const rootSource = {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: (listener) => {
+      rootListeners.add(listener);
+      return () => rootListeners.delete(listener);
+    },
+  };
+  const mapping = (name) => root?.settings?.keyMap?.[name];
+  const early = createGameKeyStateCapture(() => documentStub, {
+    initialLatchesAreClear: true,
+    roots: rootSource,
+    readMultiplierMapping: mapping,
+  });
+  assert.equal(early.readMultiplierLatch("x10"), undefined);
+  root = { settings: { keyMap: { x10: "x", x25: "z", x100: "c" } } };
+  for (const listener of rootListeners) listener();
+  for (const name of ["x10", "x25", "x100"])
+    assert.equal(early.readMultiplierLatch(name), false);
+
+  root = { ...root };
+  for (const listener of rootListeners) listener();
+  assert.equal(early.readMultiplierLatch("x10"), undefined);
+  early.uninstall();
+
+  const late = createGameKeyStateCapture(() => documentStub, {
+    initialLatchesAreClear: true,
+    roots: rootSource,
+    readMultiplierMapping: mapping,
+  });
+  assert.equal(late.readMultiplierLatch("x10"), undefined);
+  late.uninstall();
+
+  root = undefined;
+  const missedInput = createGameKeyStateCapture(() => documentStub, {
+    initialLatchesAreClear: true,
+    roots: rootSource,
+    readMultiplierMapping: mapping,
+  });
+  documentStub.dispatch("keydown", { key: "x", keyCode: 88 });
+  root = { settings: { keyMap: { x10: "x", x25: "z", x100: "c" } } };
+  for (const listener of rootListeners) listener();
+  assert.equal(missedInput.readMultiplierLatch("x10"), undefined);
+  missedInput.uninstall();
+}
+
 console.log("game-key-state ok");

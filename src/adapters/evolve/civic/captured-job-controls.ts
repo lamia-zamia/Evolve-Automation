@@ -16,6 +16,8 @@ import type { JobsDecision } from "../../../domain/civic/jobs.ts";
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import { rejected, SUCCEEDED } from "../../command-outcomes.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 export interface CapturedJobControlsDependencies {
   readonly controls: GameControlRegistry;
   readonly onInvocation?: (
@@ -49,7 +51,6 @@ function callCount(
   method: "add" | "sub",
   count: number,
   craftedResourceId: string | undefined,
-  onInvocation?: CapturedJobControlsDependencies["onInvocation"],
 ): boolean {
   const handle = controls.resolve(elementId);
   if (handle === undefined) return false;
@@ -59,7 +60,28 @@ function callCount(
     craftedResourceId === undefined ? undefined : [craftedResourceId];
   for (let index = 0; index < calls; index++) {
     const result = controls.invoke(handle, method, args);
-    onInvocation?.({
+    if (!result.ok) return false;
+  }
+  return true;
+}
+
+function callCountWithInvocation(
+  controls: GameControlRegistry,
+  elementId: string,
+  method: "add" | "sub",
+  count: number,
+  craftedResourceId: string | undefined,
+  onInvocation: NonNullable<CapturedJobControlsDependencies["onInvocation"]>,
+): boolean {
+  const handle = controls.resolve(elementId);
+  if (handle === undefined) return false;
+  if (!Number.isFinite(count)) return false;
+  const calls = Math.ceil(Math.max(count, 0));
+  const args =
+    craftedResourceId === undefined ? undefined : [craftedResourceId];
+  for (let index = 0; index < calls; index++) {
+    const result = controls.invoke(handle, method, args);
+    onInvocation({
       elementId,
       generation: handle.generation,
       methods: handle.methods,
@@ -72,20 +94,26 @@ function callCount(
   return true;
 }
 
-export function createCapturedJobControls({
-  controls,
-  onInvocation,
-}: CapturedJobControlsDependencies): GameJobControlsPort {
+export function createCapturedJobControls(
+  dependencies: CapturedJobControlsDependencies,
+): GameJobControlsPort {
+  const { controls } = dependencies;
   return Object.freeze({
     assign({ elementId, count, craftedResourceId }: GameJobAssignmentRequest) {
-      return callCount(
-        controls,
-        elementId,
-        "add",
-        count,
-        craftedResourceId,
-        onInvocation,
-      );
+      if (
+        (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+          __EA_TEST_SURFACE_ENABLED__ === true) &&
+        dependencies.onInvocation !== undefined
+      )
+        return callCountWithInvocation(
+          controls,
+          elementId,
+          "add",
+          count,
+          craftedResourceId,
+          dependencies.onInvocation,
+        );
+      return callCount(controls, elementId, "add", count, craftedResourceId);
     },
 
     unassign({
@@ -93,14 +121,20 @@ export function createCapturedJobControls({
       count,
       craftedResourceId,
     }: GameJobAssignmentRequest) {
-      return callCount(
-        controls,
-        elementId,
-        "sub",
-        count,
-        craftedResourceId,
-        onInvocation,
-      );
+      if (
+        (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+          __EA_TEST_SURFACE_ENABLED__ === true) &&
+        dependencies.onInvocation !== undefined
+      )
+        return callCountWithInvocation(
+          controls,
+          elementId,
+          "sub",
+          count,
+          craftedResourceId,
+          dependencies.onInvocation,
+        );
+      return callCount(controls, elementId, "sub", count, craftedResourceId);
     },
 
     setDefault({ elementId, jobId }: GameDefaultJobRequest) {
@@ -108,14 +142,18 @@ export function createCapturedJobControls({
       if (handle === undefined) return false;
       const args = [jobId];
       const result = controls.invoke(handle, "setDefault", args);
-      onInvocation?.({
-        elementId,
-        generation: handle.generation,
-        methods: handle.methods,
-        method: "setDefault",
-        args,
-        ok: result.ok,
-      });
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+        __EA_TEST_SURFACE_ENABLED__ === true
+      )
+        dependencies.onInvocation?.({
+          elementId,
+          generation: handle.generation,
+          methods: handle.methods,
+          method: "setDefault",
+          args,
+          ok: result.ok,
+        });
       return result.ok;
     },
   });

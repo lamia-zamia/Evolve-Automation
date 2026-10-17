@@ -776,7 +776,7 @@ function executeFullDecision(
   decision: Readonly<JobsDecision>,
   measure: MeasurePhase,
   testTrace: CapturedJobsTraceSink | undefined,
-  invocations: Array<Readonly<Record<string, unknown>>>,
+  invocations: Array<Readonly<Record<string, unknown>>> | undefined,
 ): JobsExecutionOutcome {
   const ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job]));
   const foundry = new Map(
@@ -908,68 +908,74 @@ function executeFullDecision(
       if (preflightFailure.elementId === "foundry") return candidate.crafting;
       return preflightFailure.elementId === "skilledServants";
     });
-    emitCapturedJobsTrace(testTrace, {
-      kind: "deferred",
-      path: "full",
-      failureCode: "full-jobs-controls-not-ready",
-      root: session.root,
-      settings: {
-        ...session.settings,
-        manageServants: session.input.manageServants,
-      },
-      defaultJobId: session.catalog.defaultJobId,
-      sampledJobCount: session.input.jobs.length,
-      sampledJobs: session.input.jobs
-        .filter((candidate) => candidate.workers > 0 || candidate.servants > 0)
-        .map(({ id, token, workers, servants, crafting }) => ({
-          id,
-          token,
-          workers,
-          servants,
-          crafting,
-        })),
-      pools: {
-        population: session.input.population,
-        defaultWorkers:
-          session.ordinaryJobs.find(
-            (job) => job.id === session.catalog.defaultJobId,
-          )?.workers ?? 0,
-        servantsMaximum: session.input.servantsMaximum,
-        servantsUsed: session.catalog.servantState?.used ?? 0,
-        craftsmenMaximum: session.input.craftsmenMaximum,
-        skilledServantsMaximum: session.input.skilledServantsMaximum,
-        skilledServantsUsed: session.foundry.skilledUsed,
-      },
-      decision: {
-        kind: decision.kind,
-        selectedDefaultToken: decision.selectedDefaultToken,
-        assignmentChanges: summarizeCapturedJobsTraceAssignments(
-          session.input.jobs,
-          decision.assignments,
-        ),
-      },
-      missing: {
-        elementId: preflightFailure.elementId,
-        method: preflightFailure.method,
-        job: job?.id,
-        jobToken: job?.token,
-        workerDelta:
-          job === undefined
-            ? 0
-            : decision.assignments.find(
-                (assignment) => assignment.jobToken === job.token,
-              )!.workers - job.workers,
-        servantDelta:
-          job === undefined
-            ? 0
-            : decision.assignments.find(
-                (assignment) => assignment.jobToken === job.token,
-              )!.servants - job.servants,
-        servantCapacity: session.input.servantsMaximum,
-        existingServants: job?.servants ?? 0,
-      },
-      requiredControls: capturedRequiredControls(controls, requiredMethods),
-    });
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    )
+      emitCapturedJobsTrace(testTrace, {
+        kind: "deferred",
+        path: "full",
+        failureCode: "full-jobs-controls-not-ready",
+        root: session.root,
+        settings: {
+          ...session.settings,
+          manageServants: session.input.manageServants,
+        },
+        defaultJobId: session.catalog.defaultJobId,
+        sampledJobCount: session.input.jobs.length,
+        sampledJobs: session.input.jobs
+          .filter(
+            (candidate) => candidate.workers > 0 || candidate.servants > 0,
+          )
+          .map(({ id, token, workers, servants, crafting }) => ({
+            id,
+            token,
+            workers,
+            servants,
+            crafting,
+          })),
+        pools: {
+          population: session.input.population,
+          defaultWorkers:
+            session.ordinaryJobs.find(
+              (job) => job.id === session.catalog.defaultJobId,
+            )?.workers ?? 0,
+          servantsMaximum: session.input.servantsMaximum,
+          servantsUsed: session.catalog.servantState?.used ?? 0,
+          craftsmenMaximum: session.input.craftsmenMaximum,
+          skilledServantsMaximum: session.input.skilledServantsMaximum,
+          skilledServantsUsed: session.foundry.skilledUsed,
+        },
+        decision: {
+          kind: decision.kind,
+          selectedDefaultToken: decision.selectedDefaultToken,
+          assignmentChanges: summarizeCapturedJobsTraceAssignments(
+            session.input.jobs,
+            decision.assignments,
+          ),
+        },
+        missing: {
+          elementId: preflightFailure.elementId,
+          method: preflightFailure.method,
+          job: job?.id,
+          jobToken: job?.token,
+          workerDelta:
+            job === undefined
+              ? 0
+              : decision.assignments.find(
+                  (assignment) => assignment.jobToken === job.token,
+                )!.workers - job.workers,
+          servantDelta:
+            job === undefined
+              ? 0
+              : decision.assignments.find(
+                  (assignment) => assignment.jobToken === job.token,
+                )!.servants - job.servants,
+          servantCapacity: session.input.servantsMaximum,
+          existingServants: job?.servants ?? 0,
+        },
+        requiredControls: capturedRequiredControls(controls, requiredMethods),
+      });
     return Object.freeze({
       status: "deferred",
       reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`,
@@ -985,14 +991,19 @@ function executeFullDecision(
     if (handle === undefined || !Number.isFinite(count)) return false;
     for (let index = 0; index < Math.ceil(Math.max(count, 0)); index++) {
       const result = controls.invoke(handle, method, args);
-      invocations.push({
-        elementId,
-        generation: handle.generation,
-        methods: handle.methods,
-        method,
-        args: args ?? [],
-        ok: result.ok,
-      });
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      ) {
+        invocations?.push({
+          elementId,
+          generation: handle.generation,
+          methods: handle.methods,
+          method,
+          args: args ?? [],
+          ok: result.ok,
+        });
+      }
       if (!result.ok) return false;
     }
     return true;
@@ -1298,12 +1309,16 @@ export function createCapturedOrdinaryJobsAutomation({
     readJobHistory: () =>
       historyRoot === rootState.readRoot() ? history : undefined,
   });
-  const invocations: Array<Readonly<Record<string, unknown>>> = [];
+  const invocations: Array<Readonly<Record<string, unknown>>> | undefined =
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? []
+      : undefined;
   const controlsPort = createCapturedJobControls({
     controls,
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
-      ? { onInvocation: (invocation) => invocations.push(invocation) }
+      ? { onInvocation: (invocation) => invocations?.push(invocation) }
       : {}),
   });
   const sessionRef: { value: OrdinaryJobsSession | undefined } = {
@@ -1361,15 +1376,19 @@ export function createCapturedOrdinaryJobsAutomation({
         keyState,
       );
       if (multiplierLatch !== "none-latched") {
-        emitCapturedJobsTrace(testTrace, {
-          kind: "deferred",
-          path: "ordinary",
-          failureCode: "jobs-multiplier-latch-not-ready",
-          root: session.root,
-          settings: session.settings,
-          input: session.input,
-          multiplierLatch,
-        });
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        )
+          emitCapturedJobsTrace(testTrace, {
+            kind: "deferred",
+            path: "ordinary",
+            failureCode: "jobs-multiplier-latch-not-ready",
+            root: session.root,
+            settings: session.settings,
+            input: session.input,
+            multiplierLatch,
+          });
         sessionRef.value = undefined;
         return Object.freeze({
           status: "deferred",
@@ -1435,58 +1454,62 @@ export function createCapturedOrdinaryJobsAutomation({
             : decision.assignments.find(
                 (candidate) => candidate.jobToken === job.token,
               );
-        emitCapturedJobsTrace(testTrace, {
-          kind: "deferred",
-          path: "ordinary",
-          failureCode: "ordinary-jobs-controls-not-ready",
-          root: session.root,
-          settings: {
-            ...session.settings,
-            manageServants: session.commandState.manageServants,
-          },
-          defaultJobId: session.catalog.defaultJobId,
-          sampledJobCount: session.commandState.jobs.length,
-          sampledJobs: session.commandState.jobs
-            .filter((job) => job.workers > 0 || job.servants > 0)
-            .map(({ id, token, workers, servants }) => ({
-              id,
-              token,
-              workers,
-              servants,
-            })),
-          pools: {
-            population: session.input.population,
-            defaultWorkers:
-              session.commandState.jobs.find(
-                (job) => job.id === session.catalog.defaultJobId,
-              )?.workers ?? 0,
-            servantsMaximum: session.input.servantsMaximum,
-            servantsUsed: session.catalog.servantState?.used ?? 0,
-          },
-          decision: {
-            kind: decision.kind,
-            selectedDefaultToken: decision.selectedDefaultToken,
-            assignmentChanges: summarizeCapturedJobsTraceAssignments(
-              session.commandState.jobs,
-              decision.assignments,
-            ),
-          },
-          missing: {
-            elementId: preflightFailure.elementId,
-            method: preflightFailure.method,
-            job: job?.id,
-            jobToken: job?.token,
-            workerDelta:
-              job === undefined || assignment === undefined
-                ? 0
-                : assignment.workers - job.workers,
-            servantDelta:
-              job === undefined || assignment === undefined
-                ? 0
-                : assignment.servants - job.servants,
-          },
-          requiredControls: capturedRequiredControls(controls, required),
-        });
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        )
+          emitCapturedJobsTrace(testTrace, {
+            kind: "deferred",
+            path: "ordinary",
+            failureCode: "ordinary-jobs-controls-not-ready",
+            root: session.root,
+            settings: {
+              ...session.settings,
+              manageServants: session.commandState.manageServants,
+            },
+            defaultJobId: session.catalog.defaultJobId,
+            sampledJobCount: session.commandState.jobs.length,
+            sampledJobs: session.commandState.jobs
+              .filter((job) => job.workers > 0 || job.servants > 0)
+              .map(({ id, token, workers, servants }) => ({
+                id,
+                token,
+                workers,
+                servants,
+              })),
+            pools: {
+              population: session.input.population,
+              defaultWorkers:
+                session.commandState.jobs.find(
+                  (job) => job.id === session.catalog.defaultJobId,
+                )?.workers ?? 0,
+              servantsMaximum: session.input.servantsMaximum,
+              servantsUsed: session.catalog.servantState?.used ?? 0,
+            },
+            decision: {
+              kind: decision.kind,
+              selectedDefaultToken: decision.selectedDefaultToken,
+              assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                session.commandState.jobs,
+                decision.assignments,
+              ),
+            },
+            missing: {
+              elementId: preflightFailure.elementId,
+              method: preflightFailure.method,
+              job: job?.id,
+              jobToken: job?.token,
+              workerDelta:
+                job === undefined || assignment === undefined
+                  ? 0
+                  : assignment.workers - job.workers,
+              servantDelta:
+                job === undefined || assignment === undefined
+                  ? 0
+                  : assignment.servants - job.servants,
+            },
+            requiredControls: capturedRequiredControls(controls, required),
+          });
         sessionRef.value = undefined;
         return Object.freeze({
           status: "deferred",
@@ -1494,7 +1517,11 @@ export function createCapturedOrdinaryJobsAutomation({
         });
       }
       sessionRef.value = undefined;
-      invocations.length = 0;
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      )
+        invocations?.splice(0);
       let outcome = executeCapturedJobDecision(
         controlsPort,
         session.commandState,
@@ -1530,148 +1557,160 @@ export function createCapturedOrdinaryJobsAutomation({
             );
           });
         if (!matches) {
-          emitCapturedJobsTrace(testTrace, {
-            kind: "failure",
-            path: "ordinary",
-            failureCode: "ordinary-jobs-postcondition-failed",
-            root: session.root,
-            currentRoot,
-            settings: {
-              ...session.settings,
-              manageServants: session.commandState.manageServants,
-            },
-            defaultJobId: session.catalog.defaultJobId,
-            sampledJobs: session.commandState.jobs
-              .filter((job) => job.workers > 0 || job.servants > 0)
-              .map(({ id, token, workers, servants }) => ({
-                id,
-                token,
-                workers,
-                servants,
-              })),
-            decision: {
-              kind: decision.kind,
-              selectedDefaultToken: decision.selectedDefaultToken,
-              assignmentChanges: summarizeCapturedJobsTraceAssignments(
-                session.commandState.jobs,
-                decision.assignments,
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true
+          )
+            emitCapturedJobsTrace(testTrace, {
+              kind: "failure",
+              path: "ordinary",
+              failureCode: "ordinary-jobs-postcondition-failed",
+              root: session.root,
+              currentRoot,
+              settings: {
+                ...session.settings,
+                manageServants: session.commandState.manageServants,
+              },
+              defaultJobId: session.catalog.defaultJobId,
+              sampledJobs: session.commandState.jobs
+                .filter((job) => job.workers > 0 || job.servants > 0)
+                .map(({ id, token, workers, servants }) => ({
+                  id,
+                  token,
+                  workers,
+                  servants,
+                })),
+              decision: {
+                kind: decision.kind,
+                selectedDefaultToken: decision.selectedDefaultToken,
+                assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                  session.commandState.jobs,
+                  decision.assignments,
+                ),
+              },
+              invocations: summarizeCapturedJobsTraceInvocations(
+                invocations ?? [],
               ),
-            },
-            invocations: summarizeCapturedJobsTraceInvocations(invocations),
-            pools: {
-              population: session.input.population,
-              defaultWorkers:
-                session.commandState.jobs.find(
-                  (job) => job.id === session.catalog.defaultJobId,
-                )?.workers ?? 0,
-              servantsMaximum: session.input.servantsMaximum,
-              servantsUsed: session.catalog.servantState?.used ?? 0,
-            },
-            expected: {
-              defaultJobId:
-                decision.selectedDefaultToken === null
-                  ? session.catalog.defaultJobId
-                  : session.commandState.jobs.find(
-                      (job) => job.token === decision.selectedDefaultToken,
-                    )?.id,
-              assignments: summarizeCapturedJobsTraceAssignments(
-                session.commandState.jobs,
-                decision.assignments,
-              ),
-            },
-            actual: {
-              rootUnchanged: currentRoot === session.root,
-              defaultJobId: observed?.defaultJobId ?? null,
-              mismatches:
-                observed === undefined
-                  ? null
-                  : decision.assignments.flatMap((assignment) => {
-                      const expected = session.commandState.jobs.find(
-                        (job) => job.token === assignment.jobToken,
-                      );
-                      const actual = observed.jobs.find(
-                        (job) => job.token === assignment.jobToken,
-                      );
-                      return expected === undefined ||
-                        actual === undefined ||
-                        actual.workers !== assignment.workers ||
-                        actual.servants !==
-                          (session.commandState.manageServants
-                            ? assignment.servants
-                            : expected.servants)
-                        ? [
-                            {
-                              id: expected?.id,
-                              beforeWorkers: expected?.workers,
-                              requestedWorkers: assignment.workers,
-                              actualWorkers: actual?.workers,
-                              beforeServants: expected?.servants,
-                              requestedServants: assignment.servants,
-                              actualServants: actual?.servants,
-                            },
-                          ]
-                        : [];
-                    }),
-            },
-          });
+              pools: {
+                population: session.input.population,
+                defaultWorkers:
+                  session.commandState.jobs.find(
+                    (job) => job.id === session.catalog.defaultJobId,
+                  )?.workers ?? 0,
+                servantsMaximum: session.input.servantsMaximum,
+                servantsUsed: session.catalog.servantState?.used ?? 0,
+              },
+              expected: {
+                defaultJobId:
+                  decision.selectedDefaultToken === null
+                    ? session.catalog.defaultJobId
+                    : session.commandState.jobs.find(
+                        (job) => job.token === decision.selectedDefaultToken,
+                      )?.id,
+                assignments: summarizeCapturedJobsTraceAssignments(
+                  session.commandState.jobs,
+                  decision.assignments,
+                ),
+              },
+              actual: {
+                rootUnchanged: currentRoot === session.root,
+                defaultJobId: observed?.defaultJobId ?? null,
+                mismatches:
+                  observed === undefined
+                    ? null
+                    : decision.assignments.flatMap((assignment) => {
+                        const expected = session.commandState.jobs.find(
+                          (job) => job.token === assignment.jobToken,
+                        );
+                        const actual = observed.jobs.find(
+                          (job) => job.token === assignment.jobToken,
+                        );
+                        return expected === undefined ||
+                          actual === undefined ||
+                          actual.workers !== assignment.workers ||
+                          actual.servants !==
+                            (session.commandState.manageServants
+                              ? assignment.servants
+                              : expected.servants)
+                          ? [
+                              {
+                                id: expected?.id,
+                                beforeWorkers: expected?.workers,
+                                requestedWorkers: assignment.workers,
+                                actualWorkers: actual?.workers,
+                                beforeServants: expected?.servants,
+                                requestedServants: assignment.servants,
+                                actualServants: actual?.servants,
+                              },
+                            ]
+                          : [];
+                      }),
+              },
+            });
           outcome = rejected(
             "ordinary-jobs-postcondition-failed",
             "ordinary job assignment was not observed in captured root state",
           );
         } else {
-          emitCapturedJobsTrace(testTrace, {
-            kind: "success",
-            path: "ordinary",
-            failureCode: "jobs-assignment-postcondition-succeeded",
-            root: session.root,
-            currentRoot,
-            settings: {
-              ...session.settings,
-              manageServants: session.commandState.manageServants,
-            },
-            defaultJobId: session.catalog.defaultJobId,
-            sampledJobs: session.commandState.jobs
-              .filter((job) => job.workers > 0 || job.servants > 0)
-              .map(({ id, token, workers, servants }) => ({
-                id,
-                token,
-                workers,
-                servants,
-              })),
-            decision: {
-              kind: decision.kind,
-              selectedDefaultToken: decision.selectedDefaultToken,
-              assignmentChanges: summarizeCapturedJobsTraceAssignments(
-                session.commandState.jobs,
-                decision.assignments,
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true
+          )
+            emitCapturedJobsTrace(testTrace, {
+              kind: "success",
+              path: "ordinary",
+              failureCode: "jobs-assignment-postcondition-succeeded",
+              root: session.root,
+              currentRoot,
+              settings: {
+                ...session.settings,
+                manageServants: session.commandState.manageServants,
+              },
+              defaultJobId: session.catalog.defaultJobId,
+              sampledJobs: session.commandState.jobs
+                .filter((job) => job.workers > 0 || job.servants > 0)
+                .map(({ id, token, workers, servants }) => ({
+                  id,
+                  token,
+                  workers,
+                  servants,
+                })),
+              decision: {
+                kind: decision.kind,
+                selectedDefaultToken: decision.selectedDefaultToken,
+                assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                  session.commandState.jobs,
+                  decision.assignments,
+                ),
+              },
+              invocations: summarizeCapturedJobsTraceInvocations(
+                invocations ?? [],
               ),
-            },
-            invocations: summarizeCapturedJobsTraceInvocations(invocations),
-            pools: {
-              population: session.input.population,
-              defaultWorkers:
-                session.commandState.jobs.find(
-                  (job) => job.id === session.catalog.defaultJobId,
-                )?.workers ?? 0,
-              servantsMaximum: session.input.servantsMaximum,
-              servantsUsed: session.catalog.servantState?.used ?? 0,
-            },
-            actual: {
-              defaultJobId: observed?.defaultJobId ?? null,
-              changedAssignments: summarizeCapturedJobsTraceAssignments(
-                session.commandState.jobs,
-                decision.assignments,
-              ).map((change) => ({
-                ...change,
-                actualWorkers:
-                  observed?.jobs.find((job) => job.token === change.jobToken)
-                    ?.workers ?? null,
-                actualServants:
-                  observed?.jobs.find((job) => job.token === change.jobToken)
-                    ?.servants ?? null,
-              })),
-            },
-          });
+              pools: {
+                population: session.input.population,
+                defaultWorkers:
+                  session.commandState.jobs.find(
+                    (job) => job.id === session.catalog.defaultJobId,
+                  )?.workers ?? 0,
+                servantsMaximum: session.input.servantsMaximum,
+                servantsUsed: session.catalog.servantState?.used ?? 0,
+              },
+              actual: {
+                defaultJobId: observed?.defaultJobId ?? null,
+                changedAssignments: summarizeCapturedJobsTraceAssignments(
+                  session.commandState.jobs,
+                  decision.assignments,
+                ).map((change) => ({
+                  ...change,
+                  actualWorkers:
+                    observed?.jobs.find((job) => job.token === change.jobToken)
+                      ?.workers ?? null,
+                  actualServants:
+                    observed?.jobs.find((job) => job.token === change.jobToken)
+                      ?.servants ?? null,
+                })),
+              },
+            });
           historyRoot = rootState.readRoot();
           history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
@@ -1848,16 +1887,20 @@ export function createCapturedFullJobsAutomation({
           keyState,
         );
         if (multiplierLatch !== "none-latched") {
-          emitCapturedJobsTrace(testTrace, {
-            kind: "deferred",
-            path: "full",
-            failureCode: "jobs-multiplier-latch-not-ready",
-            root: session.root,
-            settings: session.settings,
-            input: session.input,
-            decision,
-            multiplierLatch,
-          });
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true
+          )
+            emitCapturedJobsTrace(testTrace, {
+              kind: "deferred",
+              path: "full",
+              failureCode: "jobs-multiplier-latch-not-ready",
+              root: session.root,
+              settings: session.settings,
+              input: session.input,
+              decision,
+              multiplierLatch,
+            });
           return Object.freeze({
             status: "deferred",
             reason: `native job multiplier latch is ${multiplierLatch}`,
@@ -1883,7 +1926,12 @@ export function createCapturedFullJobsAutomation({
             : decision.authorityEntertainerCap;
           return SUCCEEDED;
         }
-        const invocations: Array<Readonly<Record<string, unknown>>> = [];
+        const invocations:
+          Array<Readonly<Record<string, unknown>>> | undefined =
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+            ? []
+            : undefined;
         const outcome = measure("jobs.full.execute", () =>
           executeFullDecision(
             controls,
@@ -1903,100 +1951,106 @@ export function createCapturedFullJobsAutomation({
             fullJobsPostcondition(currentRoot, session, decision),
         );
         if (!postcondition) {
-          emitCapturedJobsTrace(testTrace, {
-            kind: "failure",
-            path: "full",
-            failureCode: "full-jobs-postcondition-failed",
-            root: session.root,
-            currentRoot,
-            settings: {
-              ...session.settings,
-              manageServants: session.input.manageServants,
-            },
-            defaultJobId: session.catalog.defaultJobId,
-            sampledJobCount: session.input.jobs.length,
-            sampledJobs: session.input.jobs
-              .filter((job) => job.workers > 0 || job.servants > 0)
-              .map(({ id, token, workers, servants, crafting }) => ({
-                id,
-                token,
-                workers,
-                servants,
-                crafting,
-              })),
-            pools: {
-              population: session.input.population,
-              defaultWorkers:
-                session.ordinaryJobs.find(
-                  (job) => job.id === session.catalog.defaultJobId,
-                )?.workers ?? 0,
-              servantsMaximum: session.input.servantsMaximum,
-              servantsUsed: session.catalog.servantState?.used ?? 0,
-              craftsmenMaximum: session.input.craftsmenMaximum,
-              skilledServantsMaximum: session.input.skilledServantsMaximum,
-              skilledServantsUsed: session.foundry.skilledUsed,
-            },
-            decision: {
-              kind: decision.kind,
-              selectedDefaultToken: decision.selectedDefaultToken,
-              assignmentChanges: summarizeCapturedJobsTraceAssignments(
-                session.input.jobs,
-                decision.assignments,
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true
+          )
+            emitCapturedJobsTrace(testTrace, {
+              kind: "failure",
+              path: "full",
+              failureCode: "full-jobs-postcondition-failed",
+              root: session.root,
+              currentRoot,
+              settings: {
+                ...session.settings,
+                manageServants: session.input.manageServants,
+              },
+              defaultJobId: session.catalog.defaultJobId,
+              sampledJobCount: session.input.jobs.length,
+              sampledJobs: session.input.jobs
+                .filter((job) => job.workers > 0 || job.servants > 0)
+                .map(({ id, token, workers, servants, crafting }) => ({
+                  id,
+                  token,
+                  workers,
+                  servants,
+                  crafting,
+                })),
+              pools: {
+                population: session.input.population,
+                defaultWorkers:
+                  session.ordinaryJobs.find(
+                    (job) => job.id === session.catalog.defaultJobId,
+                  )?.workers ?? 0,
+                servantsMaximum: session.input.servantsMaximum,
+                servantsUsed: session.catalog.servantState?.used ?? 0,
+                craftsmenMaximum: session.input.craftsmenMaximum,
+                skilledServantsMaximum: session.input.skilledServantsMaximum,
+                skilledServantsUsed: session.foundry.skilledUsed,
+              },
+              decision: {
+                kind: decision.kind,
+                selectedDefaultToken: decision.selectedDefaultToken,
+                assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                  session.input.jobs,
+                  decision.assignments,
+                ),
+              },
+              invocations: summarizeCapturedJobsTraceInvocations(
+                invocations ?? [],
               ),
-            },
-            invocations: summarizeCapturedJobsTraceInvocations(invocations),
-            expected: {
-              defaultJobId:
-                decision.selectedDefaultToken === null
-                  ? session.catalog.defaultJobId
-                  : session.ordinaryJobs.find(
-                      (job) => job.token === decision.selectedDefaultToken,
-                    )?.id,
-              assignments: summarizeCapturedJobsTraceAssignments(
-                session.input.jobs,
-                decision.assignments,
-              ),
-            },
-            actual: {
-              rootUnchanged: currentRoot === session.root,
-              defaultJobId: readProperty(
-                readProperty(currentRoot, "civic"),
-                "d_job",
-              ),
-              mismatches: decision.assignments.flatMap((assignment) => {
-                const job = session.input.jobs.find(
-                  (candidate) => candidate.token === assignment.jobToken,
-                );
-                const owner = job?.crafting
-                  ? readProperty(readProperty(currentRoot, "city"), "foundry")
-                  : readProperty(
-                      readProperty(currentRoot, "civic"),
-                      job?.id ?? "",
-                    );
-                const servants = readProperty(
-                  readProperty(readProperty(currentRoot, "race"), "servants"),
-                  job?.crafting ? "sjobs" : "jobs",
-                );
-                const actualWorkers = readProperty(
-                  owner,
-                  job?.crafting ? job.id : "workers",
-                );
-                const actualServants = readProperty(servants, job?.id ?? "");
-                return actualWorkers !== assignment.workers ||
-                  actualServants !== assignment.servants
-                  ? [
-                      {
-                        id: job?.id,
-                        requestedWorkers: assignment.workers,
-                        actualWorkers,
-                        requestedServants: assignment.servants,
-                        actualServants,
-                      },
-                    ]
-                  : [];
-              }),
-            },
-          });
+              expected: {
+                defaultJobId:
+                  decision.selectedDefaultToken === null
+                    ? session.catalog.defaultJobId
+                    : session.ordinaryJobs.find(
+                        (job) => job.token === decision.selectedDefaultToken,
+                      )?.id,
+                assignments: summarizeCapturedJobsTraceAssignments(
+                  session.input.jobs,
+                  decision.assignments,
+                ),
+              },
+              actual: {
+                rootUnchanged: currentRoot === session.root,
+                defaultJobId: readProperty(
+                  readProperty(currentRoot, "civic"),
+                  "d_job",
+                ),
+                mismatches: decision.assignments.flatMap((assignment) => {
+                  const job = session.input.jobs.find(
+                    (candidate) => candidate.token === assignment.jobToken,
+                  );
+                  const owner = job?.crafting
+                    ? readProperty(readProperty(currentRoot, "city"), "foundry")
+                    : readProperty(
+                        readProperty(currentRoot, "civic"),
+                        job?.id ?? "",
+                      );
+                  const servants = readProperty(
+                    readProperty(readProperty(currentRoot, "race"), "servants"),
+                    job?.crafting ? "sjobs" : "jobs",
+                  );
+                  const actualWorkers = readProperty(
+                    owner,
+                    job?.crafting ? job.id : "workers",
+                  );
+                  const actualServants = readProperty(servants, job?.id ?? "");
+                  return actualWorkers !== assignment.workers ||
+                    actualServants !== assignment.servants
+                    ? [
+                        {
+                          id: job?.id,
+                          requestedWorkers: assignment.workers,
+                          actualWorkers,
+                          requestedServants: assignment.servants,
+                          actualServants,
+                        },
+                      ]
+                    : [];
+                }),
+              },
+            });
           return rejected(
             "full-jobs-postcondition-failed",
             `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
@@ -2025,78 +2079,84 @@ export function createCapturedFullJobsAutomation({
             )}`,
           );
         }
-        emitCapturedJobsTrace(testTrace, {
-          kind: "success",
-          path: "full",
-          failureCode: "jobs-assignment-postcondition-succeeded",
-          root: session.root,
-          currentRoot,
-          settings: {
-            ...session.settings,
-            manageServants: session.input.manageServants,
-          },
-          defaultJobId: session.catalog.defaultJobId,
-          decision: {
-            kind: decision.kind,
-            selectedDefaultToken: decision.selectedDefaultToken,
-            assignmentChanges: summarizeCapturedJobsTraceAssignments(
-              session.input.jobs,
-              decision.assignments,
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        )
+          emitCapturedJobsTrace(testTrace, {
+            kind: "success",
+            path: "full",
+            failureCode: "jobs-assignment-postcondition-succeeded",
+            root: session.root,
+            currentRoot,
+            settings: {
+              ...session.settings,
+              manageServants: session.input.manageServants,
+            },
+            defaultJobId: session.catalog.defaultJobId,
+            decision: {
+              kind: decision.kind,
+              selectedDefaultToken: decision.selectedDefaultToken,
+              assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                session.input.jobs,
+                decision.assignments,
+              ),
+            },
+            invocations: summarizeCapturedJobsTraceInvocations(
+              invocations ?? [],
             ),
-          },
-          invocations: summarizeCapturedJobsTraceInvocations(invocations),
-          pools: {
-            population: session.input.population,
-            defaultWorkers:
-              session.ordinaryJobs.find(
-                (job) => job.id === session.catalog.defaultJobId,
-              )?.workers ?? 0,
-            servantsMaximum: session.input.servantsMaximum,
-            servantsUsed: session.catalog.servantState?.used ?? 0,
-            craftsmenMaximum: session.input.craftsmenMaximum,
-            skilledServantsMaximum: session.input.skilledServantsMaximum,
-            skilledServantsUsed: session.foundry.skilledUsed,
-          },
-          actual: {
-            defaultJobId: readProperty(
-              readProperty(currentRoot, "civic"),
-              "d_job",
-            ),
-            changedAssignments: summarizeCapturedJobsTraceAssignments(
-              session.input.jobs,
-              decision.assignments,
-            ).map((change) => {
-              const assignment = decision.assignments.find(
-                (candidate) => candidate.jobToken === change.jobToken,
-              )!;
-              const job = session.input.jobs.find(
-                (candidate) => candidate.token === assignment.jobToken,
-              );
-              const owner = job?.crafting
-                ? readProperty(readProperty(currentRoot, "city"), "foundry")
-                : readProperty(
-                    readProperty(currentRoot, "civic"),
-                    job?.id ?? "",
-                  );
-              const servants = readProperty(
-                readProperty(readProperty(currentRoot, "race"), "servants"),
-                job?.crafting ? "sjobs" : "jobs",
-              );
-              return {
-                id: job?.id,
-                beforeWorkers: change.beforeWorkers,
-                requestedWorkers: assignment.workers,
-                workers: readProperty(
-                  owner,
-                  job?.crafting ? job.id : "workers",
-                ),
-                beforeServants: change.beforeServants,
-                requestedServants: assignment.servants,
-                servants: readProperty(servants, job?.id ?? ""),
-              };
-            }),
-          },
-        });
+            pools: {
+              population: session.input.population,
+              defaultWorkers:
+                session.ordinaryJobs.find(
+                  (job) => job.id === session.catalog.defaultJobId,
+                )?.workers ?? 0,
+              servantsMaximum: session.input.servantsMaximum,
+              servantsUsed: session.catalog.servantState?.used ?? 0,
+              craftsmenMaximum: session.input.craftsmenMaximum,
+              skilledServantsMaximum: session.input.skilledServantsMaximum,
+              skilledServantsUsed: session.foundry.skilledUsed,
+            },
+            actual: {
+              defaultJobId: readProperty(
+                readProperty(currentRoot, "civic"),
+                "d_job",
+              ),
+              changedAssignments: summarizeCapturedJobsTraceAssignments(
+                session.input.jobs,
+                decision.assignments,
+              ).map((change) => {
+                const assignment = decision.assignments.find(
+                  (candidate) => candidate.jobToken === change.jobToken,
+                )!;
+                const job = session.input.jobs.find(
+                  (candidate) => candidate.token === assignment.jobToken,
+                );
+                const owner = job?.crafting
+                  ? readProperty(readProperty(currentRoot, "city"), "foundry")
+                  : readProperty(
+                      readProperty(currentRoot, "civic"),
+                      job?.id ?? "",
+                    );
+                const servants = readProperty(
+                  readProperty(readProperty(currentRoot, "race"), "servants"),
+                  job?.crafting ? "sjobs" : "jobs",
+                );
+                return {
+                  id: job?.id,
+                  beforeWorkers: change.beforeWorkers,
+                  requestedWorkers: assignment.workers,
+                  workers: readProperty(
+                    owner,
+                    job?.crafting ? job.id : "workers",
+                  ),
+                  beforeServants: change.beforeServants,
+                  requestedServants: assignment.servants,
+                  servants: readProperty(servants, job?.id ?? ""),
+                };
+              }),
+            },
+          });
         historyRoot = currentRoot;
         history = Object.freeze({
           lastPopulationCount: decision.lastPopulationCount,

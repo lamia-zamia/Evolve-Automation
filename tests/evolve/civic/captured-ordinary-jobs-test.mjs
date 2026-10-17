@@ -883,6 +883,7 @@ const fullControls = {
 };
 let fullManageServants = true;
 let fullBuildingWeighting = false;
+let fullMultiplierLatch = false;
 let fullRootIdentity;
 let fullBuildTargetReads = 0;
 let fullBuildCostReads = 0;
@@ -902,6 +903,7 @@ const fullDiagnostics = {
 const fullAutomation = createCapturedFullJobsAutomation({
   rootState: { readRoot: () => fullRootIdentity ?? fullRoot },
   controls: fullControls,
+  keyState: { readMultiplierLatch: () => fullMultiplierLatch },
   readSettings: () => ({
     ...resetBreakpoints,
     job_unemployed: true,
@@ -1708,5 +1710,127 @@ assert.deepEqual(
   [2, 18, 10, 0],
   "root counts survive missing controls, incomplete servant pools and bad split settings",
 );
+
+const multiplierRoot = structuredClone(noOpRoot);
+multiplierRoot.settings = { mKeys: true };
+let ordinaryMultiplierLatch;
+const ordinaryMultiplierCalls = [];
+const ordinaryMultiplierControls = {
+  capturedElementIds: () => controls.capturedElementIds(),
+  resolve: (elementId) => controls.resolve(elementId),
+  invoke: (handle, method, args = []) => {
+    ordinaryMultiplierCalls.push({ elementId: handle.elementId, method, args });
+    if (method === "setDefault") {
+      multiplierRoot.civic.d_job = args[0];
+    } else {
+      const id = handle.elementId.slice("civ-".length);
+      multiplierRoot.civic[id].workers += method === "add" ? 1 : -1;
+    }
+    return { ok: true, value: undefined };
+  },
+};
+const ordinaryMultiplierAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => multiplierRoot },
+  controls: ordinaryMultiplierControls,
+  keyState: { readMultiplierLatch: () => ordinaryMultiplierLatch },
+  readSettings: () => ({
+    ...resetBreakpoints,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 0,
+    job_b3_unemployed: 0,
+    job_unemployed: true,
+    job_farmer: true,
+    jobSetDefault: true,
+  }),
+});
+const ordinaryUnknownPrepared =
+  ordinaryMultiplierAutomation.reader.readCycle(false);
+const ordinaryUnknownDecision = planJobs(ordinaryUnknownPrepared);
+assert.ok(
+  ordinaryUnknownDecision?.assignments.some(
+    (assignment) =>
+      assignment.workers !==
+      ordinaryUnknownPrepared.jobs.find(
+        (job) => job.token === assignment.jobToken,
+      )?.workers,
+  ),
+  `unknown-latch fixture requires a real worker assignment: ${JSON.stringify({ available: ordinaryUnknownPrepared.available, assignments: ordinaryUnknownDecision?.assignments, jobs: ordinaryUnknownPrepared.jobs })}`,
+);
+assert.equal(
+  ordinaryMultiplierAutomation.executor.execute(ordinaryUnknownDecision).status,
+  "deferred",
+  "ordinary Jobs fails closed on an unknown multiplier latch",
+);
+assert.deepEqual(ordinaryMultiplierCalls, []);
+ordinaryMultiplierLatch = true;
+const ordinaryActivePrepared =
+  ordinaryMultiplierAutomation.reader.readCycle(false);
+const ordinaryActiveDecision = planJobs(ordinaryActivePrepared);
+assert.equal(
+  ordinaryMultiplierAutomation.executor.execute(ordinaryActiveDecision).status,
+  "deferred",
+  "ordinary Jobs fails closed on a known active multiplier latch",
+);
+assert.deepEqual(ordinaryMultiplierCalls, []);
+ordinaryMultiplierLatch = false;
+const ordinaryClearPrepared =
+  ordinaryMultiplierAutomation.reader.readCycle(false);
+const ordinaryClearDecision = planJobs(ordinaryClearPrepared);
+assert.equal(
+  ordinaryMultiplierAutomation.executor.execute(ordinaryClearDecision).status,
+  "succeeded",
+  "ordinary Jobs runs after the latch is known clear",
+);
+assert.ok(ordinaryMultiplierCalls.length > 0);
+
+fullManageServants = true;
+fullBuildingWeighting = false;
+fullControlFailure = undefined;
+fullIgnoreControls = false;
+fullRootIdentity = undefined;
+fullCalls.length = 0;
+for (const key of Object.keys(fullRoot)) delete fullRoot[key];
+Object.assign(fullRoot, structuredClone(fullStateBeforePreflight));
+fullRoot.settings = { mKeys: true };
+fullMultiplierLatch = undefined;
+const fullUnknownLatch = fullAutomation.prepare();
+assert.equal(fullUnknownLatch.status, "ready");
+assert.ok(
+  fullUnknownLatch.execution.decision?.assignments.some(
+    (assignment) =>
+      assignment.workers !==
+      fullUnknownLatch.input.jobs.find(
+        (job) => job.token === assignment.jobToken,
+      )?.workers,
+  ),
+  "full unknown-latch fixture requires a real worker assignment",
+);
+const fullLatchRootBefore = structuredClone(fullRoot);
+assert.equal(
+  fullUnknownLatch.execution.execute().status,
+  "deferred",
+  "full Jobs fails closed on an unknown multiplier latch",
+);
+assert.deepEqual(fullCalls, []);
+assert.deepEqual(fullRoot, fullLatchRootBefore);
+fullMultiplierLatch = true;
+const fullActiveLatch = fullAutomation.prepare();
+assert.equal(fullActiveLatch.status, "ready");
+assert.equal(
+  fullActiveLatch.execution.execute().status,
+  "deferred",
+  "full Jobs fails closed on a known active multiplier latch",
+);
+assert.deepEqual(fullCalls, []);
+assert.deepEqual(fullRoot, fullLatchRootBefore);
+fullMultiplierLatch = false;
+const fullClearLatch = fullAutomation.prepare();
+assert.equal(fullClearLatch.status, "ready");
+assert.equal(
+  fullClearLatch.execution.execute().status,
+  "succeeded",
+  "full Jobs runs after the latch is known clear",
+);
+assert.ok(fullCalls.length > 0);
 
 console.log("captured-ordinary-jobs ok");

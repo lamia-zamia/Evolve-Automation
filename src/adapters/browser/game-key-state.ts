@@ -43,6 +43,8 @@ export interface GameKeyStateCaptureOptions {
   readonly readMultiplierMapping?: (
     name: GameMultiplierLatchName,
   ) => string | number | undefined;
+  /** True only when the page capture installed before Evolve's Vue script and module. */
+  readonly initialLatchesAreClear?: boolean;
 }
 
 interface GameKeyStateMouseModifierBinding {
@@ -94,6 +96,9 @@ export function createGameKeyStateCapture(
   const latched = new Map<GameMultiplierLatchName, boolean>();
   const readMultiplierMapping = options.readMultiplierMapping;
   let capturedRoot = options.roots?.readRoot();
+  let mayEstablishInitialClear =
+    options.initialLatchesAreClear === true && capturedRoot === undefined;
+  let inputObserved = false;
 
   /**
    * Runs one event's worth of upstream latch semantics over the mappings as configured *now*.
@@ -143,6 +148,7 @@ export function createGameKeyStateCapture(
   }
 
   const onKeyDown = (event: unknown): void => {
+    inputObserved = true;
     for (const key of observedKeys(event)) pressed.add(key);
     const mapped = mappedEventKey(event);
     if (mapped === undefined) return;
@@ -151,6 +157,7 @@ export function createGameKeyStateCapture(
     });
   };
   const onKeyUp = (event: unknown): void => {
+    inputObserved = true;
     for (const key of observedKeys(event)) pressed.delete(key);
     const mapped = mappedEventKey(event);
     if (mapped === undefined) return;
@@ -159,6 +166,7 @@ export function createGameKeyStateCapture(
     });
   };
   const onMouseMove = (event: unknown): void => {
+    inputObserved = true;
     for (const binding of GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS) {
       const isPressed = readProperty(event, binding.eventProperty) === true;
       if (isPressed) {
@@ -189,8 +197,10 @@ export function createGameKeyStateCapture(
       // A re-wrap keeps the same root (Vue caches the proxy per raw target) and the game's own latch
       // with it; only an unrelated root starts over.
       if (next === capturedRoot) return;
+      const firstRoot = capturedRoot === undefined && next !== undefined;
       capturedRoot = next;
       latched.clear();
+      if (!firstRoot) mayEstablishInitialClear = false;
     });
   })();
   let uninstalled = false;
@@ -199,6 +209,16 @@ export function createGameKeyStateCapture(
       return pressed.has(key);
     },
     readMultiplierLatch(name: GameMultiplierLatchName): boolean | undefined {
+      if (
+        mayEstablishInitialClear &&
+        !inputObserved &&
+        capturedRoot !== undefined &&
+        options.roots?.readRoot() === capturedRoot
+      ) {
+        for (const latch of GAME_MULTIPLIER_LATCH_NAMES)
+          latched.set(latch, false);
+        mayEstablishInitialClear = false;
+      }
       return latched.get(name);
     },
     uninstall(): void {

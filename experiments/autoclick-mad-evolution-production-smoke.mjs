@@ -15,6 +15,11 @@ const bundle = resolve(root, "evolve_automation.user.js");
 const bundleBytes = await readFile(bundle);
 const bundleText = bundleBytes.toString("utf8");
 const bundleIdentity = createHash("sha256").update(bundleBytes).digest("hex");
+const originalJobsFailureCodes = [
+  "ordinary-jobs-postcondition-failed",
+  "ordinary-jobs-controls-incomplete",
+  "full-jobs-controls-incomplete",
+];
 for (const marker of [
   "captureCompletedTechConditionsDuring",
   "researchConditionGateCompromised",
@@ -68,9 +73,32 @@ const games = [
   },
 ];
 
+function capturedJobAssignments(state) {
+  const civic = state?.civic ?? {};
+  const jobs = Object.entries(civic)
+    .filter(
+      ([id, job]) => job !== null && typeof job === "object" && job.job === id,
+    )
+    .map(([id, job]) => ({ id, workers: job.workers, assigned: job.assigned }));
+  const servants = state?.race?.servants;
+  return {
+    workers: jobs,
+    servants: Object.entries(servants?.jobs ?? {}).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  };
+}
+
 function currentNativeState() {
   const capture = window[Symbol.for("evolve-automation.page-capture")];
   const state = capture?.rootState?.readRoot?.();
+  const civic = state?.civic ?? {};
+  const jobs = Object.entries(civic)
+    .filter(
+      ([id, job]) => job !== null && typeof job === "object" && job.job === id,
+    )
+    .map(([id, job]) => ({ id, workers: job.workers, assigned: job.assigned }));
+  const servants = state?.race?.servants;
   const jobControls = (capture?.controls?.capturedElementIds?.() ?? [])
     .filter((id) => /job|servant|farmer|craft/i.test(id))
     .map((id) => ({
@@ -84,7 +112,12 @@ function currentNativeState() {
     day: state?.stats?.days ?? null,
     RNA: state?.resource?.RNA?.amount ?? null,
     DNA: state?.resource?.DNA?.amount ?? null,
-    jobs: state?.civic?.jobs ?? null,
+    jobs: {
+      workers: jobs,
+      servants: Object.entries(servants?.jobs ?? {}).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    },
     jobControls,
   };
 }
@@ -133,6 +166,16 @@ for (const game of games) {
         ])
         .filter(([, calls]) => calls > 0),
     );
+    const nativeJobsAfterHuman = Object.entries(usage)
+      .filter(([key]) => /^(civ|servant)-.+\.(add|sub|setDefault)$/.test(key))
+      .reduce(
+        (total, [key, calls]) =>
+          total + Math.max(0, calls.returned - count(usageAtEvolution, key)),
+        0,
+      );
+    const jobsChangedAfterHuman =
+      JSON.stringify(capturedJobAssignments(evolved)) !==
+      JSON.stringify(final.jobs);
     const report = {
       game: { label: game.label, commit: game.commit, path: game.path },
       bundle: { path: bundle, sha256: bundleIdentity },
@@ -153,6 +196,8 @@ for (const game of games) {
       final,
       madCalls,
       evolutionCalls,
+      nativeJobsAfterHuman,
+      jobsChangedAfterHuman,
       constructionCallsAfterHuman,
       workTicks: diagnostics.workTicks,
       errors: diagnostics.events
@@ -172,6 +217,8 @@ for (const game of games) {
         speciesHuman: final.species === "human",
         civilizationConstructionAfterHuman:
           Object.keys(constructionCallsAfterHuman).length > 0,
+        nativeJobsAfterHuman: nativeJobsAfterHuman > 0,
+        jobsChangedAfterHuman,
         automationContinuedAfterEvolution:
           Object.keys(constructionCallsAfterHuman).length > 0,
       },
@@ -181,6 +228,15 @@ for (const game of games) {
     }
     assert.equal(madCalls.arm, 1, `${game.label}: MAD arm called once`);
     assert.equal(madCalls.launch, 1, `${game.label}: MAD launch called once`);
+    assert.equal(
+      diagnostics.events.filter(
+        (event) =>
+          event.kind === "error" &&
+          originalJobsFailureCodes.some((code) => event.text.includes(code)),
+      ).length,
+      0,
+      `${game.label}: no original Jobs failure codes`,
+    );
     reports.push(report);
   } finally {
     await session?.close();
