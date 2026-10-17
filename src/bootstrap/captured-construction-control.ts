@@ -133,6 +133,25 @@ export function createCapturedConstructionControl(
   const onDiagnostic = dependencies.onDiagnostic;
   const onActivity = dependencies.onActivity;
   const onMutation = dependencies.onMutation;
+  let constructionPolicyForCycle: CapturedConstructionPolicy | undefined;
+  const readConstructionPolicy = (): CapturedConstructionPolicy => {
+    if (constructionPolicyForCycle !== undefined)
+      return constructionPolicyForCycle;
+    // Discover before the first policy read. The build source used to discover here, after
+    // construction options had already sampled Building offers, which allowed that draw to
+    // invalidate a result just before we observed the same offers a second time.
+    dependencies.ensureBuildControls?.();
+    constructionPolicyForCycle = readPolicy();
+    return constructionPolicyForCycle;
+  };
+  const withFreshConstructionPolicy = <T>(operation: () => T): T => {
+    constructionPolicyForCycle = undefined;
+    try {
+      return operation();
+    } finally {
+      constructionPolicyForCycle = undefined;
+    }
+  };
   // The offered-technology catalog is asked for at most once per cycle, and only if something in
   // the cycle actually needs it. Every candidate consults the same reservations, so without this
   // the cycle would pay for one discovery pass per candidate.
@@ -202,11 +221,8 @@ export function createCapturedConstructionControl(
           rootState,
           controls,
           costs,
-          readTargets: () => readPolicy().buildings,
+          readTargets: () => readConstructionPolicy().buildings,
           readSettings,
-          ...(dependencies.ensureBuildControls === undefined
-            ? {}
-            : { ensureControls: dependencies.ensureBuildControls }),
           ...(onSkipped === undefined ? {} : { onSkipped }),
           ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
           ...(onActivity === undefined ? {} : { onActivity }),
@@ -232,7 +248,7 @@ export function createCapturedConstructionControl(
       resources,
       rootState,
       conflicts,
-      readOptions: readPolicy,
+      readOptions: readConstructionPolicy,
       ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
       ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
       readPresentationSettings,
@@ -249,7 +265,7 @@ export function createCapturedConstructionControl(
       if (rootState.readRoot() === undefined) return false;
       offeredThisCycle = undefined;
       try {
-        return establishOrdering();
+        return withFreshConstructionPolicy(establishOrdering);
       } finally {
         offeredThisCycle = undefined;
       }
@@ -258,13 +274,15 @@ export function createCapturedConstructionControl(
       if (rootState.readRoot() === undefined) return NOT_CAPTURED;
       offeredThisCycle = undefined;
       try {
-        return runBuildAutomation({
-          reader,
-          executor,
-          diagnostics,
-          ...(onMutation === undefined ? {} : { onMutation }),
-          ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
-        });
+        return withFreshConstructionPolicy(() =>
+          runBuildAutomation({
+            reader,
+            executor,
+            diagnostics,
+            ...(onMutation === undefined ? {} : { onMutation }),
+            ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
+          }),
+        );
       } finally {
         offeredThisCycle = undefined;
       }

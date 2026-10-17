@@ -239,6 +239,79 @@ function makeControl(dependencies) {
   });
 }
 
+// Building controls are established before the policy read, then that immutable policy serves
+// both cycle options and Building candidates. A later construction operation takes a fresh policy.
+{
+  const page = makePage({
+    buildings: { farm: { count: 0, priceAt: () => ({ Money: 1 }) } },
+    resources: { Money: { amount: 10 } },
+  });
+  const events = [];
+  let policyRevision = 0;
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    ensureBuildControls: () => events.push("ensure-controls"),
+    readPolicy: () => {
+      events.push(`policy-${policyRevision}`);
+      return policy([target("farm", 10 + policyRevision++)])();
+    },
+  });
+
+  assert.equal(control.establishOrdering(), true);
+  assert.deepEqual(events, ["ensure-controls", "policy-0"]);
+  events.length = 0;
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(events, ["ensure-controls", "policy-1"]);
+  assert.equal(page.root.city.farm.count, 1);
+}
+
+// A successful native action followed by a stale candidate still ends the operation scope. The
+// next operation samples again after the partial mutation instead of inheriting that policy.
+{
+  const page = makePage({
+    buildings: {
+      first: { count: 0, priceAt: () => ({ Money: 1 }) },
+      second: { count: 0, priceAt: () => ({ Money: 1 }) },
+    },
+    resources: { Money: { amount: 10 } },
+  });
+  let staleSecond = true;
+  let policyReads = 0;
+  const mutations = [];
+  const controls = {
+    ...page.registry,
+    resolve(elementId) {
+      const resolved = page.registry.resolve(elementId);
+      return elementId === "city-second" &&
+        staleSecond &&
+        resolved !== undefined
+        ? { ...resolved, generation: resolved.generation + 1 }
+        : resolved;
+    },
+  };
+  const control = makeControl({
+    rootState: page.rootState,
+    controls,
+    onMutation: () => mutations.push("native-action-succeeded"),
+    readPolicy: () => {
+      policyReads += 1;
+      return policy([target("first", 50), target("second", 40)])();
+    },
+  });
+
+  const partial = control.runCycle();
+  assert.equal(partial.status, "stale");
+  assert.deepEqual(page.clicks, ["city-first"]);
+  assert.deepEqual(mutations, ["native-action-succeeded"]);
+  assert.equal(policyReads, 1);
+
+  staleSecond = false;
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.equal(policyReads, 2);
+  assert.deepEqual(page.clicks, ["city-first", "city-first", "city-second"]);
+}
+
 // The game's updateBuildings reprices an externally changed count before demand. The completed
 // construction order remains in force, but its current price comes from the game queue probe.
 {

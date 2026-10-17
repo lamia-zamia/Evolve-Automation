@@ -8309,7 +8309,14 @@
       readSettings,
       readPresentationSettings,
       diagnostics
-    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, onMutation = dependencies.onMutation, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
+    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, onMutation = dependencies.onMutation, constructionPolicyForCycle, readConstructionPolicy = () => (constructionPolicyForCycle !== void 0 || (dependencies.ensureBuildControls?.(), constructionPolicyForCycle = readPolicy()), constructionPolicyForCycle), withFreshConstructionPolicy = (operation2) => {
+      constructionPolicyForCycle = void 0;
+      try {
+        return operation2();
+      } finally {
+        constructionPolicyForCycle = void 0;
+      }
+    }, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
       controls: controls2,
       ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
@@ -8345,9 +8352,8 @@
           rootState,
           controls: controls2,
           costs,
-          readTargets: () => readPolicy().buildings,
+          readTargets: () => readConstructionPolicy().buildings,
           readSettings,
-          ...dependencies.ensureBuildControls === void 0 ? {} : { ensureControls: dependencies.ensureBuildControls },
           ...onSkipped === void 0 ? {} : { onSkipped },
           ...onDiagnostic === void 0 ? {} : { onDiagnostic },
           ...onActivity === void 0 ? {} : { onActivity }
@@ -8373,7 +8379,7 @@
       resources,
       rootState,
       conflicts,
-      readOptions: readPolicy,
+      readOptions: readConstructionPolicy,
       ...readKnowledgeGate === void 0 ? {} : { readKnowledgeGate },
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
       readPresentationSettings,
@@ -8386,7 +8392,7 @@
         if (rootState.readRoot() === void 0) return !1;
         offeredThisCycle = void 0;
         try {
-          return establishOrdering();
+          return withFreshConstructionPolicy(establishOrdering);
         } finally {
           offeredThisCycle = void 0;
         }
@@ -8395,13 +8401,15 @@
         if (rootState.readRoot() === void 0) return NOT_CAPTURED;
         offeredThisCycle = void 0;
         try {
-          return runBuildAutomation({
-            reader,
-            executor,
-            diagnostics,
-            ...onMutation === void 0 ? {} : { onMutation },
-            ...onDiagnostic === void 0 ? {} : { onDiagnostic }
-          });
+          return withFreshConstructionPolicy(
+            () => runBuildAutomation({
+              reader,
+              executor,
+              diagnostics,
+              ...onMutation === void 0 ? {} : { onMutation },
+              ...onDiagnostic === void 0 ? {} : { onDiagnostic }
+            })
+          );
         } finally {
           offeredThisCycle = void 0;
         }
