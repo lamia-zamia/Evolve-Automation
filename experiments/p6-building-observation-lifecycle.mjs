@@ -97,7 +97,21 @@ const instrumented = await esbuild.build({
             assert.equal(contents.split(call).length - 1, 1);
             contents = contents.replace(
               call,
-              `const hooks = globalThis.__EA_TEST_HOOKS__;\n    if (hooks !== undefined) hooks.buildingUnlockCurrentEvaluations = 0;\n    const establishedSnapshot = () => [...establishedBuildingOffers].map(([key, sample]) => ({ key, epoch: sample.epoch, regions: [...sample.regions].sort(), unlocked: [...sample.catalog.unlocked].sort() }));\n    const establishedBefore = establishedSnapshot();\n    ${call}\n    const establishedAfter = establishedSnapshot();\n    const observer = hooks?.buildingUnlockReadObserver;\n    if (typeof observer === "function") observer([...regions], phase, { rootGeneration: epoch.readRootGeneration(), progressionEpoch: epoch.read(), catalog: catalog === undefined ? undefined : { regions: [...catalog.regions], unlocked: [...catalog.unlocked] }, establishedBefore, establishedAfter, settings: readSettings(), controlRevision: controls.readRevision?.() });`,
+              `const hooks = globalThis.__EA_TEST_HOOKS__;\n    if (hooks !== undefined) hooks.buildingUnlockCurrentEvaluations = 0;\n    const establishedSnapshot = () => [...establishedBuildingOffers].map(([key, sample]) => ({ key, epoch: sample.epoch, regions: [...sample.regions].sort(), unlocked: [...sample.catalog.unlocked].sort() }));\n    const establishedBefore = establishedSnapshot();\n    const recordObservation = (result: typeof catalog) => { const establishedAfter = establishedSnapshot(); const observer = hooks?.buildingUnlockReadObserver; if (typeof observer === "function") observer([...regions], phase, { rootGeneration: epoch.readRootGeneration(), progressionEpoch: epoch.read(), catalog: result === undefined ? undefined : { regions: [...result.regions], unlocked: [...result.unlocked] }, establishedBefore, establishedAfter, settings: readSettings(), controlRevision: controls.readRevision?.() }); };\n    ${call}`,
+            );
+            const failedReturn =
+              "      return undefined;\n    }\n    establishedBuildingOffers.delete(key);";
+            assert.equal(contents.split(failedReturn).length - 1, 1);
+            contents = contents.replace(
+              failedReturn,
+              "      recordObservation(undefined);\n      return undefined;\n    }\n    establishedBuildingOffers.delete(key);",
+            );
+            const establishedReturn =
+              "    return Object.freeze({\n      unlocked: catalog.unlocked,";
+            assert.equal(contents.split(establishedReturn).length - 1, 1);
+            contents = contents.replace(
+              establishedReturn,
+              "    recordObservation(catalog);\n    return Object.freeze({\n      unlocked: catalog.unlocked,",
             );
             const established =
               "const candidates = [...establishedBuildingOffers.values()].reverse();";
@@ -219,7 +233,7 @@ const instrumented = await esbuild.build({
                     "git",
                     [
                       "show",
-                      "HEAD:src/bootstrap/captured-construction-control.ts",
+                      "e97a4bb6:src/bootstrap/captured-construction-control.ts",
                     ],
                     { cwd: root, encoding: "utf8" },
                   )
@@ -227,17 +241,30 @@ const instrumented = await esbuild.build({
             const anchor =
               "  const resources = createCapturedResourceSource(rootState);";
             assert.equal(contents.split(anchor).length - 1, 1);
+            const policyReader = contents.includes(
+              "const readConstructionPolicy =",
+            )
+              ? "readConstructionPolicy()"
+              : "readPolicy()";
             contents = contents.replace(
               anchor,
-              `  const p6ReadPolicy = (callsite: string) => {\n    const hooks = globalThis.__EA_TEST_HOOKS__;\n    const previous = hooks?.buildingUnlockCurrentCallsite;\n    if (hooks !== undefined) hooks.buildingUnlockCurrentCallsite = callsite;\n    try { return readPolicy(); }\n    finally { if (hooks !== undefined) hooks.buildingUnlockCurrentCallsite = previous; }\n  };\n${anchor}`,
+              `  const p6ReadPolicy = (callsite: string) => {\n    const hooks = globalThis.__EA_TEST_HOOKS__;\n    const previous = hooks?.buildingUnlockCurrentCallsite;\n    if (hooks !== undefined) hooks.buildingUnlockCurrentCallsite = callsite;\n    try { return ${policyReader}; }\n    finally { if (hooks !== undefined) hooks.buildingUnlockCurrentCallsite = previous; }\n  };\n${anchor}`,
             );
-            const target = "readTargets: () => readPolicy().buildings,";
+            const target = contents.includes(
+              "readTargets: () => readConstructionPolicy().buildings,",
+            )
+              ? "readTargets: () => readConstructionPolicy().buildings,"
+              : "readTargets: () => readPolicy().buildings,";
             assert.equal(contents.split(target).length - 1, 1);
             contents = contents.replace(
               target,
               'readTargets: () => p6ReadPolicy("construction-build-source").buildings,',
             );
-            const optionsAnchor = "readOptions: readPolicy,";
+            const optionsAnchor = contents.includes(
+              "readOptions: readConstructionPolicy,",
+            )
+              ? "readOptions: readConstructionPolicy,"
+              : "readOptions: readPolicy,";
             assert.equal(contents.split(optionsAnchor).length - 1, 1);
             contents = contents.replace(
               optionsAnchor,
