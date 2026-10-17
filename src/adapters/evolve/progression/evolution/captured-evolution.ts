@@ -21,6 +21,7 @@ import type {
 } from "../../../../domain/progression/evolution/evolution.ts";
 import type {
   EvolutionCostsSample,
+  EvolutionCycleTrace,
   EvolutionExecutor,
   EvolutionReader,
   EvolutionResultSample,
@@ -36,12 +37,27 @@ import {
   readCapturedEvolutionTargetGenus,
   sampleCapturedEvolutionRaceCatalog,
 } from "./captured-evolution-race-catalog.ts";
-import { CAPTURED_EVOLUTION_GENERA } from "./captured-evolution-catalog.ts";
+import {
+  CAPTURED_EVOLUTION_GENERA,
+  CAPTURED_EVOLUTION_RACES,
+} from "./captured-evolution-catalog.ts";
 import { readCapturedEvolutionResult } from "./captured-evolution-result.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 const EVOLUTION_ACTION_PREFIX = "evolution-";
-const EVOLUTION_ACTION_SELECTOR = "#evolution > .action";
+export const EVOLUTION_ACTION_SELECTOR = "#evolution > .action";
 const RESOURCE_ACTION_IDS = new Set(["rna", "dna"]);
+const CAPTURED_CELL_ACTION_IDS = new Set([
+  "membrane",
+  "organelles",
+  "nucleus",
+  "eukaryotic_cell",
+  "mitochondria",
+]);
+const CAPTURED_GENUS_BY_ACTION_ID = new Map(
+  CAPTURED_EVOLUTION_GENERA.map((genus) => [genus.actionId, genus.id]),
+);
 
 export interface CapturedEvolutionDependencies {
   readonly rootState: GameRootStateSource;
@@ -52,6 +68,7 @@ export interface CapturedEvolutionDependencies {
   readonly loadQueuedSettings: () => void;
   readonly universeControls: UniverseSelectionControls;
   readonly challengeGroups: readonly ChallengeGroup[];
+  readonly trace?: (event: EvolutionCycleTrace) => void;
   readonly onActivity?: GameActivitySink;
 }
 
@@ -86,24 +103,77 @@ function nestedRecord(
   return capturedEvolutionRecord(readProperty(owner, key));
 }
 
-function capturedEvolutionMutationFingerprint(
-  rootState: GameRootStateSource,
-): string | undefined {
-  const root = rootRecord(rootState);
-  if (root === undefined) return undefined;
-  try {
-    return JSON.stringify({
-      race: readProperty(root, "race"),
-      resource: readProperty(root, "resource"),
-      evolution: readProperty(root, "evolution"),
-      tech: readProperty(root, "tech"),
-      genes: readProperty(root, "genes"),
-      queue: readProperty(root, "queue"),
-      researchQueue: readProperty(root, "r_queue"),
-    });
-  } catch {
-    return undefined;
+function capturedEvolutionActionState(
+  root: unknown,
+  id: string,
+  challengeTrait: string | undefined,
+): unknown {
+  if (id === "rna" || id === "dna") {
+    return readProperty(
+      readProperty(readProperty(root, "resource"), id.toUpperCase()),
+      "amount",
+    );
   }
+  if (id.startsWith("s-")) {
+    return readProperty(readProperty(root, "race"), "imitation");
+  }
+  if (challengeTrait !== undefined) {
+    return readProperty(readProperty(root, "race"), challengeTrait);
+  }
+  const genus = CAPTURED_EVOLUTION_GENERA.find(
+    (candidate) => candidate.actionId === id,
+  );
+  const genusTech =
+    genus === undefined
+      ? undefined
+      : readProperty(readProperty(root, "tech"), `evo_${genus.id}`);
+  if (genusTech !== undefined) return genusTech;
+  if (CAPTURED_EVOLUTION_RACES.some((race) => race.id === id)) {
+    const species = readProperty(readProperty(root, "race"), "species");
+    const actionState = readProperty(readProperty(root, "evolution"), id);
+    const actionCount = readProperty(actionState, "count");
+    return `${String(species)}:${String(actionCount === undefined ? actionState : actionCount)}`;
+  }
+  const actionState = readProperty(readProperty(root, "evolution"), id);
+  const count = readProperty(actionState, "count");
+  return count === undefined ? actionState : count;
+}
+
+function capturedEvolutionResource(
+  root: unknown,
+  id: "RNA" | "DNA",
+):
+  | {
+      readonly amount: number;
+      readonly max: number;
+      readonly display: boolean;
+    }
+  | undefined {
+  const resource = nestedRecord(nestedRecord(root, "resource"), id);
+  const amount = Number(readProperty(resource, "amount"));
+  const max = Number(readProperty(resource, "max"));
+  return Number.isFinite(amount) && Number.isFinite(max)
+    ? Object.freeze({
+        amount,
+        max,
+        // Native evolution actions require resource.display; an absent field before unlock is false.
+        display: Boolean(readProperty(resource, "display")),
+      })
+    : undefined;
+}
+
+function capturedEvolutionRootInvalidated(root: unknown): boolean {
+  const record = capturedEvolutionRecord(root);
+  const resources = nestedRecord(record, "resource");
+  const evolution = nestedRecord(record, "evolution");
+  return (
+    readProperty(readProperty(record, "race"), "species") === "protoplasm" &&
+    Number(readProperty(readProperty(record, "stats"), "days")) === 0 &&
+    resources !== undefined &&
+    Object.keys(resources).length === 0 &&
+    evolution !== undefined &&
+    Object.keys(evolution).length === 0
+  );
 }
 
 function readRace(
@@ -184,7 +254,19 @@ export function createCapturedEvolution(
 
   let storedTarget: { id: string; name: string } | undefined;
   let lastSpecies: string | undefined;
+  const reportedEvolutionFailures = new Set<string>();
   const reportActivity = dependencies.onActivity ?? (() => {});
+
+  const reportEvolutionFailure = (id: string, detail: string): void => {
+    const key = `${id}:${detail}`;
+    if (reportedEvolutionFailures.has(key)) return;
+    reportedEvolutionFailures.add(key);
+    reportActivity({
+      message: `Evolution action ${id} failed: ${detail}`,
+      color: "danger",
+      tags: Object.freeze(["progress"]),
+    });
+  };
 
   const reader: EvolutionReader = Object.freeze({
     sampleSpecies(): string {
@@ -248,7 +330,25 @@ export function createCapturedEvolution(
       return Number(readProperty(readRace(dependencies.rootState), trait));
     },
 
+    sampleChallengeActionAvailability(
+      id: string,
+    ): "not-offered" | "stale" | "available" {
+      const elementId = `${EVOLUTION_ACTION_PREFIX}${id}`;
+      const offered = readActionRows(dependencies.drawnActions).some(
+        (row) => row.id === elementId,
+      );
+      if (!offered) return "not-offered";
+      const handle = dependencies.controls.resolve(elementId);
+      return handle !== undefined &&
+        Number.isSafeInteger(handle.generation) &&
+        handle.generation > 0 &&
+        handle.methods.includes("action")
+        ? "available"
+        : "stale";
+    },
+
     sampleCosts(targetId: string): EvolutionCostsSample {
+      const root = dependencies.rootState.readRoot();
       const rows = actionRowsForTree(
         readActionRows(dependencies.drawnActions),
         challengeIds,
@@ -261,35 +361,104 @@ export function createCapturedEvolution(
         maxRna = Math.max(maxRna, row.cost["RNA"] ?? 0);
         maxDna = Math.max(maxDna, row.cost["DNA"] ?? 0);
       }
+      const rna = capturedEvolutionResource(root, "RNA");
+      const dna = capturedEvolutionResource(root, "DNA");
+      // Before unlock, Evolve may omit an entire resource record; its amount and cap coerce as zero.
       return Object.freeze({
         maxRna,
         maxDna,
-        rnaCurrent: resourceAmount(dependencies.rootState, "RNA", "amount"),
-        rnaMax: resourceAmount(dependencies.rootState, "RNA", "max"),
-        dnaCurrent: resourceAmount(dependencies.rootState, "DNA", "amount"),
-        dnaMax: resourceAmount(dependencies.rootState, "DNA", "max"),
+        rnaCurrent: rna?.amount ?? 0,
+        rnaMax: rna?.max ?? 0,
+        rnaDisplay: rna?.display ?? false,
+        dnaCurrent: dna?.amount ?? 0,
+        dnaMax: dna?.max ?? 0,
+        dnaDisplay: dna?.display ?? false,
       });
     },
 
     sampleEvolutionTree(targetId: string): readonly EvolutionTreeAction[] {
+      const root = dependencies.rootState.readRoot();
       const rows = actionRowsForTree(
         readActionRows(dependencies.drawnActions),
         challengeIds,
         targetId,
         dependencies.rootState,
       );
+      const targetDefinition = CAPTURED_EVOLUTION_RACES.find(
+        (candidate) => candidate.id === targetId,
+      );
+      const targetGenusSample = readCapturedEvolutionTargetGenus(
+        root,
+        targetId,
+      );
+      const settings = capturedEvolutionReadSettings(dependencies.readSettings);
+      const tech = nestedRecord(rootRecord(dependencies.rootState), "tech");
+      const activeGenus = CAPTURED_EVOLUTION_GENERA.find(
+        (genus) => Number(readProperty(tech, `evo_${genus.id}`)) >= 2,
+      )?.id;
+      const preferredGenus = settings?.["userEvolutionGenus"];
+      const targetGenus =
+        targetDefinition !== undefined &&
+        targetDefinition.genus !== "variable" &&
+        targetDefinition.genus !== "hybrid" &&
+        targetDefinition.genus !== "custom"
+          ? targetDefinition.genus
+          : activeGenus !== undefined &&
+              targetGenusSample?.targetGenera.includes(activeGenus)
+            ? activeGenus
+            : typeof preferredGenus === "string" &&
+                targetGenusSample?.targetGenera.includes(preferredGenus)
+              ? preferredGenus
+              : undefined;
+      const selectedGenusActionId =
+        targetGenus === undefined
+          ? undefined
+          : CAPTURED_EVOLUTION_GENERA.find((genus) => genus.id === targetGenus)
+              ?.actionId;
       const race = readRace(dependencies.rootState);
       return Object.freeze(
-        rows.map((row) => {
-          const id = capturedEvolutionActionId(row.id);
-          const trait = challengeTraitById.get(id);
-          return Object.freeze({
-            id,
-            unlocked: true,
-            activeChallenge:
-              trait !== undefined && Number(readProperty(race, trait)) === 1,
-          });
-        }),
+        rows
+          .filter(
+            (row) =>
+              !CAPTURED_CELL_ACTION_IDS.has(capturedEvolutionActionId(row.id)),
+          )
+          .filter((row) => {
+            const actionId = capturedEvolutionActionId(row.id);
+            const genus = CAPTURED_GENUS_BY_ACTION_ID.get(actionId);
+            return (
+              genus === undefined ||
+              selectedGenusActionId === undefined ||
+              actionId === selectedGenusActionId
+            );
+          })
+          .sort((left, right) => {
+            // Native setAction only draws condition-qualified rows. Prefer the configured race
+            // when its native action is offered; otherwise let native genus progression continue.
+            const targetActionId = `${EVOLUTION_ACTION_PREFIX}${targetId}`;
+            const targetOrder =
+              Number(right.id === targetActionId) -
+              Number(left.id === targetActionId);
+            if (targetOrder !== 0) return targetOrder;
+            if (selectedGenusActionId === undefined) return 0;
+            return (
+              Number(right.id.endsWith(selectedGenusActionId)) -
+              Number(left.id.endsWith(selectedGenusActionId))
+            );
+          })
+          .map((row) => {
+            const id = capturedEvolutionActionId(row.id);
+            const trait = challengeTraitById.get(id);
+            const genus = CAPTURED_GENUS_BY_ACTION_ID.get(id);
+            return Object.freeze({
+              id,
+              unlocked:
+                genus === undefined ||
+                id !== selectedGenusActionId ||
+                genus !== activeGenus,
+              activeChallenge:
+                trait !== undefined && Number(readProperty(race, trait)) === 1,
+            });
+          }),
       );
     },
 
@@ -384,24 +553,135 @@ export function createCapturedEvolution(
     },
   });
 
-  const invokeAction = (id: string): boolean => {
+  const invokeAction = (id: string) => {
+    const rootBefore = dependencies.rootState.readRoot();
+    if (rootRecord(dependencies.rootState) === undefined) {
+      return Object.freeze({ status: "unavailable" as const });
+    }
     const handle = dependencies.controls.resolve(
       `${EVOLUTION_ACTION_PREFIX}${id}`,
     );
-    if (handle === undefined) return false;
-    const before = capturedEvolutionMutationFingerprint(dependencies.rootState);
+    if (handle === undefined || !handle.methods.includes("action")) {
+      return Object.freeze({ status: "unavailable" as const });
+    }
+    const before = capturedEvolutionActionState(
+      rootBefore,
+      id,
+      challengeTraitById.get(id),
+    );
     const result = dependencies.controls.invoke(handle, "action");
-    if (!result.ok) return false;
-    const after = capturedEvolutionMutationFingerprint(dependencies.rootState);
-    return before !== undefined && after !== undefined && before !== after;
+    if (!result.ok) {
+      if (
+        result.reason === "stale-control" ||
+        result.reason === "unknown-control"
+      ) {
+        return Object.freeze({ status: "unavailable" as const });
+      }
+      reportEvolutionFailure(id, result.detail ?? result.reason);
+      return Object.freeze({
+        status: "failed" as const,
+        detail: result.detail ?? result.reason,
+      });
+    }
+    const rootAfter = dependencies.rootState.readRoot();
+    if (rootAfter !== rootBefore) {
+      return Object.freeze({ status: "root-replaced" as const });
+    }
+    if (capturedEvolutionRootInvalidated(rootAfter)) {
+      return Object.freeze({ status: "root-replaced" as const });
+    }
+    const after = capturedEvolutionActionState(
+      rootAfter,
+      id,
+      challengeTraitById.get(id),
+    );
+    return Object.freeze({
+      status: "invoked" as const,
+      stateChanged: !Object.is(before, after),
+    });
   };
 
-  const invokeRepeated = (id: string, count: number): void => {
+  const invokeRepeated = (
+    id: "rna" | "dna",
+    count: number,
+  ): "complete" | "deferred" | "failed" => {
     for (let index = 0; index < count; index++) {
-      if (!invokeAction(id)) {
-        throw new TypeError(`captured evolution control unavailable: ${id}`);
+      const resource = capturedEvolutionResource(
+        dependencies.rootState.readRoot(),
+        id.toUpperCase() as "RNA" | "DNA",
+      );
+      if (resource === undefined) {
+        if (
+          (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+            __EA_TEST_SURFACE_ENABLED__ === true) &&
+          dependencies.trace !== undefined
+        )
+          dependencies.trace({
+            stage: "resource-action",
+            details: {
+              id,
+              index,
+              requested: count,
+              outcome: "deferred-resource-unavailable",
+            },
+          });
+        return "deferred";
       }
+      if (!resource.display) {
+        if (
+          (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+            __EA_TEST_SURFACE_ENABLED__ === true) &&
+          dependencies.trace !== undefined
+        )
+          dependencies.trace({
+            stage: "resource-action",
+            details: {
+              id,
+              index,
+              requested: count,
+              outcome: "deferred-resource-hidden",
+            },
+          });
+        return "deferred";
+      }
+      if (resource.amount >= resource.max) {
+        if (
+          (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+            __EA_TEST_SURFACE_ENABLED__ === true) &&
+          dependencies.trace !== undefined
+        )
+          dependencies.trace({
+            stage: "resource-action",
+            details: {
+              id,
+              index,
+              requested: count,
+              outcome: "complete-at-cap",
+            },
+          });
+        return "complete";
+      }
+      const outcome = invokeAction(id);
+      if (
+        (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+          __EA_TEST_SURFACE_ENABLED__ === true) &&
+        dependencies.trace !== undefined
+      )
+        dependencies.trace({
+          stage: "resource-action",
+          details: { id, index, requested: count, outcome },
+        });
+      if (outcome.status === "failed") return "failed";
+      if (outcome.status !== "invoked" || !outcome.stateChanged)
+        return "deferred";
+      const after = capturedEvolutionResource(
+        dependencies.rootState.readRoot(),
+        id.toUpperCase() as "RNA" | "DNA",
+      );
+      if (after === undefined || after.amount <= resource.amount)
+        return "deferred";
     }
+    return "complete";
   };
 
   const executor: EvolutionExecutor = Object.freeze({
@@ -418,17 +698,21 @@ export function createCapturedEvolution(
       });
     },
 
-    clickEvolution(id: string): boolean {
+    clickEvolution(id: string) {
       return invokeAction(id);
     },
 
-    accumulateResources(command: Readonly<ResourceAccumulationCommand>): void {
-      invokeRepeated("rna", command.rnaForDna);
-      invokeRepeated("dna", command.dnaForEvolution);
-      invokeRepeated("rna", command.rnaForEvolution);
+    accumulateResources(
+      command: Readonly<ResourceAccumulationCommand>,
+    ): "complete" | "deferred" | "failed" {
+      const rnaForDna = invokeRepeated("rna", command.rnaForDna);
+      if (rnaForDna !== "complete") return rnaForDna;
+      const dna = invokeRepeated("dna", command.dnaForEvolution);
+      if (dna !== "complete") return dna;
+      return invokeRepeated("rna", command.rnaForEvolution);
     },
 
-    clickImitation(imitateRace: string): boolean {
+    clickImitation(imitateRace: string) {
       return invokeAction(`s-${imitateRace}`);
     },
 

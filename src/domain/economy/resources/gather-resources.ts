@@ -55,8 +55,6 @@ const DIRECT_TARGETS = Object.freeze([
 export function planGatherResources(
   input: Readonly<GatherResourcesInput>,
 ): GatherResourcesDecision | null {
-  if (input.stopped) return null;
-
   const quantities: Record<GatherResourceId, number> = {
     Food: input.resources.Food.currentQuantity,
     Lumber: input.resources.Lumber.currentQuantity,
@@ -71,6 +69,14 @@ export function planGatherResources(
 
   for (const target of DIRECT_TARGETS) {
     if (!input.clickable[target.actionId]) continue;
+    // After bootstrap, keep only the immediate zero-Food recovery available. The game reduces
+    // population when Food runs out; collecting routine materials would spend Mana on Conjuring.
+    if (
+      input.stopped &&
+      (target.actionId !== "food" || input.resources.Food.currentQuantity > 0)
+    ) {
+      continue;
+    }
     if (target.actionId === "food" && input.fasting) continue;
 
     const resource = input.resources[target.resourceId];
@@ -197,7 +203,7 @@ export function planGatherResources(
     );
   }
 
-  if (input.clickable.slaughter) {
+  if (!input.stopped && input.clickable.slaughter) {
     const amount = Math.min(
       Math.max(
         input.resources.Lumber.maxQuantity - quantities.Lumber,

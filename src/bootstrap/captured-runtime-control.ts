@@ -235,7 +235,10 @@ import {
 import { createCapturedConditionContextReader } from "../adapters/evolve/captured-condition-context.ts";
 import type { CapturedConditionContext } from "../adapters/evolve/captured-conditions.ts";
 import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evolution/captured-queued-settings.ts";
-import { createCapturedEvolution } from "../adapters/evolve/progression/evolution/captured-evolution.ts";
+import {
+  createCapturedEvolution,
+  EVOLUTION_ACTION_SELECTOR,
+} from "../adapters/evolve/progression/evolution/captured-evolution.ts";
 import {
   createCapturedEvolutionResultCheck,
   createCapturedSoftResetControl,
@@ -248,6 +251,7 @@ import {
   createUniverseSelectionControls,
 } from "../adapters/browser/progression-controls.ts";
 import { runEvolution } from "../application/evolution.ts";
+import type { EvolutionCycleTrace } from "../ports/evolution.ts";
 import { runCapturedPlanetSelection } from "../application/captured-planet-selection.ts";
 import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
 import {
@@ -757,6 +761,86 @@ export function startCapturedRuntime({
   const drawnActions = createGameDrawnActionsReader({
     getDocument: () => document,
   });
+  const emitEvolutionTrace = (event: EvolutionCycleTrace): void => {
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+      __EA_TEST_SURFACE_ENABLED__ !== true
+    ) {
+      return;
+    }
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    const sink = readProperty(hooks, "evolutionCycleTrace");
+    if (typeof sink === "function") Reflect.apply(sink, hooks, [event]);
+    else {
+      const root = pageCapture.rootState.readRoot();
+      const stats = readProperty(root, "stats");
+      const reset = Number(readProperty(stats, "reset"));
+      if (reset !== 849) return;
+      let recordedEvent: EvolutionCycleTrace = event;
+      if (event.stage === "entered") {
+        const resource = readProperty(root, "resource");
+        const resourceState = (id: string) => {
+          const value = readProperty(resource, id);
+          return {
+            amount: readProperty(value, "amount"),
+            max: readProperty(value, "max"),
+            display: readProperty(value, "display"),
+          };
+        };
+        const settings = settingsStore.readRaw();
+        const enabledChallengeIds = evolutionChallengeGroups
+          .map((group) => group.members[0]?.id)
+          .filter(
+            (id): id is string =>
+              id !== undefined &&
+              readProperty(settings, `challenge_${id}`) === true,
+          );
+        const actionRows = drawnActions
+          .read(EVOLUTION_ACTION_SELECTOR)
+          .map((row) => {
+            const handle = pageCapture.controls.resolve(row.id);
+            return {
+              id: row.id,
+              generation: handle?.generation ?? null,
+              methods: handle === undefined ? [] : [...handle.methods],
+              nativeAffordable: row.nativeAffordable ?? null,
+              costComplete: row.costComplete,
+            };
+          });
+        recordedEvent = {
+          ...event,
+          details: {
+            ...event.details,
+            resources: { RNA: resourceState("RNA"), DNA: resourceState("DNA") },
+            actionRows,
+            enabledChallengeIds,
+          },
+        };
+      }
+      const key = "__eaEvolutionCycleTrace";
+      let events: unknown[] = [];
+      try {
+        const stored = JSON.parse(sessionStorage.getItem(key) ?? "[]");
+        if (Array.isArray(stored)) events = stored;
+      } catch {
+        events = [];
+      }
+      if (events.length >= 240) return;
+      const runner = readProperty(settingsHostWindow, "__EA_RUNNER__");
+      const periods = readProperty(runner, "periods");
+      const readLoads = readProperty(runner, "loads");
+      const period =
+        typeof periods === "function"
+          ? Reflect.apply(periods, runner, [])
+          : undefined;
+      const loads =
+        typeof readLoads === "function"
+          ? Reflect.apply(readLoads, runner, [])
+          : undefined;
+      events.push({ period, loads, reset, event: recordedEvent });
+      sessionStorage.setItem(key, JSON.stringify(events));
+    }
+  };
   const capturedEvolution = createCapturedEvolution({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -767,6 +851,10 @@ export function startCapturedRuntime({
     universeControls: createUniverseSelectionControls(() => document),
     challengeGroups: evolutionChallengeGroups,
     onActivity,
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? { trace: emitEvolutionTrace }
+      : {}),
   });
   const capturedEvolutionResultCheck = createCapturedEvolutionResultCheck({
     reader: capturedEvolution.reader,
@@ -931,6 +1019,10 @@ export function startCapturedRuntime({
         }
       },
       challengeGroups: evolutionChallengeGroups,
+      ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+        ? { trace: emitEvolutionTrace }
+        : {}),
     });
   // The settings UI is useful even when document-start capture was missed (for example, when a
   // local bundle is loaded after the game). Automation still fails closed below until capture is

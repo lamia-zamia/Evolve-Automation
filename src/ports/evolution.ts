@@ -17,8 +17,10 @@ export interface EvolutionCostsSample {
   readonly maxDna: number;
   readonly rnaCurrent: number;
   readonly rnaMax: number;
+  readonly rnaDisplay: boolean;
   readonly dnaCurrent: number;
   readonly dnaMax: number;
+  readonly dnaDisplay: boolean;
 }
 
 /**
@@ -29,6 +31,10 @@ export interface EvolutionCostsSample {
 export interface EvolutionReader {
   sampleSpecies(): string;
   sampleLandingGate(): EvolutionLandingGate;
+  /** Native condition-hidden challenge rows are not offers; a visible row without a current binding is a redraw gap. */
+  sampleChallengeActionAvailability(
+    id: string,
+  ): "not-offered" | "stale" | "available";
   hasStoredTarget(): boolean;
   storedTargetId(): string | null;
   /** Sampled after loadQueuedSettings has reloaded the effective settings. */
@@ -48,6 +54,12 @@ export interface EvolutionReader {
   ): Readonly<Record<string, boolean>>;
 }
 
+export interface EvolutionCycleTrace {
+  readonly stage: string;
+  readonly reason?: string;
+  readonly details?: Readonly<Record<string, unknown>>;
+}
+
 export interface ResourceAccumulationCommand {
   readonly rnaForDna: number;
   readonly dnaForEvolution: number;
@@ -61,9 +73,19 @@ export interface EvolutionExecutor {
   /** Store the chosen target and log the attempt. */
   commitTarget(id: string, name: string): void;
   /** Click an evolution action (challenge, tree node, or cell); returns success. */
-  clickEvolution(id: string): boolean;
-  accumulateResources(command: Readonly<ResourceAccumulationCommand>): void;
-  clickImitation(imitateRace: string): boolean;
+  clickEvolution(id: string): boolean | EvolutionActionOutcome;
+  accumulateResources(
+    command: Readonly<ResourceAccumulationCommand>,
+  ): void | ResourceAccumulationOutcome;
+  clickImitation(imitateRace: string): boolean | EvolutionActionOutcome;
   logImitationUnavailable(imitateRace: string): void;
   logImitationNoRace(): void;
 }
+
+export type EvolutionActionOutcome =
+  | { readonly status: "unavailable" }
+  | { readonly status: "failed"; readonly detail: string }
+  | { readonly status: "root-replaced" }
+  | { readonly status: "invoked"; readonly stateChanged: boolean };
+
+export type ResourceAccumulationOutcome = "complete" | "deferred" | "failed";

@@ -1503,4 +1503,51 @@ for (const scenario of [
   );
 }
 
+// DeadSpace `soft_reset` mutates the existing Vue root in place: clearStates empties resources and
+// evolution, resets days, then requests reload. The launch executor must recognize that native
+// postcondition and commit the reset even though the root object identity did not change.
+{
+  const root = buildRoot({
+    race: { species: "human", cataclysm: false },
+    stats: { days: 480, reset: 2 },
+    resource: {
+      RNA: { amount: 100, max: 200 },
+      DNA: { amount: 100, max: 200 },
+    },
+    evolution: { mitochondria: { count: 1 } },
+  });
+  const calls = [];
+  const committedIdentities = [];
+  const controls = {
+    resolve: () => ({
+      elementId: CAPTURED_MAD_CONTROL,
+      generation: 8,
+      methods: ["arm", "launch"],
+    }),
+    invoke: (_handle, method) => {
+      calls.push(method);
+      if (method === "launch") {
+        root.race = { species: "protoplasm" };
+        root.stats.days = 0;
+        root.resource = {};
+        root.evolution = {};
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds: () => [CAPTURED_MAD_CONTROL],
+  };
+  const prestige = createCapturedMadPrestige({
+    rootState: { readRoot: () => root },
+    controls,
+    readSettings: () => ({ ...settings, prestigeType: "mad" }),
+    readGoal: () => "Reset",
+    setGoal: () => {},
+    onResetCommitted: (reset, day) => committedIdentities.push([reset, day]),
+  });
+  prestige.reader.samplePrestige();
+  prestige.executor.execute({ kind: "launch-mad" });
+  assert.deepEqual(calls, ["launch"]);
+  assert.deepEqual(committedIdentities, [[2, 480]]);
+}
+
 console.log("Captured MAD prestige tests passed");

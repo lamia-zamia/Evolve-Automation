@@ -195,6 +195,11 @@ export function createEvolutionReader(
       max: coerceNumber(resource["maxQuantity"]),
     };
   };
+  const resourceDisplayed = (id: string): boolean => {
+    const resources = requireRecord(dependencies.getResources(), "resources");
+    const resource = requireRecord(resources[id], `resources.${id}`);
+    return Boolean(resource["display"]);
+  };
 
   return Object.freeze({
     sampleSpecies(): string {
@@ -211,6 +216,15 @@ export function createEvolutionReader(
         seeded: Boolean(current["seeded"]),
         chose: Boolean(current["chose"]),
       });
+    },
+
+    sampleChallengeActionAvailability(
+      id: string,
+    ): "not-offered" | "stale" | "available" {
+      const action = evolutionActions(dependencies.getEvolutions)[id];
+      return action !== undefined && action.isUnlocked()
+        ? "available"
+        : "not-offered";
     },
 
     hasStoredTarget(): boolean {
@@ -313,8 +327,10 @@ export function createEvolutionReader(
         maxDna,
         rnaCurrent: rna.current,
         rnaMax: rna.max,
+        rnaDisplay: resourceDisplayed("RNA"),
         dnaCurrent: dna.current,
         dnaMax: dna.max,
+        dnaDisplay: resourceDisplayed("DNA"),
       });
     },
 
