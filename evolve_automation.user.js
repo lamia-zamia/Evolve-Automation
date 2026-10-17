@@ -24464,13 +24464,11 @@
         handles.set(elementId, handle);
       }
     });
-    if (preflightFailure !== void 0) {
-      let job = session.input.jobs.find((candidate) => preflightFailure.elementId.startsWith("servant-") ? preflightFailure.elementId === `servant-${candidate.id}` : preflightFailure.elementId.startsWith("civ-") ? preflightFailure.elementId === `civ-${candidate.id}` : preflightFailure.elementId === "foundry" ? candidate.crafting : preflightFailure.elementId === "skilledServants");
+    if (preflightFailure !== void 0)
       return Object.freeze({
         status: "deferred",
         reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`
       });
-    }
     let invoke2 = (elementId, method, count2, args) => {
       let handle = handles.get(elementId);
       if (handle === void 0 || !Number.isFinite(count2)) return !1;
@@ -24727,19 +24725,11 @@
           session.commandState,
           decision
         );
-        if (preflightFailure !== void 0) {
-          let job = session.commandState.jobs.find((candidate) => preflightFailure.elementId === `civ-${candidate.id}` ? decision.assignments.some(
-            (assignment2) => assignment2.jobToken === candidate.token && assignment2.workers !== candidate.workers
-          ) : preflightFailure.elementId === `servant-${candidate.id}` ? decision.assignments.some(
-            (assignment2) => assignment2.jobToken === candidate.token && assignment2.servants !== candidate.servants
-          ) : !1), assignment = job === void 0 ? void 0 : decision.assignments.find(
-            (candidate) => candidate.jobToken === job.token
-          );
+        if (preflightFailure !== void 0)
           return sessionRef.value = void 0, Object.freeze({
             status: "deferred",
             reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`
           });
-        }
         sessionRef.value = void 0;
         let outcome = executeCapturedJobDecision(
           controlsPort,

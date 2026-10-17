@@ -900,18 +900,18 @@ function executeFullDecision(
     return undefined;
   });
   if (preflightFailure !== undefined) {
-    const job = session.input.jobs.find((candidate) => {
-      if (preflightFailure.elementId.startsWith("servant-"))
-        return preflightFailure.elementId === `servant-${candidate.id}`;
-      if (preflightFailure.elementId.startsWith("civ-"))
-        return preflightFailure.elementId === `civ-${candidate.id}`;
-      if (preflightFailure.elementId === "foundry") return candidate.crafting;
-      return preflightFailure.elementId === "skilledServants";
-    });
     if (
       typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
       __EA_TEST_SURFACE_ENABLED__ === true
-    )
+    ) {
+      const job = session.input.jobs.find((candidate) => {
+        if (preflightFailure.elementId.startsWith("servant-"))
+          return preflightFailure.elementId === `servant-${candidate.id}`;
+        if (preflightFailure.elementId.startsWith("civ-"))
+          return preflightFailure.elementId === `civ-${candidate.id}`;
+        if (preflightFailure.elementId === "foundry") return candidate.crafting;
+        return preflightFailure.elementId === "skilledServants";
+      });
       emitCapturedJobsTrace(testTrace, {
         kind: "deferred",
         path: "full",
@@ -976,6 +976,7 @@ function executeFullDecision(
         },
         requiredControls: capturedRequiredControls(controls, requiredMethods),
       });
+    }
     return Object.freeze({
       status: "deferred",
       reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`,
@@ -1433,31 +1434,31 @@ export function createCapturedOrdinaryJobsAutomation({
         decision,
       );
       if (preflightFailure !== undefined) {
-        const job = session.commandState.jobs.find((candidate) => {
-          if (preflightFailure.elementId === `civ-${candidate.id}`)
-            return decision.assignments.some(
-              (assignment) =>
-                assignment.jobToken === candidate.token &&
-                assignment.workers !== candidate.workers,
-            );
-          if (preflightFailure.elementId === `servant-${candidate.id}`)
-            return decision.assignments.some(
-              (assignment) =>
-                assignment.jobToken === candidate.token &&
-                assignment.servants !== candidate.servants,
-            );
-          return false;
-        });
-        const assignment =
-          job === undefined
-            ? undefined
-            : decision.assignments.find(
-                (candidate) => candidate.jobToken === job.token,
-              );
         if (
           typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
           __EA_TEST_SURFACE_ENABLED__ === true
-        )
+        ) {
+          const job = session.commandState.jobs.find((candidate) => {
+            if (preflightFailure.elementId === `civ-${candidate.id}`)
+              return decision.assignments.some(
+                (assignment) =>
+                  assignment.jobToken === candidate.token &&
+                  assignment.workers !== candidate.workers,
+              );
+            if (preflightFailure.elementId === `servant-${candidate.id}`)
+              return decision.assignments.some(
+                (assignment) =>
+                  assignment.jobToken === candidate.token &&
+                  assignment.servants !== candidate.servants,
+              );
+            return false;
+          });
+          const assignment =
+            job === undefined
+              ? undefined
+              : decision.assignments.find(
+                  (candidate) => candidate.jobToken === job.token,
+                );
           emitCapturedJobsTrace(testTrace, {
             kind: "deferred",
             path: "ordinary",
@@ -1510,6 +1511,7 @@ export function createCapturedOrdinaryJobsAutomation({
             },
             requiredControls: capturedRequiredControls(controls, required),
           });
+        }
         sessionRef.value = undefined;
         return Object.freeze({
           status: "deferred",
