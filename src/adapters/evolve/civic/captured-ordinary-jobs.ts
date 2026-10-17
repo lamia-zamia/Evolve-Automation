@@ -6,11 +6,11 @@ import {
   type JobsDecision,
   type JobsJobInput,
 } from "../../../domain/civic/jobs.ts";
-import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type { GameActionCostReader } from "../../../ports/game-action-costs.ts";
 import type { GameBuildTarget } from "../../../ports/game-build-targets.ts";
 import type {
   JobsExecutor,
+  JobsExecutionOutcome,
   JobsReader,
   PreparedJobsExecution,
 } from "../../../ports/jobs.ts";
@@ -19,6 +19,8 @@ import type {
   GameControlRegistry,
 } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
+import type { GameMultiplierLatchReader } from "../../../ports/game-key-state.ts";
+import { readCapturedMultiplierLatch } from "../captured-multiplier-keys.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import {
   finite,
@@ -62,6 +64,23 @@ import {
 
 const runUnmeasuredJobs: MeasurePhase = (_phase, action) => action();
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
+type CapturedJobsTraceEvent = Readonly<Record<string, unknown>>;
+type CapturedJobsTraceSink = (event: CapturedJobsTraceEvent) => void;
+
+function emitCapturedJobsTrace(
+  sink: CapturedJobsTraceSink | undefined,
+  event: CapturedJobsTraceEvent,
+): void {
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    sink?.(event);
+  }
+}
+
 function createExclusiveJobsMeasure(
   diagnostics: PhaseTimingSink | undefined,
 ): MeasurePhase {
@@ -88,8 +107,10 @@ export interface CapturedOrdinaryJobsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  readonly keyState?: GameMultiplierLatchReader;
   readonly readDemand?: () => CapturedDemandSample;
   readonly onSkipped?: (controlId: string, reason: string) => void;
+  readonly testTrace?: CapturedJobsTraceSink;
 }
 
 export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDependencies {
@@ -104,45 +125,145 @@ interface OrdinaryJobsSession {
   readonly catalog: Readonly<CapturedJobCatalog>;
   readonly input: Readonly<JobsCycleInput>;
   readonly commandState: Readonly<CapturedJobCommandState>;
+  readonly settings: Readonly<{ autoJobs: boolean; autoCraftsmen: boolean }>;
 }
 
-function hasMethod(
+function capturedRequiredControls(
   controls: GameControlRegistry,
-  elementId: string,
-  method: string,
-): boolean {
-  const handle = controls.resolve(elementId);
-  return handle !== undefined && handle.methods.includes(method);
+  required: ReadonlyMap<string, ReadonlySet<string>>,
+): readonly Readonly<{
+  elementId: string;
+  requiredMethods: readonly string[];
+  generation: number | null;
+  methods: readonly string[];
+}>[] {
+  return Object.freeze(
+    [...required].map(([elementId, methods]) => {
+      const handle = controls.resolve(elementId);
+      return Object.freeze({
+        elementId,
+        requiredMethods: Object.freeze([...methods]),
+        generation: handle?.generation ?? null,
+        methods: handle?.methods ?? Object.freeze([]),
+      });
+    }),
+  );
 }
 
-function preflightDecision(
-  controls: GameControlRegistry,
+function summarizeCapturedJobsTraceAssignments(
+  beforeJobs: readonly Readonly<{
+    token: number;
+    id: string;
+    workers: number;
+    servants: number;
+  }>[],
+  assignments: readonly Readonly<{
+    jobToken: number;
+    workers: number;
+    servants: number;
+  }>[],
+): readonly Readonly<Record<string, unknown>>[] {
+  const before = new Map(beforeJobs.map((job) => [job.token, job]));
+  return Object.freeze(
+    assignments.flatMap((assignment) => {
+      const job = before.get(assignment.jobToken);
+      if (
+        job === undefined ||
+        (job.workers === assignment.workers &&
+          job.servants === assignment.servants)
+      )
+        return [];
+      return [
+        Object.freeze({
+          jobToken: job.token,
+          jobId: job.id,
+          beforeWorkers: job.workers,
+          requestedWorkers: assignment.workers,
+          workerDelta: assignment.workers - job.workers,
+          beforeServants: job.servants,
+          requestedServants: assignment.servants,
+          servantDelta: assignment.servants - job.servants,
+        }),
+      ];
+    }),
+  );
+}
+
+function summarizeCapturedJobsTraceInvocations(
+  invocations: readonly Readonly<Record<string, unknown>>[],
+): readonly Readonly<Record<string, unknown>>[] {
+  const summaries = new Map<
+    string,
+    {
+      elementId: unknown;
+      generation: unknown;
+      method: unknown;
+      args: unknown;
+      ok: unknown;
+      count: number;
+    }
+  >();
+  for (const invocation of invocations) {
+    const summary = {
+      elementId: invocation.elementId,
+      generation: invocation.generation,
+      method: invocation.method,
+      args: invocation.args,
+      ok: invocation.ok,
+    };
+    const key = JSON.stringify(summary);
+    const existing = summaries.get(key);
+    if (existing === undefined) summaries.set(key, { ...summary, count: 1 });
+    else existing.count++;
+  }
+  return Object.freeze(
+    [...summaries.values()].map((summary) => Object.freeze(summary)),
+  );
+}
+
+function requiredOrdinaryMethods(
   state: Readonly<CapturedJobCommandState>,
   decision: Readonly<JobsDecision>,
-): boolean {
+): ReadonlyMap<string, ReadonlySet<string>> {
   const jobs = new Map(state.jobs.map((job) => [job.token, job]));
+  const required = new Map<string, Set<string>>();
+  const require = (elementId: string, method: string) => {
+    const methods = required.get(elementId) ?? new Set<string>();
+    methods.add(method);
+    required.set(elementId, methods);
+  };
   for (const assignment of decision.assignments) {
     const job = jobs.get(assignment.jobToken);
-    if (job === undefined) return false;
-    if (assignment.workers !== job.workers) {
-      const method = assignment.workers < job.workers ? "sub" : "add";
-      if (!hasMethod(controls, `civ-${job.id}`, method)) return false;
-    }
-    if (state.manageServants && assignment.servants !== job.servants) {
-      const method = assignment.servants < job.servants ? "sub" : "add";
-      if (!hasMethod(controls, `servant-${job.id}`, method)) return false;
-    }
+    if (job === undefined) continue;
+    if (assignment.workers !== job.workers)
+      require(`civ-${job.id}`, assignment.workers < job.workers
+        ? "sub"
+        : "add");
+    if (state.manageServants && assignment.servants !== job.servants)
+      require(`servant-${job.id}`, assignment.servants < job.servants
+        ? "sub"
+        : "add");
   }
   if (decision.selectedDefaultToken !== null) {
     const job = jobs.get(decision.selectedDefaultToken);
-    if (
-      job === undefined ||
-      !hasMethod(controls, `civ-${job.id}`, "setDefault")
-    ) {
-      return false;
-    }
+    if (job !== undefined) require(`civ-${job.id}`, "setDefault");
   }
-  return true;
+  return required;
+}
+
+function missingOrdinaryMethod(
+  controls: GameControlRegistry,
+  state: Readonly<CapturedJobCommandState>,
+  decision: Readonly<JobsDecision>,
+): Readonly<{ elementId: string; method: string }> | undefined {
+  for (const [elementId, methods] of requiredOrdinaryMethods(state, decision)) {
+    const handle = controls.resolve(elementId);
+    const method = [...methods].find(
+      (requiredMethod) => !handle?.methods.includes(requiredMethod),
+    );
+    if (method !== undefined) return Object.freeze({ elementId, method });
+  }
+  return undefined;
 }
 
 function unavailableInput(): Readonly<JobsCycleInput> {
@@ -511,6 +632,7 @@ interface FullJobsSession {
   readonly ordinaryJobs: readonly Readonly<
     CapturedJobCommandState["jobs"][number]
   >[];
+  readonly settings: Readonly<{ autoJobs: boolean; autoCraftsmen: boolean }>;
 }
 
 function craftJob(
@@ -653,7 +775,9 @@ function executeFullDecision(
   session: Readonly<FullJobsSession>,
   decision: Readonly<JobsDecision>,
   measure: MeasurePhase,
-): CommandExecutionOutcome {
+  testTrace: CapturedJobsTraceSink | undefined,
+  invocations: Array<Readonly<Record<string, unknown>>>,
+): JobsExecutionOutcome {
   const ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job]));
   const foundry = new Map(
     session.foundry.input.jobs.map((job, index) => [
@@ -764,17 +888,93 @@ function executeFullDecision(
         handle.elementId !== elementId ||
         [...methods].some((method) => !handle.methods.includes(method))
       ) {
-        return elementId;
+        return Object.freeze({
+          elementId,
+          method:
+            [...methods].find((method) => !handle?.methods.includes(method)) ??
+            [...methods][0]!,
+        });
       }
       handles.set(elementId, handle);
     }
     return undefined;
   });
-  if (preflightFailure !== undefined)
-    return rejected(
-      "full-jobs-controls-incomplete",
-      `missing required method on ${preflightFailure}`,
-    );
+  if (preflightFailure !== undefined) {
+    const job = session.input.jobs.find((candidate) => {
+      if (preflightFailure.elementId.startsWith("servant-"))
+        return preflightFailure.elementId === `servant-${candidate.id}`;
+      if (preflightFailure.elementId.startsWith("civ-"))
+        return preflightFailure.elementId === `civ-${candidate.id}`;
+      if (preflightFailure.elementId === "foundry") return candidate.crafting;
+      return preflightFailure.elementId === "skilledServants";
+    });
+    emitCapturedJobsTrace(testTrace, {
+      kind: "deferred",
+      path: "full",
+      failureCode: "full-jobs-controls-not-ready",
+      root: session.root,
+      settings: {
+        ...session.settings,
+        manageServants: session.input.manageServants,
+      },
+      defaultJobId: session.catalog.defaultJobId,
+      sampledJobCount: session.input.jobs.length,
+      sampledJobs: session.input.jobs
+        .filter((candidate) => candidate.workers > 0 || candidate.servants > 0)
+        .map(({ id, token, workers, servants, crafting }) => ({
+          id,
+          token,
+          workers,
+          servants,
+          crafting,
+        })),
+      pools: {
+        population: session.input.population,
+        defaultWorkers:
+          session.ordinaryJobs.find(
+            (job) => job.id === session.catalog.defaultJobId,
+          )?.workers ?? 0,
+        servantsMaximum: session.input.servantsMaximum,
+        servantsUsed: session.catalog.servantState?.used ?? 0,
+        craftsmenMaximum: session.input.craftsmenMaximum,
+        skilledServantsMaximum: session.input.skilledServantsMaximum,
+        skilledServantsUsed: session.foundry.skilledUsed,
+      },
+      decision: {
+        kind: decision.kind,
+        selectedDefaultToken: decision.selectedDefaultToken,
+        assignmentChanges: summarizeCapturedJobsTraceAssignments(
+          session.input.jobs,
+          decision.assignments,
+        ),
+      },
+      missing: {
+        elementId: preflightFailure.elementId,
+        method: preflightFailure.method,
+        job: job?.id,
+        jobToken: job?.token,
+        workerDelta:
+          job === undefined
+            ? 0
+            : decision.assignments.find(
+                (assignment) => assignment.jobToken === job.token,
+              )!.workers - job.workers,
+        servantDelta:
+          job === undefined
+            ? 0
+            : decision.assignments.find(
+                (assignment) => assignment.jobToken === job.token,
+              )!.servants - job.servants,
+        servantCapacity: session.input.servantsMaximum,
+        existingServants: job?.servants ?? 0,
+      },
+      requiredControls: capturedRequiredControls(controls, requiredMethods),
+    });
+    return Object.freeze({
+      status: "deferred",
+      reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`,
+    });
+  }
   const invoke = (
     elementId: string,
     method: "add" | "sub" | "setDefault",
@@ -784,7 +984,16 @@ function executeFullDecision(
     const handle = handles.get(elementId);
     if (handle === undefined || !Number.isFinite(count)) return false;
     for (let index = 0; index < Math.ceil(Math.max(count, 0)); index++) {
-      if (!controls.invoke(handle, method, args).ok) return false;
+      const result = controls.invoke(handle, method, args);
+      invocations.push({
+        elementId,
+        generation: handle.generation,
+        methods: handle.methods,
+        method,
+        args: args ?? [],
+        ok: result.ok,
+      });
+      if (!result.ok) return false;
     }
     return true;
   };
@@ -1065,8 +1274,10 @@ export function createCapturedOrdinaryJobsAutomation({
   rootState,
   controls,
   readSettings,
+  keyState,
   readDemand,
   onSkipped,
+  testTrace,
 }: CapturedOrdinaryJobsDependencies): {
   readonly reader: JobsReader;
   readonly executor: JobsExecutor;
@@ -1087,7 +1298,14 @@ export function createCapturedOrdinaryJobsAutomation({
     readJobHistory: () =>
       historyRoot === rootState.readRoot() ? history : undefined,
   });
-  const controlsPort = createCapturedJobControls({ controls });
+  const invocations: Array<Readonly<Record<string, unknown>>> = [];
+  const controlsPort = createCapturedJobControls({
+    controls,
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? { onInvocation: (invocation) => invocations.push(invocation) }
+      : {}),
+  });
   const sessionRef: { value: OrdinaryJobsSession | undefined } = {
     value: undefined,
   };
@@ -1098,9 +1316,10 @@ export function createCapturedOrdinaryJobsAutomation({
         return unavailableInput();
       }
       const root = rootState.readRoot();
+      const settingsValue = readSettings();
       const sampled = readCycle(
         root,
-        readSettings(),
+        settingsValue,
         catalogReader,
         readDemand,
         authorityCap,
@@ -1114,12 +1333,16 @@ export function createCapturedOrdinaryJobsAutomation({
         catalog: sampled.catalog,
         input: sampled.input,
         commandState: sampled.commandState,
+        settings: Object.freeze({
+          autoJobs: readProperty(settingsValue, "autoJobs") === true,
+          autoCraftsmen: readProperty(settingsValue, "autoCraftsmen") === true,
+        }),
       });
       return sampled.input;
     },
   });
   const executor: JobsExecutor = Object.freeze({
-    execute(decision: Readonly<JobsDecision>): CommandExecutionOutcome {
+    execute(decision: Readonly<JobsDecision>): JobsExecutionOutcome {
       const session = sessionRef.value;
       if (session === undefined)
         return stale(
@@ -1132,6 +1355,26 @@ export function createCapturedOrdinaryJobsAutomation({
           "ordinary-jobs-root-changed",
           "captured game root changed",
         );
+      }
+      const multiplierLatch = readCapturedMultiplierLatch(
+        session.root,
+        keyState,
+      );
+      if (multiplierLatch !== "none-latched") {
+        emitCapturedJobsTrace(testTrace, {
+          kind: "deferred",
+          path: "ordinary",
+          failureCode: "jobs-multiplier-latch-not-ready",
+          root: session.root,
+          settings: session.settings,
+          input: session.input,
+          multiplierLatch,
+        });
+        sessionRef.value = undefined;
+        return Object.freeze({
+          status: "deferred",
+          reason: `native job multiplier latch is ${multiplierLatch}`,
+        });
       }
       const currentCatalog = catalogReader();
       const currentCycle = readCycle(
@@ -1164,22 +1407,103 @@ export function createCapturedOrdinaryJobsAutomation({
           "ordinary jobs decision does not match the sampled plan",
         );
       }
-      if (!preflightDecision(controls, session.commandState, decision)) {
+      const required = requiredOrdinaryMethods(session.commandState, decision);
+      const preflightFailure = missingOrdinaryMethod(
+        controls,
+        session.commandState,
+        decision,
+      );
+      if (preflightFailure !== undefined) {
+        const job = session.commandState.jobs.find((candidate) => {
+          if (preflightFailure.elementId === `civ-${candidate.id}`)
+            return decision.assignments.some(
+              (assignment) =>
+                assignment.jobToken === candidate.token &&
+                assignment.workers !== candidate.workers,
+            );
+          if (preflightFailure.elementId === `servant-${candidate.id}`)
+            return decision.assignments.some(
+              (assignment) =>
+                assignment.jobToken === candidate.token &&
+                assignment.servants !== candidate.servants,
+            );
+          return false;
+        });
+        const assignment =
+          job === undefined
+            ? undefined
+            : decision.assignments.find(
+                (candidate) => candidate.jobToken === job.token,
+              );
+        emitCapturedJobsTrace(testTrace, {
+          kind: "deferred",
+          path: "ordinary",
+          failureCode: "ordinary-jobs-controls-not-ready",
+          root: session.root,
+          settings: {
+            ...session.settings,
+            manageServants: session.commandState.manageServants,
+          },
+          defaultJobId: session.catalog.defaultJobId,
+          sampledJobCount: session.commandState.jobs.length,
+          sampledJobs: session.commandState.jobs
+            .filter((job) => job.workers > 0 || job.servants > 0)
+            .map(({ id, token, workers, servants }) => ({
+              id,
+              token,
+              workers,
+              servants,
+            })),
+          pools: {
+            population: session.input.population,
+            defaultWorkers:
+              session.commandState.jobs.find(
+                (job) => job.id === session.catalog.defaultJobId,
+              )?.workers ?? 0,
+            servantsMaximum: session.input.servantsMaximum,
+            servantsUsed: session.catalog.servantState?.used ?? 0,
+          },
+          decision: {
+            kind: decision.kind,
+            selectedDefaultToken: decision.selectedDefaultToken,
+            assignmentChanges: summarizeCapturedJobsTraceAssignments(
+              session.commandState.jobs,
+              decision.assignments,
+            ),
+          },
+          missing: {
+            elementId: preflightFailure.elementId,
+            method: preflightFailure.method,
+            job: job?.id,
+            jobToken: job?.token,
+            workerDelta:
+              job === undefined || assignment === undefined
+                ? 0
+                : assignment.workers - job.workers,
+            servantDelta:
+              job === undefined || assignment === undefined
+                ? 0
+                : assignment.servants - job.servants,
+          },
+          requiredControls: capturedRequiredControls(controls, required),
+        });
         sessionRef.value = undefined;
-        return rejected(
-          "ordinary-jobs-controls-incomplete",
-          "ordinary jobs command controls are incomplete",
-        );
+        return Object.freeze({
+          status: "deferred",
+          reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`,
+        });
       }
       sessionRef.value = undefined;
+      invocations.length = 0;
       let outcome = executeCapturedJobDecision(
         controlsPort,
         session.commandState,
         decision,
       );
       if (outcome.status === "succeeded") {
+        const currentRoot = rootState.readRoot();
         const observed =
-          rootState.readRoot() === session.root ? catalogReader() : undefined;
+          currentRoot === session.root ? catalogReader() : undefined;
         const matches =
           observed !== undefined &&
           observed.defaultJobId ===
@@ -1206,11 +1530,148 @@ export function createCapturedOrdinaryJobsAutomation({
             );
           });
         if (!matches) {
+          emitCapturedJobsTrace(testTrace, {
+            kind: "failure",
+            path: "ordinary",
+            failureCode: "ordinary-jobs-postcondition-failed",
+            root: session.root,
+            currentRoot,
+            settings: {
+              ...session.settings,
+              manageServants: session.commandState.manageServants,
+            },
+            defaultJobId: session.catalog.defaultJobId,
+            sampledJobs: session.commandState.jobs
+              .filter((job) => job.workers > 0 || job.servants > 0)
+              .map(({ id, token, workers, servants }) => ({
+                id,
+                token,
+                workers,
+                servants,
+              })),
+            decision: {
+              kind: decision.kind,
+              selectedDefaultToken: decision.selectedDefaultToken,
+              assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                session.commandState.jobs,
+                decision.assignments,
+              ),
+            },
+            invocations: summarizeCapturedJobsTraceInvocations(invocations),
+            pools: {
+              population: session.input.population,
+              defaultWorkers:
+                session.commandState.jobs.find(
+                  (job) => job.id === session.catalog.defaultJobId,
+                )?.workers ?? 0,
+              servantsMaximum: session.input.servantsMaximum,
+              servantsUsed: session.catalog.servantState?.used ?? 0,
+            },
+            expected: {
+              defaultJobId:
+                decision.selectedDefaultToken === null
+                  ? session.catalog.defaultJobId
+                  : session.commandState.jobs.find(
+                      (job) => job.token === decision.selectedDefaultToken,
+                    )?.id,
+              assignments: summarizeCapturedJobsTraceAssignments(
+                session.commandState.jobs,
+                decision.assignments,
+              ),
+            },
+            actual: {
+              rootUnchanged: currentRoot === session.root,
+              defaultJobId: observed?.defaultJobId ?? null,
+              mismatches:
+                observed === undefined
+                  ? null
+                  : decision.assignments.flatMap((assignment) => {
+                      const expected = session.commandState.jobs.find(
+                        (job) => job.token === assignment.jobToken,
+                      );
+                      const actual = observed.jobs.find(
+                        (job) => job.token === assignment.jobToken,
+                      );
+                      return expected === undefined ||
+                        actual === undefined ||
+                        actual.workers !== assignment.workers ||
+                        actual.servants !==
+                          (session.commandState.manageServants
+                            ? assignment.servants
+                            : expected.servants)
+                        ? [
+                            {
+                              id: expected?.id,
+                              beforeWorkers: expected?.workers,
+                              requestedWorkers: assignment.workers,
+                              actualWorkers: actual?.workers,
+                              beforeServants: expected?.servants,
+                              requestedServants: assignment.servants,
+                              actualServants: actual?.servants,
+                            },
+                          ]
+                        : [];
+                    }),
+            },
+          });
           outcome = rejected(
             "ordinary-jobs-postcondition-failed",
             "ordinary job assignment was not observed in captured root state",
           );
         } else {
+          emitCapturedJobsTrace(testTrace, {
+            kind: "success",
+            path: "ordinary",
+            failureCode: "jobs-assignment-postcondition-succeeded",
+            root: session.root,
+            currentRoot,
+            settings: {
+              ...session.settings,
+              manageServants: session.commandState.manageServants,
+            },
+            defaultJobId: session.catalog.defaultJobId,
+            sampledJobs: session.commandState.jobs
+              .filter((job) => job.workers > 0 || job.servants > 0)
+              .map(({ id, token, workers, servants }) => ({
+                id,
+                token,
+                workers,
+                servants,
+              })),
+            decision: {
+              kind: decision.kind,
+              selectedDefaultToken: decision.selectedDefaultToken,
+              assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                session.commandState.jobs,
+                decision.assignments,
+              ),
+            },
+            invocations: summarizeCapturedJobsTraceInvocations(invocations),
+            pools: {
+              population: session.input.population,
+              defaultWorkers:
+                session.commandState.jobs.find(
+                  (job) => job.id === session.catalog.defaultJobId,
+                )?.workers ?? 0,
+              servantsMaximum: session.input.servantsMaximum,
+              servantsUsed: session.catalog.servantState?.used ?? 0,
+            },
+            actual: {
+              defaultJobId: observed?.defaultJobId ?? null,
+              changedAssignments: summarizeCapturedJobsTraceAssignments(
+                session.commandState.jobs,
+                decision.assignments,
+              ).map((change) => ({
+                ...change,
+                actualWorkers:
+                  observed?.jobs.find((job) => job.token === change.jobToken)
+                    ?.workers ?? null,
+                actualServants:
+                  observed?.jobs.find((job) => job.token === change.jobToken)
+                    ?.servants ?? null,
+              })),
+            },
+          });
           historyRoot = rootState.readRoot();
           history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
@@ -1243,12 +1704,14 @@ export function createCapturedFullJobsAutomation({
   rootState,
   controls,
   readSettings,
+  keyState,
   onSkipped,
   costs,
   readDemand,
   readBuildTargets,
   buildCosts,
   diagnostics,
+  testTrace,
 }: CapturedFullJobsDependencies): {
   readonly prepare: () =>
     | { readonly status: "unavailable" }
@@ -1357,11 +1820,15 @@ export function createCapturedFullJobsAutomation({
       foundry: sampled.foundry,
       input: sampled.input,
       ordinaryJobs: sampled.ordinaryJobs,
+      settings: Object.freeze({
+        autoJobs: readProperty(settings, "autoJobs") === true,
+        autoCraftsmen: readProperty(settings, "autoCraftsmen") === true,
+      }),
     });
     let consumed = false;
     const execution: PreparedJobsExecution = Object.freeze({
       decision,
-      execute(): CommandExecutionOutcome {
+      execute(): JobsExecutionOutcome {
         if (generation !== prepareGeneration)
           return stale(
             "full-jobs-session-superseded",
@@ -1376,6 +1843,26 @@ export function createCapturedFullJobsAutomation({
         const executionRoot = rootState.readRoot();
         if (executionRoot !== session.root)
           return stale("full-jobs-root-changed", "captured game root changed");
+        const multiplierLatch = readCapturedMultiplierLatch(
+          session.root,
+          keyState,
+        );
+        if (multiplierLatch !== "none-latched") {
+          emitCapturedJobsTrace(testTrace, {
+            kind: "deferred",
+            path: "full",
+            failureCode: "jobs-multiplier-latch-not-ready",
+            root: session.root,
+            settings: session.settings,
+            input: session.input,
+            decision,
+            multiplierLatch,
+          });
+          return Object.freeze({
+            status: "deferred",
+            reason: `native job multiplier latch is ${multiplierLatch}`,
+          });
+        }
         if (decision === null) return SUCCEEDED;
         const staleState = measure("jobs.full.staleCheck", () =>
           isFullJobsStateCurrent(executionRoot, session),
@@ -1396,8 +1883,16 @@ export function createCapturedFullJobsAutomation({
             : decision.authorityEntertainerCap;
           return SUCCEEDED;
         }
+        const invocations: Array<Readonly<Record<string, unknown>>> = [];
         const outcome = measure("jobs.full.execute", () =>
-          executeFullDecision(controls, session, decision, measure),
+          executeFullDecision(
+            controls,
+            session,
+            decision,
+            measure,
+            testTrace,
+            invocations,
+          ),
         );
         if (outcome.status !== "succeeded") return outcome;
         const currentRoot = rootState.readRoot();
@@ -1407,7 +1902,101 @@ export function createCapturedFullJobsAutomation({
             currentRoot === session.root &&
             fullJobsPostcondition(currentRoot, session, decision),
         );
-        if (!postcondition)
+        if (!postcondition) {
+          emitCapturedJobsTrace(testTrace, {
+            kind: "failure",
+            path: "full",
+            failureCode: "full-jobs-postcondition-failed",
+            root: session.root,
+            currentRoot,
+            settings: {
+              ...session.settings,
+              manageServants: session.input.manageServants,
+            },
+            defaultJobId: session.catalog.defaultJobId,
+            sampledJobCount: session.input.jobs.length,
+            sampledJobs: session.input.jobs
+              .filter((job) => job.workers > 0 || job.servants > 0)
+              .map(({ id, token, workers, servants, crafting }) => ({
+                id,
+                token,
+                workers,
+                servants,
+                crafting,
+              })),
+            pools: {
+              population: session.input.population,
+              defaultWorkers:
+                session.ordinaryJobs.find(
+                  (job) => job.id === session.catalog.defaultJobId,
+                )?.workers ?? 0,
+              servantsMaximum: session.input.servantsMaximum,
+              servantsUsed: session.catalog.servantState?.used ?? 0,
+              craftsmenMaximum: session.input.craftsmenMaximum,
+              skilledServantsMaximum: session.input.skilledServantsMaximum,
+              skilledServantsUsed: session.foundry.skilledUsed,
+            },
+            decision: {
+              kind: decision.kind,
+              selectedDefaultToken: decision.selectedDefaultToken,
+              assignmentChanges: summarizeCapturedJobsTraceAssignments(
+                session.input.jobs,
+                decision.assignments,
+              ),
+            },
+            invocations: summarizeCapturedJobsTraceInvocations(invocations),
+            expected: {
+              defaultJobId:
+                decision.selectedDefaultToken === null
+                  ? session.catalog.defaultJobId
+                  : session.ordinaryJobs.find(
+                      (job) => job.token === decision.selectedDefaultToken,
+                    )?.id,
+              assignments: summarizeCapturedJobsTraceAssignments(
+                session.input.jobs,
+                decision.assignments,
+              ),
+            },
+            actual: {
+              rootUnchanged: currentRoot === session.root,
+              defaultJobId: readProperty(
+                readProperty(currentRoot, "civic"),
+                "d_job",
+              ),
+              mismatches: decision.assignments.flatMap((assignment) => {
+                const job = session.input.jobs.find(
+                  (candidate) => candidate.token === assignment.jobToken,
+                );
+                const owner = job?.crafting
+                  ? readProperty(readProperty(currentRoot, "city"), "foundry")
+                  : readProperty(
+                      readProperty(currentRoot, "civic"),
+                      job?.id ?? "",
+                    );
+                const servants = readProperty(
+                  readProperty(readProperty(currentRoot, "race"), "servants"),
+                  job?.crafting ? "sjobs" : "jobs",
+                );
+                const actualWorkers = readProperty(
+                  owner,
+                  job?.crafting ? job.id : "workers",
+                );
+                const actualServants = readProperty(servants, job?.id ?? "");
+                return actualWorkers !== assignment.workers ||
+                  actualServants !== assignment.servants
+                  ? [
+                      {
+                        id: job?.id,
+                        requestedWorkers: assignment.workers,
+                        actualWorkers,
+                        requestedServants: assignment.servants,
+                        actualServants,
+                      },
+                    ]
+                  : [];
+              }),
+            },
+          });
           return rejected(
             "full-jobs-postcondition-failed",
             `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
@@ -1435,6 +2024,79 @@ export function createCapturedFullJobsAutomation({
               }),
             )}`,
           );
+        }
+        emitCapturedJobsTrace(testTrace, {
+          kind: "success",
+          path: "full",
+          failureCode: "jobs-assignment-postcondition-succeeded",
+          root: session.root,
+          currentRoot,
+          settings: {
+            ...session.settings,
+            manageServants: session.input.manageServants,
+          },
+          defaultJobId: session.catalog.defaultJobId,
+          decision: {
+            kind: decision.kind,
+            selectedDefaultToken: decision.selectedDefaultToken,
+            assignmentChanges: summarizeCapturedJobsTraceAssignments(
+              session.input.jobs,
+              decision.assignments,
+            ),
+          },
+          invocations: summarizeCapturedJobsTraceInvocations(invocations),
+          pools: {
+            population: session.input.population,
+            defaultWorkers:
+              session.ordinaryJobs.find(
+                (job) => job.id === session.catalog.defaultJobId,
+              )?.workers ?? 0,
+            servantsMaximum: session.input.servantsMaximum,
+            servantsUsed: session.catalog.servantState?.used ?? 0,
+            craftsmenMaximum: session.input.craftsmenMaximum,
+            skilledServantsMaximum: session.input.skilledServantsMaximum,
+            skilledServantsUsed: session.foundry.skilledUsed,
+          },
+          actual: {
+            defaultJobId: readProperty(
+              readProperty(currentRoot, "civic"),
+              "d_job",
+            ),
+            changedAssignments: summarizeCapturedJobsTraceAssignments(
+              session.input.jobs,
+              decision.assignments,
+            ).map((change) => {
+              const assignment = decision.assignments.find(
+                (candidate) => candidate.jobToken === change.jobToken,
+              )!;
+              const job = session.input.jobs.find(
+                (candidate) => candidate.token === assignment.jobToken,
+              );
+              const owner = job?.crafting
+                ? readProperty(readProperty(currentRoot, "city"), "foundry")
+                : readProperty(
+                    readProperty(currentRoot, "civic"),
+                    job?.id ?? "",
+                  );
+              const servants = readProperty(
+                readProperty(readProperty(currentRoot, "race"), "servants"),
+                job?.crafting ? "sjobs" : "jobs",
+              );
+              return {
+                id: job?.id,
+                beforeWorkers: change.beforeWorkers,
+                requestedWorkers: assignment.workers,
+                workers: readProperty(
+                  owner,
+                  job?.crafting ? job.id : "workers",
+                ),
+                beforeServants: change.beforeServants,
+                requestedServants: assignment.servants,
+                servants: readProperty(servants, job?.id ?? ""),
+              };
+            }),
+          },
+        });
         historyRoot = currentRoot;
         history = Object.freeze({
           lastPopulationCount: decision.lastPopulationCount,

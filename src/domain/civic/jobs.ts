@@ -727,6 +727,13 @@ function planJobsAllocationOnce(
     }
   }
 
+  // Native Civics `sub()` returns every removed worker to the current default job. When all
+  // managed jobs are capped or unavailable, keep those otherwise-unallocated workers in that
+  // native pool instead of planning an impossible zero-worker state.
+  if (defaultIndex !== -1 && availableWorkers > 0) {
+    requiredWorkers[defaultIndex]! += availableWorkers;
+  }
+
   const entertainerIndex = indexOfToken(jobIndex, input.entertainerToken);
   let selectedDefaultToken: number | null = null;
   if (!input.craftOnly && input.setDefault) {

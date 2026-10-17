@@ -3583,16 +3583,32 @@ export function startCapturedRuntime({
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
   });
+  const capturedJobsTraceSink =
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? (event: Readonly<Record<string, unknown>>) => {
+          const observer = readProperty(
+            readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+            "observeJobsTrace",
+          );
+          if (typeof observer === "function") observer(event);
+        }
+      : undefined;
   const ordinaryJobs = createCapturedOrdinaryJobsAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    keyState: pageCapture.keyState,
     readSettings: () => settingsStore.readRaw(),
     readDemand: readDemandFor("Jobs"),
     onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
+    ...(capturedJobsTraceSink === undefined
+      ? {}
+      : { testTrace: capturedJobsTraceSink }),
   });
   const fullJobs = createCapturedFullJobsAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    keyState: pageCapture.keyState,
     readSettings: () => settingsStore.readRaw(),
     onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
     costs,
@@ -3602,6 +3618,9 @@ export function startCapturedRuntime({
     ...(phaseDiagnostics === undefined
       ? {}
       : { diagnostics: phaseDiagnostics }),
+    ...(capturedJobsTraceSink === undefined
+      ? {}
+      : { testTrace: capturedJobsTraceSink }),
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,
@@ -5612,7 +5631,7 @@ export function startCapturedRuntime({
       );
       if (typeof observer === "function") observer(phase, outcome);
     }
-    if (outcome.status !== "succeeded")
+    if (outcome.status !== "succeeded" && outcome.status !== "deferred")
       reportOnce(
         `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`,
       );
@@ -5650,7 +5669,7 @@ export function startCapturedRuntime({
           }),
         );
     }
-    if (outcome.status !== "succeeded")
+    if (outcome.status !== "succeeded" && outcome.status !== "deferred")
       reportOnce(
         `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`,
       );

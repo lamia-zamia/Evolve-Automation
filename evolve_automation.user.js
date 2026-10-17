@@ -13147,6 +13147,7 @@
         requiredWorkers[index] += workers, availableWorkers -= workers;
       }
     }
+    defaultIndex !== -1 && availableWorkers > 0 && (requiredWorkers[defaultIndex] += availableWorkers);
     let entertainerIndex = indexOfToken(jobIndex, input.entertainerToken), selectedDefaultToken = null;
     !input.craftOnly && input.setDefault && (selectedDefaultToken = input.defaultPreference.find((candidate) => {
       let index = indexOfToken(jobIndex, candidate.allocationToken);
@@ -23398,31 +23399,64 @@
   }
 
   // src/adapters/evolve/civic/captured-job-controls.ts
-  function callCount(controls2, elementId, method, count2, craftedResourceId) {
+  function callCount(controls2, elementId, method, count2, craftedResourceId, onInvocation) {
     let handle = controls2.resolve(elementId);
     if (handle === void 0 || !Number.isFinite(count2)) return !1;
     let calls = Math.ceil(Math.max(count2, 0)), args = craftedResourceId === void 0 ? void 0 : [craftedResourceId];
-    for (let index = 0; index < calls; index++)
-      if (!controls2.invoke(handle, method, args).ok) return !1;
+    for (let index = 0; index < calls; index++) {
+      let result = controls2.invoke(handle, method, args);
+      if (onInvocation?.({
+        elementId,
+        generation: handle.generation,
+        methods: handle.methods,
+        method,
+        args: args ?? [],
+        ok: result.ok
+      }), !result.ok) return !1;
+    }
     return !0;
   }
   function createCapturedJobControls({
-    controls: controls2
+    controls: controls2,
+    onInvocation
   }) {
     return Object.freeze({
       assign({ elementId, count: count2, craftedResourceId }) {
-        return callCount(controls2, elementId, "add", count2, craftedResourceId);
+        return callCount(
+          controls2,
+          elementId,
+          "add",
+          count2,
+          craftedResourceId,
+          onInvocation
+        );
       },
       unassign({
         elementId,
         count: count2,
         craftedResourceId
       }) {
-        return callCount(controls2, elementId, "sub", count2, craftedResourceId);
+        return callCount(
+          controls2,
+          elementId,
+          "sub",
+          count2,
+          craftedResourceId,
+          onInvocation
+        );
       },
       setDefault({ elementId, jobId }) {
         let handle = controls2.resolve(elementId);
-        return handle === void 0 ? !1 : controls2.invoke(handle, "setDefault", [jobId]).ok;
+        if (handle === void 0) return !1;
+        let args = [jobId], result = controls2.invoke(handle, "setDefault", args);
+        return onInvocation?.({
+          elementId,
+          generation: handle.generation,
+          methods: handle.methods,
+          method: "setDefault",
+          args,
+          ok: result.ok
+        }), result.ok;
       }
     });
   }
@@ -24058,30 +24092,77 @@
       }
     };
   }
-  function hasMethod(controls2, elementId, method) {
-    let handle = controls2.resolve(elementId);
-    return handle !== void 0 && handle.methods.includes(method);
+  function capturedRequiredControls(controls2, required) {
+    return Object.freeze(
+      [...required].map(([elementId, methods]) => {
+        let handle = controls2.resolve(elementId);
+        return Object.freeze({
+          elementId,
+          requiredMethods: Object.freeze([...methods]),
+          generation: handle?.generation ?? null,
+          methods: handle?.methods ?? Object.freeze([])
+        });
+      })
+    );
   }
-  function preflightDecision(controls2, state, decision) {
-    let jobs = new Map(state.jobs.map((job) => [job.token, job]));
+  function summarizeCapturedJobsTraceAssignments(beforeJobs, assignments) {
+    let before = new Map(beforeJobs.map((job) => [job.token, job]));
+    return Object.freeze(
+      assignments.flatMap((assignment) => {
+        let job = before.get(assignment.jobToken);
+        return job === void 0 || job.workers === assignment.workers && job.servants === assignment.servants ? [] : [
+          Object.freeze({
+            jobToken: job.token,
+            jobId: job.id,
+            beforeWorkers: job.workers,
+            requestedWorkers: assignment.workers,
+            workerDelta: assignment.workers - job.workers,
+            beforeServants: job.servants,
+            requestedServants: assignment.servants,
+            servantDelta: assignment.servants - job.servants
+          })
+        ];
+      })
+    );
+  }
+  function summarizeCapturedJobsTraceInvocations(invocations) {
+    let summaries = /* @__PURE__ */ new Map();
+    for (let invocation of invocations) {
+      let summary = {
+        elementId: invocation.elementId,
+        generation: invocation.generation,
+        method: invocation.method,
+        args: invocation.args,
+        ok: invocation.ok
+      }, key = JSON.stringify(summary), existing = summaries.get(key);
+      existing === void 0 ? summaries.set(key, { ...summary, count: 1 }) : existing.count++;
+    }
+    return Object.freeze(
+      [...summaries.values()].map((summary) => Object.freeze(summary))
+    );
+  }
+  function requiredOrdinaryMethods(state, decision) {
+    let jobs = new Map(state.jobs.map((job) => [job.token, job])), required = /* @__PURE__ */ new Map(), require2 = (elementId, method) => {
+      let methods = required.get(elementId) ?? /* @__PURE__ */ new Set();
+      methods.add(method), required.set(elementId, methods);
+    };
     for (let assignment of decision.assignments) {
       let job = jobs.get(assignment.jobToken);
-      if (job === void 0) return !1;
-      if (assignment.workers !== job.workers) {
-        let method = assignment.workers < job.workers ? "sub" : "add";
-        if (!hasMethod(controls2, `civ-${job.id}`, method)) return !1;
-      }
-      if (state.manageServants && assignment.servants !== job.servants) {
-        let method = assignment.servants < job.servants ? "sub" : "add";
-        if (!hasMethod(controls2, `servant-${job.id}`, method)) return !1;
-      }
+      job !== void 0 && (assignment.workers !== job.workers && require2(`civ-${job.id}`, assignment.workers < job.workers ? "sub" : "add"), state.manageServants && assignment.servants !== job.servants && require2(`servant-${job.id}`, assignment.servants < job.servants ? "sub" : "add"));
     }
     if (decision.selectedDefaultToken !== null) {
       let job = jobs.get(decision.selectedDefaultToken);
-      if (job === void 0 || !hasMethod(controls2, `civ-${job.id}`, "setDefault"))
-        return !1;
+      job !== void 0 && require2(`civ-${job.id}`, "setDefault");
     }
-    return !0;
+    return required;
+  }
+  function missingOrdinaryMethod(controls2, state, decision) {
+    for (let [elementId, methods] of requiredOrdinaryMethods(state, decision)) {
+      let handle = controls2.resolve(elementId), method = [...methods].find(
+        (requiredMethod) => !handle?.methods.includes(requiredMethod)
+      );
+      if (method !== void 0) return Object.freeze({ elementId, method });
+    }
   }
   function unavailableInput() {
     return Object.freeze({
@@ -24390,7 +24471,7 @@
       ordinaryJobs: ordinary.commandState.jobs
     });
   }
-  function executeFullDecision(controls2, session, decision, measure) {
+  function executeFullDecision(controls2, session, decision, measure, testTrace, invocations) {
     let ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job])), foundry = new Map(
       session.foundry.input.jobs.map((job, index) => [
         session.input.jobs[session.ordinaryJobs.length + index].token,
@@ -24446,20 +24527,52 @@
       for (let [elementId, methods] of requiredMethods) {
         let handle = controls2.resolve(elementId);
         if (handle === void 0 || handle.elementId !== elementId || [...methods].some((method) => !handle.methods.includes(method)))
-          return elementId;
+          return Object.freeze({
+            elementId,
+            method: [...methods].find((method) => !handle?.methods.includes(method)) ?? [...methods][0]
+          });
         handles.set(elementId, handle);
       }
     });
-    if (preflightFailure !== void 0)
-      return rejected(
-        "full-jobs-controls-incomplete",
-        `missing required method on ${preflightFailure}`
-      );
+    if (preflightFailure !== void 0) {
+      let job = session.input.jobs.find((candidate) => preflightFailure.elementId.startsWith("servant-") ? preflightFailure.elementId === `servant-${candidate.id}` : preflightFailure.elementId.startsWith("civ-") ? preflightFailure.elementId === `civ-${candidate.id}` : preflightFailure.elementId === "foundry" ? candidate.crafting : preflightFailure.elementId === "skilledServants");
+      return session.root, {
+        ...session.settings,
+        manageServants: session.input.manageServants
+      }, session.catalog.defaultJobId, session.input.jobs.length, session.input.jobs.filter((candidate) => candidate.workers > 0 || candidate.servants > 0).map(({ id, token, workers, servants, crafting }) => ({
+        id,
+        token,
+        workers,
+        servants,
+        crafting
+      })), session.input.population, session.ordinaryJobs.find(
+        (job2) => job2.id === session.catalog.defaultJobId
+      )?.workers, session.input.servantsMaximum, session.catalog.servantState?.used, session.input.craftsmenMaximum, session.input.skilledServantsMaximum, session.foundry.skilledUsed, decision.kind, decision.selectedDefaultToken, summarizeCapturedJobsTraceAssignments(
+        session.input.jobs,
+        decision.assignments
+      ), preflightFailure.elementId, preflightFailure.method, job?.id, job?.token, job === void 0 || decision.assignments.find(
+        (assignment) => assignment.jobToken === job.token
+      ).workers - job.workers, job === void 0 || decision.assignments.find(
+        (assignment) => assignment.jobToken === job.token
+      ).servants - job.servants, session.input.servantsMaximum, job?.servants, capturedRequiredControls(controls2, requiredMethods), Object.freeze({
+        status: "deferred",
+        reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`
+      });
+    }
     let invoke2 = (elementId, method, count2, args) => {
       let handle = handles.get(elementId);
       if (handle === void 0 || !Number.isFinite(count2)) return !1;
-      for (let index = 0; index < Math.ceil(Math.max(count2, 0)); index++)
-        if (!controls2.invoke(handle, method, args).ok) return !1;
+      for (let index = 0; index < Math.ceil(Math.max(count2, 0)); index++) {
+        let result = controls2.invoke(handle, method, args);
+        if (invocations.push({
+          elementId,
+          generation: handle.generation,
+          methods: handle.methods,
+          method,
+          args: args ?? [],
+          ok: result.ok
+        }), !result.ok) return !1;
+      }
       return !0;
     };
     for (let [kind, id, count2] of workerRemovals)
@@ -24628,8 +24741,10 @@
     rootState,
     controls: controls2,
     readSettings,
+    keyState,
     readDemand,
-    onSkipped
+    onSkipped,
+    testTrace
   }) {
     let history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
       rootState,
@@ -24638,15 +24753,17 @@
       ...readDemand === void 0 ? {} : { readDemand },
       ...onSkipped === void 0 ? {} : { onSkipped },
       readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0
-    }), controlsPort = createCapturedJobControls({ controls: controls2 }), sessionRef = {
+    }), invocations = [], controlsPort = createCapturedJobControls({
+      controls: controls2
+    }), sessionRef = {
       value: void 0
     }, reader = Object.freeze({
       readCycle(craftOnly) {
         if (craftOnly)
           return sessionRef.value = void 0, unavailableInput();
-        let root = rootState.readRoot(), sampled3 = readCycle(
+        let root = rootState.readRoot(), settingsValue = readSettings(), sampled3 = readCycle(
           root,
-          readSettings(),
+          settingsValue,
           catalogReader,
           readDemand,
           authorityCap
@@ -24655,7 +24772,11 @@
           root,
           catalog: sampled3.catalog,
           input: sampled3.input,
-          commandState: sampled3.commandState
+          commandState: sampled3.commandState,
+          settings: Object.freeze({
+            autoJobs: readProperty(settingsValue, "autoJobs") === !0,
+            autoCraftsmen: readProperty(settingsValue, "autoCraftsmen") === !0
+          })
         }), sampled3.input);
       }
     }), executor = Object.freeze({
@@ -24671,6 +24792,15 @@
             "ordinary-jobs-root-changed",
             "captured game root changed"
           );
+        let multiplierLatch = readCapturedMultiplierLatch(
+          session.root,
+          keyState
+        );
+        if (multiplierLatch !== "none-latched")
+          return session.root, session.settings, session.input, sessionRef.value = void 0, Object.freeze({
+            status: "deferred",
+            reason: `native job multiplier latch is ${multiplierLatch}`
+          });
         let currentCatalog = catalogReader(), currentCycle = readCycle(
           session.root,
           readSettings(),
@@ -24689,19 +24819,45 @@
             "invalid-ordinary-jobs-decision",
             "ordinary jobs decision does not match the sampled plan"
           );
-        if (!preflightDecision(controls2, session.commandState, decision))
-          return sessionRef.value = void 0, rejected(
-            "ordinary-jobs-controls-incomplete",
-            "ordinary jobs command controls are incomplete"
+        let required = requiredOrdinaryMethods(session.commandState, decision), preflightFailure = missingOrdinaryMethod(
+          controls2,
+          session.commandState,
+          decision
+        );
+        if (preflightFailure !== void 0) {
+          let job = session.commandState.jobs.find((candidate) => preflightFailure.elementId === `civ-${candidate.id}` ? decision.assignments.some(
+            (assignment2) => assignment2.jobToken === candidate.token && assignment2.workers !== candidate.workers
+          ) : preflightFailure.elementId === `servant-${candidate.id}` ? decision.assignments.some(
+            (assignment2) => assignment2.jobToken === candidate.token && assignment2.servants !== candidate.servants
+          ) : !1), assignment = job === void 0 ? void 0 : decision.assignments.find(
+            (candidate) => candidate.jobToken === job.token
           );
-        sessionRef.value = void 0;
+          return session.root, {
+            ...session.settings,
+            manageServants: session.commandState.manageServants
+          }, session.catalog.defaultJobId, session.commandState.jobs.length, session.commandState.jobs.filter((job2) => job2.workers > 0 || job2.servants > 0).map(({ id, token, workers, servants }) => ({
+            id,
+            token,
+            workers,
+            servants
+          })), session.input.population, session.commandState.jobs.find(
+            (job2) => job2.id === session.catalog.defaultJobId
+          )?.workers, session.input.servantsMaximum, session.catalog.servantState?.used, decision.kind, decision.selectedDefaultToken, summarizeCapturedJobsTraceAssignments(
+            session.commandState.jobs,
+            decision.assignments
+          ), preflightFailure.elementId, preflightFailure.method, job?.id, job?.token, job === void 0 || assignment === void 0 || assignment.workers - job.workers, job === void 0 || assignment === void 0 || assignment.servants - job.servants, capturedRequiredControls(controls2, required), sessionRef.value = void 0, Object.freeze({
+            status: "deferred",
+            reason: `missing ${preflightFailure.elementId}.${preflightFailure.method}`
+          });
+        }
+        sessionRef.value = void 0, invocations.length = 0;
         let outcome = executeCapturedJobDecision(
           controlsPort,
           session.commandState,
           decision
         );
         if (outcome.status === "succeeded") {
-          let observed2 = rootState.readRoot() === session.root ? catalogReader() : void 0;
+          let currentRoot = rootState.readRoot(), observed2 = currentRoot === session.root ? catalogReader() : void 0;
           observed2 !== void 0 && observed2.defaultJobId === (decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.commandState.jobs.find(
             (job) => job.token === decision.selectedDefaultToken
           )?.id ?? "") && decision.assignments.every((assignment) => {
@@ -24711,13 +24867,68 @@
               (job) => job.token === assignment.jobToken
             );
             return before !== void 0 && after !== void 0 && after.workers === assignment.workers && after.servants === (session.commandState.manageServants ? assignment.servants : before.servants);
-          }) ? (historyRoot = rootState.readRoot(), history = Object.freeze({
+          }) ? (session.root, {
+            ...session.settings,
+            manageServants: session.commandState.manageServants
+          }, session.catalog.defaultJobId, session.commandState.jobs.filter((job) => job.workers > 0 || job.servants > 0).map(({ id, token, workers, servants }) => ({
+            id,
+            token,
+            workers,
+            servants
+          })), decision.kind, decision.selectedDefaultToken, summarizeCapturedJobsTraceAssignments(
+            session.commandState.jobs,
+            decision.assignments
+          ), summarizeCapturedJobsTraceInvocations(invocations), session.input.population, session.commandState.jobs.find(
+            (job) => job.id === session.catalog.defaultJobId
+          )?.workers, session.input.servantsMaximum, session.catalog.servantState?.used, observed2?.defaultJobId, summarizeCapturedJobsTraceAssignments(
+            session.commandState.jobs,
+            decision.assignments
+          ).map((change) => ({
+            ...change,
+            actualWorkers: observed2?.jobs.find((job) => job.token === change.jobToken)?.workers ?? null,
+            actualServants: observed2?.jobs.find((job) => job.token === change.jobToken)?.servants ?? null
+          })), historyRoot = rootState.readRoot(), history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
             lastFarmerCount: decision.lastFarmerCount
-          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap) : outcome = rejected(
+          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap) : (session.root, {
+            ...session.settings,
+            manageServants: session.commandState.manageServants
+          }, session.catalog.defaultJobId, session.commandState.jobs.filter((job) => job.workers > 0 || job.servants > 0).map(({ id, token, workers, servants }) => ({
+            id,
+            token,
+            workers,
+            servants
+          })), decision.kind, decision.selectedDefaultToken, summarizeCapturedJobsTraceAssignments(
+            session.commandState.jobs,
+            decision.assignments
+          ), summarizeCapturedJobsTraceInvocations(invocations), session.input.population, session.commandState.jobs.find(
+            (job) => job.id === session.catalog.defaultJobId
+          )?.workers, session.input.servantsMaximum, session.catalog.servantState?.used, decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.commandState.jobs.find(
+            (job) => job.token === decision.selectedDefaultToken
+          )?.id, summarizeCapturedJobsTraceAssignments(
+            session.commandState.jobs,
+            decision.assignments
+          ), session.root, observed2?.defaultJobId, observed2 === void 0 || decision.assignments.flatMap((assignment) => {
+            let expected2 = session.commandState.jobs.find(
+              (job) => job.token === assignment.jobToken
+            ), actual = observed2.jobs.find(
+              (job) => job.token === assignment.jobToken
+            );
+            return expected2 === void 0 || actual === void 0 || actual.workers !== assignment.workers || actual.servants !== (session.commandState.manageServants ? assignment.servants : expected2.servants) ? [
+              {
+                id: expected2?.id,
+                beforeWorkers: expected2?.workers,
+                requestedWorkers: assignment.workers,
+                actualWorkers: actual?.workers,
+                beforeServants: expected2?.servants,
+                requestedServants: assignment.servants,
+                actualServants: actual?.servants
+              }
+            ] : [];
+          }), outcome = rejected(
             "ordinary-jobs-postcondition-failed",
             "ordinary job assignment was not observed in captured root state"
-          );
+          ));
         }
         return outcome;
       }
@@ -24736,12 +24947,14 @@
     rootState,
     controls: controls2,
     readSettings,
+    keyState,
     onSkipped,
     costs,
     readDemand,
     readBuildTargets,
     buildCosts,
-    diagnostics
+    diagnostics,
+    testTrace
   }) {
     let history, historyRoot, authorityCap = null, prepareGeneration = 0, catalogReader = (root, settingsValue, demandReader) => readCapturedJobCatalog(
       root,
@@ -24794,7 +25007,11 @@
         catalog: sampled3.catalog,
         foundry: sampled3.foundry,
         input: sampled3.input,
-        ordinaryJobs: sampled3.ordinaryJobs
+        ordinaryJobs: sampled3.ordinaryJobs,
+        settings: Object.freeze({
+          autoJobs: readProperty(settings, "autoJobs") === !0,
+          autoCraftsmen: readProperty(settings, "autoCraftsmen") === !0
+        })
       }), consumed = !1, execution = Object.freeze({
         decision,
         execute() {
@@ -24812,6 +25029,15 @@
           let executionRoot = rootState.readRoot();
           if (executionRoot !== session.root)
             return stale("full-jobs-root-changed", "captured game root changed");
+          let multiplierLatch = readCapturedMultiplierLatch(
+            session.root,
+            keyState
+          );
+          if (multiplierLatch !== "none-latched")
+            return session.root, session.settings, session.input, Object.freeze({
+              status: "deferred",
+              reason: `native job multiplier latch is ${multiplierLatch}`
+            });
           if (decision === null) return SUCCEEDED;
           let staleState = measure(
             "jobs.full.staleCheck",
@@ -24827,19 +25053,108 @@
               lastPopulationCount: decision.lastPopulationCount,
               lastFarmerCount: decision.lastFarmerCount
             }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap, SUCCEEDED;
-          let outcome = measure(
+          let invocations = [], outcome = measure(
             "jobs.full.execute",
-            () => executeFullDecision(controls2, session, decision, measure)
+            () => executeFullDecision(
+              controls2,
+              session,
+              decision,
+              measure,
+              testTrace,
+              invocations
+            )
           );
           if (outcome.status !== "succeeded") return outcome;
           let currentRoot = rootState.readRoot();
           return measure(
             "jobs.full.postcondition",
             () => currentRoot === session.root && fullJobsPostcondition(currentRoot, session, decision)
-          ) ? (historyRoot = currentRoot, history = Object.freeze({
+          ) ? (session.root, {
+            ...session.settings,
+            manageServants: session.input.manageServants
+          }, session.catalog.defaultJobId, decision.kind, decision.selectedDefaultToken, summarizeCapturedJobsTraceAssignments(
+            session.input.jobs,
+            decision.assignments
+          ), summarizeCapturedJobsTraceInvocations(invocations), session.input.population, session.ordinaryJobs.find(
+            (job) => job.id === session.catalog.defaultJobId
+          )?.workers, session.input.servantsMaximum, session.catalog.servantState?.used, session.input.craftsmenMaximum, session.input.skilledServantsMaximum, session.foundry.skilledUsed, readProperty(
+            readProperty(currentRoot, "civic"),
+            "d_job"
+          ), summarizeCapturedJobsTraceAssignments(
+            session.input.jobs,
+            decision.assignments
+          ).map((change) => {
+            let assignment = decision.assignments.find(
+              (candidate) => candidate.jobToken === change.jobToken
+            ), job = session.input.jobs.find(
+              (candidate) => candidate.token === assignment.jobToken
+            ), owner = job?.crafting ? readProperty(readProperty(currentRoot, "city"), "foundry") : readProperty(
+              readProperty(currentRoot, "civic"),
+              job?.id ?? ""
+            ), servants = readProperty(
+              readProperty(readProperty(currentRoot, "race"), "servants"),
+              job?.crafting ? "sjobs" : "jobs"
+            );
+            return {
+              id: job?.id,
+              beforeWorkers: change.beforeWorkers,
+              requestedWorkers: assignment.workers,
+              workers: readProperty(
+                owner,
+                job?.crafting ? job.id : "workers"
+              ),
+              beforeServants: change.beforeServants,
+              requestedServants: assignment.servants,
+              servants: readProperty(servants, job?.id ?? "")
+            };
+          }), historyRoot = currentRoot, history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
             lastFarmerCount: decision.lastFarmerCount
-          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap, outcome) : rejected(
+          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap, outcome) : (session.root, {
+            ...session.settings,
+            manageServants: session.input.manageServants
+          }, session.catalog.defaultJobId, session.input.jobs.length, session.input.jobs.filter((job) => job.workers > 0 || job.servants > 0).map(({ id, token, workers, servants, crafting }) => ({
+            id,
+            token,
+            workers,
+            servants,
+            crafting
+          })), session.input.population, session.ordinaryJobs.find(
+            (job) => job.id === session.catalog.defaultJobId
+          )?.workers, session.input.servantsMaximum, session.catalog.servantState?.used, session.input.craftsmenMaximum, session.input.skilledServantsMaximum, session.foundry.skilledUsed, decision.kind, decision.selectedDefaultToken, summarizeCapturedJobsTraceAssignments(
+            session.input.jobs,
+            decision.assignments
+          ), summarizeCapturedJobsTraceInvocations(invocations), decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.ordinaryJobs.find(
+            (job) => job.token === decision.selectedDefaultToken
+          )?.id, summarizeCapturedJobsTraceAssignments(
+            session.input.jobs,
+            decision.assignments
+          ), session.root, readProperty(
+            readProperty(currentRoot, "civic"),
+            "d_job"
+          ), decision.assignments.flatMap((assignment) => {
+            let job = session.input.jobs.find(
+              (candidate) => candidate.token === assignment.jobToken
+            ), owner = job?.crafting ? readProperty(readProperty(currentRoot, "city"), "foundry") : readProperty(
+              readProperty(currentRoot, "civic"),
+              job?.id ?? ""
+            ), servants = readProperty(
+              readProperty(readProperty(currentRoot, "race"), "servants"),
+              job?.crafting ? "sjobs" : "jobs"
+            ), actualWorkers = readProperty(
+              owner,
+              job?.crafting ? job.id : "workers"
+            ), actualServants = readProperty(servants, job?.id ?? "");
+            return actualWorkers !== assignment.workers || actualServants !== assignment.servants ? [
+              {
+                id: job?.id,
+                requestedWorkers: assignment.workers,
+                actualWorkers,
+                requestedServants: assignment.servants,
+                actualServants
+              }
+            ] : [];
+          }), rejected(
             "full-jobs-postcondition-failed",
             `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
               decision.assignments.map((assignment) => {
@@ -24861,7 +25176,7 @@
                 };
               })
             )}`
-          );
+          ));
         }
       });
       return Object.freeze({
@@ -60034,22 +60349,26 @@ Only continue if you trust the source. Injected code:
       readDemand: readDemandFor("Jobs"),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts
-    }), ordinaryJobs = createCapturedOrdinaryJobsAutomation({
+    }), capturedJobsTraceSink = void 0, ordinaryJobs = createCapturedOrdinaryJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       readDemand: readDemandFor("Jobs"),
-      onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`)
+      onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
+      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink }
     }), fullJobs = createCapturedFullJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
       costs,
       readDemand: readDemandFor("Jobs"),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts,
-      ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics }
+      ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics },
+      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink }
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -61137,12 +61456,12 @@ Only continue if you trust the source. Injected code:
       prospectiveSpaceMinerPlan = root !== void 0 && Number.isFinite(decision.maximumSpaceMiners) ? { root, maximum: decision.maximumSpaceMiners } : void 0;
     }, runJobsPhase = (phase, dependencies, craftOnly = !1) => {
       let outcome = runJobsAutomation(dependencies, craftOnly);
-      return outcome.status !== "succeeded" && reportOnce(
+      return outcome.status !== "succeeded" && outcome.status !== "deferred" && reportOnce(
         `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`
       ), outcome;
     }, runPreparedJobsPhase = (phase, prepared, input) => {
       let foundryControl = pageCapture2.controls.resolve("foundry"), outcome = runPreparedJobsAutomation(prepared, publishSpaceMinerPlan);
-      return outcome.status !== "succeeded" && reportOnce(
+      return outcome.status !== "succeeded" && outcome.status !== "deferred" && reportOnce(
         `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`
       ), outcome;
     }, powerReader = createCapturedPowerReader({

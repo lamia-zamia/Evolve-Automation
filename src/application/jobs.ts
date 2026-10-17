@@ -1,7 +1,7 @@
-import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import { planJobs, type JobsDecision } from "../domain/civic/jobs.ts";
 import type {
   JobsExecutor,
+  JobsExecutionOutcome,
   JobsReader,
   PreparedJobsExecution,
 } from "../ports/jobs.ts";
@@ -18,14 +18,14 @@ export interface JobsAutomationDependencies {
   };
 }
 
-const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
+const SUCCEEDED: JobsExecutionOutcome = Object.freeze({
   status: "succeeded",
 });
 
 export function runJobsAutomation(
   dependencies: JobsAutomationDependencies,
   craftOnly = false,
-): CommandExecutionOutcome {
+): JobsExecutionOutcome {
   const diagnostics = dependencies.diagnostics;
   const measuring = diagnostics?.readPerformanceEnabled() === true;
   const startedAt = measuring ? diagnostics!.nowMs() : 0;
@@ -47,7 +47,7 @@ export function runJobsAutomation(
 export function runPreparedJobsAutomation(
   prepared: Readonly<PreparedJobsExecution>,
   onCoherentPlan?: (decision: Readonly<JobsDecision>) => void,
-): CommandExecutionOutcome {
+): JobsExecutionOutcome {
   const outcome = prepared.execute();
   if (outcome.status === "succeeded" && prepared.decision !== null)
     onCoherentPlan?.(prepared.decision);

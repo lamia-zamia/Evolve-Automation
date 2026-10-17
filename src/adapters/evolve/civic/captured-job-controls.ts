@@ -18,6 +18,16 @@ import { rejected, SUCCEEDED } from "../../command-outcomes.ts";
 
 export interface CapturedJobControlsDependencies {
   readonly controls: GameControlRegistry;
+  readonly onInvocation?: (
+    invocation: Readonly<{
+      elementId: string;
+      generation: number;
+      methods: readonly string[];
+      method: string;
+      args: readonly unknown[];
+      ok: boolean;
+    }>,
+  ) => void;
 }
 
 export interface CapturedJobCommandJob {
@@ -39,6 +49,7 @@ function callCount(
   method: "add" | "sub",
   count: number,
   craftedResourceId: string | undefined,
+  onInvocation?: CapturedJobControlsDependencies["onInvocation"],
 ): boolean {
   const handle = controls.resolve(elementId);
   if (handle === undefined) return false;
@@ -48,6 +59,14 @@ function callCount(
     craftedResourceId === undefined ? undefined : [craftedResourceId];
   for (let index = 0; index < calls; index++) {
     const result = controls.invoke(handle, method, args);
+    onInvocation?.({
+      elementId,
+      generation: handle.generation,
+      methods: handle.methods,
+      method,
+      args: args ?? [],
+      ok: result.ok,
+    });
     if (!result.ok) return false;
   }
   return true;
@@ -55,10 +74,18 @@ function callCount(
 
 export function createCapturedJobControls({
   controls,
+  onInvocation,
 }: CapturedJobControlsDependencies): GameJobControlsPort {
   return Object.freeze({
     assign({ elementId, count, craftedResourceId }: GameJobAssignmentRequest) {
-      return callCount(controls, elementId, "add", count, craftedResourceId);
+      return callCount(
+        controls,
+        elementId,
+        "add",
+        count,
+        craftedResourceId,
+        onInvocation,
+      );
     },
 
     unassign({
@@ -66,13 +93,30 @@ export function createCapturedJobControls({
       count,
       craftedResourceId,
     }: GameJobAssignmentRequest) {
-      return callCount(controls, elementId, "sub", count, craftedResourceId);
+      return callCount(
+        controls,
+        elementId,
+        "sub",
+        count,
+        craftedResourceId,
+        onInvocation,
+      );
     },
 
     setDefault({ elementId, jobId }: GameDefaultJobRequest) {
       const handle = controls.resolve(elementId);
       if (handle === undefined) return false;
-      return controls.invoke(handle, "setDefault", [jobId]).ok;
+      const args = [jobId];
+      const result = controls.invoke(handle, "setDefault", args);
+      onInvocation?.({
+        elementId,
+        generation: handle.generation,
+        methods: handle.methods,
+        method: "setDefault",
+        args,
+        ok: result.ok,
+      });
+      return result.ok;
     },
   });
 }
