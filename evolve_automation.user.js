@@ -9586,22 +9586,25 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-unlock-observation.ts
-  function readCapturedBuildingUnlockStateRecords(root, structuresByBinding) {
+  function readCapturedBuildingUnlockStateRecords(root, structuresByBinding, requestedBindings) {
     let records = /* @__PURE__ */ new Map();
-    for (let [binding, structures] of structuresByBinding)
-      for (let structure of structures) {
-        let state = readProperty(
-          readProperty(root, structure.region),
-          structure.struct
-        );
-        if (isRecord(state)) {
-          records.set(
-            binding,
-            Object.freeze({ entryKey: structure.entryKey, state })
+    for (let binding of requestedBindings) {
+      let structures = structuresByBinding.get(binding);
+      if (structures !== void 0)
+        for (let structure of structures) {
+          let state = readProperty(
+            readProperty(root, structure.region),
+            structure.struct
           );
-          break;
+          if (isRecord(state)) {
+            records.set(
+              binding,
+              Object.freeze({ entryKey: structure.entryKey, state })
+            );
+            break;
+          }
         }
-      }
+    }
     return records;
   }
 
@@ -9645,11 +9648,16 @@
           reportSkipped("*", "the native structure catalog is unavailable");
           return;
         }
-        let nativeStructuresByBinding = readStructuresByBinding(structures), stateRecords;
+        let nativeStructuresByBinding = readStructuresByBinding(structures), requestedBindings = /* @__PURE__ */ new Set();
+        for (let region of regions)
+          for (let binding of bindingsByRegion.get(region) ?? [])
+            requestedBindings.add(binding);
+        let stateRecords;
         try {
           stateRecords = readCapturedBuildingUnlockStateRecords(
             root,
-            nativeStructuresByBinding
+            nativeStructuresByBinding,
+            requestedBindings
           );
         } catch {
           reportSkipped("*", "the native structure state catalog is invalid");
