@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 
 import {
   createChromiumRunner,
@@ -9,27 +10,46 @@ import {
 } from "../tools/chromium-evolve-runner.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const bundle = resolve(root, "evolve_automation.user.js");
+const bundle = resolve(root, "test-artifacts/evolution-trace.user.js");
+const metadata = await readFile(
+  resolve(root, "src/userscript.meta.js"),
+  "utf8",
+);
+await build({
+  absWorkingDir: root,
+  entryPoints: ["src/main.ts"],
+  outfile: bundle,
+  bundle: true,
+  banner: { js: metadata },
+  charset: "utf8",
+  format: "iife",
+  platform: "browser",
+  target: ["esnext"],
+  define: {
+    "globalThis.__EA_TEST_SURFACE_ENABLED__": "true",
+    __EA_TEST_SURFACE_ENABLED__: "true",
+    __EA_RESEARCH_CONDITION_GATE_ENABLED__: "false",
+  },
+  minifySyntax: true,
+});
 const bundleBytes = await readFile(bundle);
 const bundleIdentity = createHash("sha256").update(bundleBytes).digest("hex");
 const pinnedGame = resolve(root, "test-artifacts/game/evolve-deadspace.js");
 const betaGame = resolve(root, "test-artifacts/game/evolve-beta-bc12393.js");
 const pinnedUpstream = "D:/work/Evolve-DeadSpace";
 const betaUpstream = "D:/work/Evolve-Beta";
+const gameSnapshot = async (path, commit) => ({
+  path,
+  commit,
+  sha256: createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex"),
+});
 const lateSave = parseSave(
   await readFile(
     resolve(
       root,
       "test-artifacts/benchmark/slice0/saves/deadspace-late-2026-10-12.txt",
-    ),
-    "utf8",
-  ),
-);
-const earlySave = parseSave(
-  await readFile(
-    resolve(
-      root,
-      "test-artifacts/benchmark/slice0/saves/deadspace-early-day14.json",
     ),
     "utf8",
   ),
@@ -41,13 +61,13 @@ const rawSettings = JSON.parse(
   ),
 );
 
-function settingsFor({ prestige, evolution, autoBuild = true }) {
+function settingsFor({ prestige, evolution }) {
   return JSON.stringify({
     ...rawSettings,
     autoPrestige: prestige,
     autoEvolution: evolution,
     autoResearch: true,
-    autoBuild,
+    autoBuild: true,
     buildingAlwaysClick: false,
     evolutionQueue: [],
     evolutionQueueEnabled: false,
@@ -70,8 +90,40 @@ function summaryView() {
     const value = resource[id];
     return value === undefined
       ? null
-      : { amount: value.amount, max: value.max };
+      : { amount: value.amount, max: value.max, display: value.display };
   };
+  const evolutionRows = [
+    ...document.querySelectorAll("#evolution > .action"),
+  ].map((element) => ({
+    id: element.id,
+    className: element.className,
+    hidden: element.hidden,
+    display: getComputedStyle(element).display,
+    generation: control(element.id)?.generation ?? null,
+    methods: control(element.id)?.methods ?? [],
+  }));
+  const configuredChallenges = (() => {
+    try {
+      return Object.entries(
+        JSON.parse(localStorage.getItem("settings") ?? "{}"),
+      )
+        .filter(
+          ([key, value]) => key.startsWith("challenge_") && value === true,
+        )
+        .map(([key]) => key.slice("challenge_".length));
+    } catch {
+      return [];
+    }
+  })();
+  const evolutionTrace = (() => {
+    try {
+      return JSON.parse(
+        sessionStorage.getItem("__eaEvolutionCycleTrace") ?? "[]",
+      );
+    } catch {
+      return [];
+    }
+  })();
   return {
     loads: window.__EA_RUNNER__?.loads?.() ?? null,
     periods: window.__EA_RUNNER__?.periods?.() ?? null,
@@ -115,6 +167,12 @@ function summaryView() {
     madArmed: state?.civic?.mad?.armed ?? null,
     resourceKeys: Object.keys(resource).length,
     evolutionKeys: Object.keys(state?.evolution ?? {}).length,
+    cells: Object.fromEntries(
+      ["mitochondria", "eukaryotic_cell", "nucleus", "organelles"].map((id) => [
+        id,
+        state?.evolution?.[id]?.count ?? null,
+      ]),
+    ),
     RNA: action("RNA"),
     DNA: action("DNA"),
     Mana: action("Mana"),
@@ -124,6 +182,9 @@ function summaryView() {
       evolutionDNA: control("evolution-dna"),
     },
     capturedEvolutionIds: actionIds.filter((id) => id.startsWith("evolution-")),
+    evolutionRows,
+    configuredChallenges,
+    evolutionTrace,
     evolutionActionCount: actionIds.filter((id) => id.startsWith("evolution-"))
       .length,
     targetCommitted: document.body.innerText.includes(
@@ -153,6 +214,7 @@ async function runScenario({
       seed: 42,
       perf: true,
     });
+    const initialState = await session.evaluate(summaryView);
     let reloads = 0;
     const observations = [];
     let prior = null;
@@ -190,6 +252,8 @@ async function runScenario({
     }
     return {
       observations,
+      postMadTrace: observations.at(-1)?.evolutionTrace ?? [],
+      initialState,
       reloads,
       errorCounts: diagnostics.counts,
       boundedLogLines: diagnostics.lines,
@@ -208,24 +272,6 @@ async function runScenario({
   }
 }
 
-function configureGatherSave(save, primitive) {
-  const configured = structuredClone(save);
-  configured.race.universe = "magic";
-  configured.race.sappy = false;
-  configured.race.fasting = false;
-  configured.tech.conjuring = 2;
-  configured.tech.primitive = primitive;
-  configured.city.rock_quarry = { count: 0 };
-  configured.resource.Mana.amount = 1;
-  configured.resource.Food.amount = Math.max(
-    100,
-    configured.resource.Food.amount,
-  );
-  configured.resource.Lumber.amount = 0;
-  configured.resource.Stone.amount = 0;
-  return configured;
-}
-
 const report = {
   bundle: { path: bundle, sha256: bundleIdentity },
   games: [
@@ -233,27 +279,30 @@ const report = {
       label: "pinned DeadSpace",
       commit: "db38e2af831907d49aeb5348d678d8d8745d6c3f",
       game: pinnedGame,
+      snapshot: await gameSnapshot(
+        pinnedGame,
+        "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+      ),
     },
     {
       label: "beta source snapshot",
       commit: "bc12393a2bee95ded06920a0f9d53caaf3ba38f2",
       game: betaGame,
+      snapshot: await gameSnapshot(
+        betaGame,
+        "bc12393a2bee95ded06920a0f9d53caaf3ba38f2",
+      ),
     },
   ],
   scenarios: {},
 };
-const onlyScenarios = new Set(
-  process.argv.slice(2).flatMap((value) => value.split(",")),
-);
 async function runNamedScenario(name, options) {
-  if (onlyScenarios.size > 0 && !onlyScenarios.has(name)) return;
   report.scenarios[name] = await runScenario(options);
 }
 
 for (const game of report.games) {
   const pinned = game.label === "pinned DeadSpace";
   const upstream = pinned ? pinnedUpstream : betaUpstream;
-  const gatherSource = pinned ? earlySave : lateSave;
   await runNamedScenario(`${pinned ? "pinned" : "beta"}-mad-transition`, {
     game: game.game,
     upstream,
@@ -261,32 +310,11 @@ for (const game of report.games) {
     settings: settingsFor({ prestige: true, evolution: true }),
     periods: 6000,
   });
-  await runNamedScenario(`${pinned ? "pinned" : "beta"}-direct-new-game`, {
-    game: game.game,
-    upstream,
-    save: null,
-    settings: settingsFor({ prestige: false, evolution: true }),
-    periods: 6000,
-  });
-  await runNamedScenario(`${pinned ? "pinned" : "beta"}-gather-bootstrap`, {
-    game: game.game,
-    upstream,
-    save: configureGatherSave(gatherSource, undefined),
-    settings: settingsFor({ prestige: false, evolution: false }),
-    periods: 1000,
-  });
-  await runNamedScenario(`${pinned ? "pinned" : "beta"}-gather-mature`, {
-    game: game.game,
-    upstream,
-    save: configureGatherSave(lateSave, 1),
-    settings: settingsFor({ prestige: false, evolution: false }),
-    periods: 1000,
-  });
 }
 
 const output = resolve(
   root,
-  "test-artifacts/autoclick-mad-evolution-replay.json",
+  "test-artifacts/evolution-post-mad-deadlock-replay.json",
 );
 await writeFile(output, `${JSON.stringify(report, null, 2)}\n`);
 console.log(output);

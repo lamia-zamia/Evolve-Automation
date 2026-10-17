@@ -21,6 +21,7 @@ import type {
 } from "../../../../domain/progression/evolution/evolution.ts";
 import type {
   EvolutionCostsSample,
+  EvolutionCycleTrace,
   EvolutionExecutor,
   EvolutionReader,
   EvolutionResultSample,
@@ -36,12 +37,27 @@ import {
   readCapturedEvolutionTargetGenus,
   sampleCapturedEvolutionRaceCatalog,
 } from "./captured-evolution-race-catalog.ts";
-import { CAPTURED_EVOLUTION_GENERA } from "./captured-evolution-catalog.ts";
+import {
+  CAPTURED_EVOLUTION_GENERA,
+  CAPTURED_EVOLUTION_RACES,
+} from "./captured-evolution-catalog.ts";
 import { readCapturedEvolutionResult } from "./captured-evolution-result.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 const EVOLUTION_ACTION_PREFIX = "evolution-";
-const EVOLUTION_ACTION_SELECTOR = "#evolution > .action";
+export const EVOLUTION_ACTION_SELECTOR = "#evolution > .action";
 const RESOURCE_ACTION_IDS = new Set(["rna", "dna"]);
+const CAPTURED_CELL_ACTION_IDS = new Set([
+  "membrane",
+  "organelles",
+  "nucleus",
+  "eukaryotic_cell",
+  "mitochondria",
+]);
+const CAPTURED_GENUS_BY_ACTION_ID = new Map(
+  CAPTURED_EVOLUTION_GENERA.map((genus) => [genus.actionId, genus.id]),
+);
 
 export interface CapturedEvolutionDependencies {
   readonly rootState: GameRootStateSource;
@@ -52,6 +68,7 @@ export interface CapturedEvolutionDependencies {
   readonly loadQueuedSettings: () => void;
   readonly universeControls: UniverseSelectionControls;
   readonly challengeGroups: readonly ChallengeGroup[];
+  readonly trace?: (event: EvolutionCycleTrace) => void;
   readonly onActivity?: GameActivitySink;
 }
 
@@ -111,6 +128,12 @@ function capturedEvolutionActionState(
       ? undefined
       : readProperty(readProperty(root, "tech"), `evo_${genus.id}`);
   if (genusTech !== undefined) return genusTech;
+  if (CAPTURED_EVOLUTION_RACES.some((race) => race.id === id)) {
+    const species = readProperty(readProperty(root, "race"), "species");
+    const actionState = readProperty(readProperty(root, "evolution"), id);
+    const actionCount = readProperty(actionState, "count");
+    return `${String(species)}:${String(actionCount === undefined ? actionState : actionCount)}`;
+  }
   const actionState = readProperty(readProperty(root, "evolution"), id);
   const count = readProperty(actionState, "count");
   return count === undefined ? actionState : count;
@@ -119,12 +142,23 @@ function capturedEvolutionActionState(
 function capturedEvolutionResource(
   root: unknown,
   id: "RNA" | "DNA",
-): { readonly amount: number; readonly max: number } | undefined {
+):
+  | {
+      readonly amount: number;
+      readonly max: number;
+      readonly display: boolean;
+    }
+  | undefined {
   const resource = nestedRecord(nestedRecord(root, "resource"), id);
   const amount = Number(readProperty(resource, "amount"));
   const max = Number(readProperty(resource, "max"));
   return Number.isFinite(amount) && Number.isFinite(max)
-    ? Object.freeze({ amount, max })
+    ? Object.freeze({
+        amount,
+        max,
+        // Native evolution actions require resource.display; an absent field before unlock is false.
+        display: Boolean(readProperty(resource, "display")),
+      })
     : undefined;
 }
 
@@ -255,33 +289,6 @@ export function createCapturedEvolution(
       });
     },
 
-    evolutionActionsReady(): boolean {
-      const root = dependencies.rootState.readRoot();
-      if (
-        capturedEvolutionResource(root, "RNA") === undefined ||
-        capturedEvolutionResource(root, "DNA") === undefined
-      ) {
-        return false;
-      }
-      const rows = new Set(
-        readActionRows(dependencies.drawnActions).map((row) => row.id),
-      );
-      for (const id of ["rna", "dna"]) {
-        const elementId = `${EVOLUTION_ACTION_PREFIX}${id}`;
-        const handle = dependencies.controls.resolve(elementId);
-        if (
-          !rows.has(elementId) ||
-          handle === undefined ||
-          !Number.isSafeInteger(handle.generation) ||
-          handle.generation < 1 ||
-          !handle.methods.includes("action")
-        ) {
-          return false;
-        }
-      }
-      return true;
-    },
-
     hasStoredTarget(): boolean {
       return storedTarget !== undefined;
     },
@@ -323,7 +330,25 @@ export function createCapturedEvolution(
       return Number(readProperty(readRace(dependencies.rootState), trait));
     },
 
+    sampleChallengeActionAvailability(
+      id: string,
+    ): "not-offered" | "stale" | "available" {
+      const elementId = `${EVOLUTION_ACTION_PREFIX}${id}`;
+      const offered = readActionRows(dependencies.drawnActions).some(
+        (row) => row.id === elementId,
+      );
+      if (!offered) return "not-offered";
+      const handle = dependencies.controls.resolve(elementId);
+      return handle !== undefined &&
+        Number.isSafeInteger(handle.generation) &&
+        handle.generation > 0 &&
+        handle.methods.includes("action")
+        ? "available"
+        : "stale";
+    },
+
     sampleCosts(targetId: string): EvolutionCostsSample {
+      const root = dependencies.rootState.readRoot();
       const rows = actionRowsForTree(
         readActionRows(dependencies.drawnActions),
         challengeIds,
@@ -336,35 +361,104 @@ export function createCapturedEvolution(
         maxRna = Math.max(maxRna, row.cost["RNA"] ?? 0);
         maxDna = Math.max(maxDna, row.cost["DNA"] ?? 0);
       }
+      const rna = capturedEvolutionResource(root, "RNA");
+      const dna = capturedEvolutionResource(root, "DNA");
+      // Before unlock, Evolve may omit an entire resource record; its amount and cap coerce as zero.
       return Object.freeze({
         maxRna,
         maxDna,
-        rnaCurrent: resourceAmount(dependencies.rootState, "RNA", "amount"),
-        rnaMax: resourceAmount(dependencies.rootState, "RNA", "max"),
-        dnaCurrent: resourceAmount(dependencies.rootState, "DNA", "amount"),
-        dnaMax: resourceAmount(dependencies.rootState, "DNA", "max"),
+        rnaCurrent: rna?.amount ?? 0,
+        rnaMax: rna?.max ?? 0,
+        rnaDisplay: rna?.display ?? false,
+        dnaCurrent: dna?.amount ?? 0,
+        dnaMax: dna?.max ?? 0,
+        dnaDisplay: dna?.display ?? false,
       });
     },
 
     sampleEvolutionTree(targetId: string): readonly EvolutionTreeAction[] {
+      const root = dependencies.rootState.readRoot();
       const rows = actionRowsForTree(
         readActionRows(dependencies.drawnActions),
         challengeIds,
         targetId,
         dependencies.rootState,
       );
+      const targetDefinition = CAPTURED_EVOLUTION_RACES.find(
+        (candidate) => candidate.id === targetId,
+      );
+      const targetGenusSample = readCapturedEvolutionTargetGenus(
+        root,
+        targetId,
+      );
+      const settings = capturedEvolutionReadSettings(dependencies.readSettings);
+      const tech = nestedRecord(rootRecord(dependencies.rootState), "tech");
+      const activeGenus = CAPTURED_EVOLUTION_GENERA.find(
+        (genus) => Number(readProperty(tech, `evo_${genus.id}`)) >= 2,
+      )?.id;
+      const preferredGenus = settings?.["userEvolutionGenus"];
+      const targetGenus =
+        targetDefinition !== undefined &&
+        targetDefinition.genus !== "variable" &&
+        targetDefinition.genus !== "hybrid" &&
+        targetDefinition.genus !== "custom"
+          ? targetDefinition.genus
+          : activeGenus !== undefined &&
+              targetGenusSample?.targetGenera.includes(activeGenus)
+            ? activeGenus
+            : typeof preferredGenus === "string" &&
+                targetGenusSample?.targetGenera.includes(preferredGenus)
+              ? preferredGenus
+              : undefined;
+      const selectedGenusActionId =
+        targetGenus === undefined
+          ? undefined
+          : CAPTURED_EVOLUTION_GENERA.find((genus) => genus.id === targetGenus)
+              ?.actionId;
       const race = readRace(dependencies.rootState);
       return Object.freeze(
-        rows.map((row) => {
-          const id = capturedEvolutionActionId(row.id);
-          const trait = challengeTraitById.get(id);
-          return Object.freeze({
-            id,
-            unlocked: true,
-            activeChallenge:
-              trait !== undefined && Number(readProperty(race, trait)) === 1,
-          });
-        }),
+        rows
+          .filter(
+            (row) =>
+              !CAPTURED_CELL_ACTION_IDS.has(capturedEvolutionActionId(row.id)),
+          )
+          .filter((row) => {
+            const actionId = capturedEvolutionActionId(row.id);
+            const genus = CAPTURED_GENUS_BY_ACTION_ID.get(actionId);
+            return (
+              genus === undefined ||
+              selectedGenusActionId === undefined ||
+              actionId === selectedGenusActionId
+            );
+          })
+          .sort((left, right) => {
+            // Native setAction only draws condition-qualified rows. Prefer the configured race
+            // when its native action is offered; otherwise let native genus progression continue.
+            const targetActionId = `${EVOLUTION_ACTION_PREFIX}${targetId}`;
+            const targetOrder =
+              Number(right.id === targetActionId) -
+              Number(left.id === targetActionId);
+            if (targetOrder !== 0) return targetOrder;
+            if (selectedGenusActionId === undefined) return 0;
+            return (
+              Number(right.id.endsWith(selectedGenusActionId)) -
+              Number(left.id.endsWith(selectedGenusActionId))
+            );
+          })
+          .map((row) => {
+            const id = capturedEvolutionActionId(row.id);
+            const trait = challengeTraitById.get(id);
+            const genus = CAPTURED_GENUS_BY_ACTION_ID.get(id);
+            return Object.freeze({
+              id,
+              unlocked:
+                genus === undefined ||
+                id !== selectedGenusActionId ||
+                genus !== activeGenus,
+              activeChallenge:
+                trait !== undefined && Number(readProperty(race, trait)) === 1,
+            });
+          }),
       );
     },
 
@@ -516,9 +610,67 @@ export function createCapturedEvolution(
         dependencies.rootState.readRoot(),
         id.toUpperCase() as "RNA" | "DNA",
       );
-      if (resource === undefined) return "deferred";
-      if (resource.amount >= resource.max) return "complete";
+      if (resource === undefined) {
+        if (
+          (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+            __EA_TEST_SURFACE_ENABLED__ === true) &&
+          dependencies.trace !== undefined
+        )
+          dependencies.trace({
+            stage: "resource-action",
+            details: {
+              id,
+              index,
+              requested: count,
+              outcome: "deferred-resource-unavailable",
+            },
+          });
+        return "deferred";
+      }
+      if (!resource.display) {
+        if (
+          (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+            __EA_TEST_SURFACE_ENABLED__ === true) &&
+          dependencies.trace !== undefined
+        )
+          dependencies.trace({
+            stage: "resource-action",
+            details: {
+              id,
+              index,
+              requested: count,
+              outcome: "deferred-resource-hidden",
+            },
+          });
+        return "deferred";
+      }
+      if (resource.amount >= resource.max) {
+        if (
+          (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+            __EA_TEST_SURFACE_ENABLED__ === true) &&
+          dependencies.trace !== undefined
+        )
+          dependencies.trace({
+            stage: "resource-action",
+            details: {
+              id,
+              index,
+              requested: count,
+              outcome: "complete-at-cap",
+            },
+          });
+        return "complete";
+      }
       const outcome = invokeAction(id);
+      if (
+        (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+          __EA_TEST_SURFACE_ENABLED__ === true) &&
+        dependencies.trace !== undefined
+      )
+        dependencies.trace({
+          stage: "resource-action",
+          details: { id, index, requested: count, outcome },
+        });
       if (outcome.status === "failed") return "failed";
       if (outcome.status !== "invoked" || !outcome.stateChanged)
         return "deferred";

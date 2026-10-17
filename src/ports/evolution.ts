@@ -17,8 +17,10 @@ export interface EvolutionCostsSample {
   readonly maxDna: number;
   readonly rnaCurrent: number;
   readonly rnaMax: number;
+  readonly rnaDisplay: boolean;
   readonly dnaCurrent: number;
   readonly dnaMax: number;
+  readonly dnaDisplay: boolean;
 }
 
 /**
@@ -29,8 +31,10 @@ export interface EvolutionCostsSample {
 export interface EvolutionReader {
   sampleSpecies(): string;
   sampleLandingGate(): EvolutionLandingGate;
-  /** False until the native RNA/DNA state and the rendered resource controls are current. */
-  evolutionActionsReady?(): boolean;
+  /** Native condition-hidden challenge rows are not offers; a visible row without a current binding is a redraw gap. */
+  sampleChallengeActionAvailability(
+    id: string,
+  ): "not-offered" | "stale" | "available";
   hasStoredTarget(): boolean;
   storedTargetId(): string | null;
   /** Sampled after loadQueuedSettings has reloaded the effective settings. */
@@ -48,6 +52,12 @@ export interface EvolutionReader {
   sampleChallengeEnabled(
     groupIds: readonly string[],
   ): Readonly<Record<string, boolean>>;
+}
+
+export interface EvolutionCycleTrace {
+  readonly stage: string;
+  readonly reason?: string;
+  readonly details?: Readonly<Record<string, unknown>>;
 }
 
 export interface ResourceAccumulationCommand {
