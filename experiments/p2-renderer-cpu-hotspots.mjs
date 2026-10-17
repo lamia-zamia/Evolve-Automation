@@ -37,7 +37,9 @@ const settingsPath =
   "D:/work/Evolve-Automation/test-artifacts/benchmark/slice0/settings/stage2e-integrated-mad-no-triggers.json";
 const game =
   "D:/work/Evolve-Automation/test-artifacts/game/evolve-deadspace.js";
-const bundle = resolve(root, "evolve_automation.user.js");
+const bundle = resolve(
+  option("bundle", resolve(root, "evolve_automation.user.js")),
+);
 const periods = Number(option("periods", "1000"));
 const warmup = Number(option("warmup", "600"));
 const repeats = Number(option("repeats", "2"));
