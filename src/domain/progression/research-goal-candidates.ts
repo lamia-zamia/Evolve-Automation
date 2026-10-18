@@ -1,4 +1,10 @@
 import type { NativeResearchPrerequisiteGraph } from "./research-prerequisite-planning.ts";
+import {
+  evaluateGoalFeasibility,
+  type GoalFeasibility,
+  type GoalResourceStock,
+} from "../economy/goal-feasibility.ts";
+import type { ResearchPrerequisiteObligationPlan } from "./research-prerequisite-obligations.ts";
 
 export type ResearchGoalRelevance =
   | "verified-prerequisite"
@@ -36,6 +42,10 @@ export interface ResearchGoalCandidateInput {
   readonly progressionEpoch: string;
   readonly rootGeneration: number | undefined;
   readonly offers: readonly ResearchGoalCandidateEvidence[];
+  readonly obligations?: Readonly<ResearchPrerequisiteObligationPlan>;
+  readonly resourceStocks?: readonly GoalResourceStock[];
+  /** The shared spenders are not fully observed yet; projections remain shadow-only. */
+  readonly commitmentsKnown?: boolean;
   readonly baselineSelectedActionId: string | undefined;
   readonly baselineSelectedDisposition?:
     "researched" | "no-observed-research" | "stopped" | undefined;
@@ -71,6 +81,22 @@ export interface ResearchGoalCandidate {
   readonly exclusionReason: string | undefined;
   readonly evidenceFresh: boolean;
   readonly downstreamCosts: "unknown";
+  readonly frontierTime: Readonly<GoalFeasibility> | undefined;
+  readonly reasons: readonly string[];
+}
+
+export type ResearchFrontierSelectionStatus =
+  | "supported-best-known-strategy"
+  | "provisional-mandatory-prerequisite-choice"
+  | "ambiguous-alternatives"
+  | "blocked-by-missing-native-authority"
+  | "infeasible"
+  | "no-required-frontier";
+
+export interface ResearchFrontierSelection {
+  readonly status: ResearchFrontierSelectionStatus;
+  readonly actionId: string | undefined;
+  readonly comparedActionIds: readonly string[];
   readonly reasons: readonly string[];
 }
 
@@ -82,8 +108,159 @@ export interface ResearchGoalCandidateEvaluation {
     "researched" | "no-observed-research" | "stopped" | undefined;
   /** Static relevance and affordability do not establish expected time-to-go value. */
   readonly preferredActionId: string | undefined;
-  readonly preference: "not-evaluated";
+  readonly preference: ResearchFrontierSelectionStatus;
+  readonly frontierSelection: Readonly<ResearchFrontierSelection>;
   readonly candidates: readonly Readonly<ResearchGoalCandidate>[];
+}
+
+const RESEARCH_FRONTIER_POOL = "anywhere";
+
+function readFrontierTime(
+  actionId: string,
+  cost: Readonly<Record<string, number>>,
+  stocks: readonly GoalResourceStock[] | undefined,
+  validityEpoch: string,
+  commitmentsKnown: boolean,
+): Readonly<GoalFeasibility> | undefined {
+  if (stocks === undefined) return undefined;
+  const requirements = Object.entries(cost).map(([resourceId, amount]) => ({
+    resourceId,
+    poolId: RESEARCH_FRONTIER_POOL,
+    amount,
+  }));
+  return evaluateGoalFeasibility(
+    actionId,
+    requirements,
+    stocks,
+    [],
+    validityEpoch,
+    commitmentsKnown,
+  );
+}
+
+function chooseResearchFrontier(
+  obligations: Readonly<ResearchPrerequisiteObligationPlan> | undefined,
+  candidates: readonly Readonly<ResearchGoalCandidate>[],
+  validEvidence: boolean,
+  commitmentsKnown: boolean,
+): Readonly<ResearchFrontierSelection> {
+  const reasons: string[] = [];
+  if (!validEvidence || obligations?.status !== "verified") {
+    return Object.freeze({
+      status: "blocked-by-missing-native-authority",
+      actionId: undefined,
+      comparedActionIds: Object.freeze([]),
+      reasons: Object.freeze([
+        ...(obligations?.reasons ?? []),
+        "current native prerequisite authority is unavailable",
+      ]),
+    });
+  }
+  const current = new Set(
+    candidates
+      .filter(
+        (candidate) =>
+          candidate.actionability === "current-native-offer" &&
+          candidate.pathApplicability === "eligible" &&
+          candidate.dependencyRelation === "declared-prerequisite" &&
+          candidate.explicitlyExcluded !== true &&
+          candidate.reservationConflict !== true,
+      )
+      .map((candidate) => candidate.actionId),
+  );
+  const alternatives = obligations.alternativeGroups.flatMap((group) =>
+    group.actionIds.filter((actionId) => current.has(actionId)),
+  );
+  if (alternatives.length > 0) {
+    return Object.freeze({
+      status: "ambiguous-alternatives",
+      actionId: undefined,
+      comparedActionIds: Object.freeze([...new Set(alternatives)].sort()),
+      reasons: Object.freeze([
+        "native prerequisite graph contains current OR alternatives without comparable terminal-time evidence",
+      ]),
+    });
+  }
+  const mandatory = candidates.filter(
+    (candidate) =>
+      obligations.mandatoryActionIds.includes(candidate.actionId) &&
+      current.has(candidate.actionId),
+  );
+  if (mandatory.length === 0) {
+    return Object.freeze({
+      status: "no-required-frontier",
+      actionId: undefined,
+      comparedActionIds: Object.freeze([]),
+      reasons: Object.freeze([
+        "no current verified mandatory action is available in the goal frontier",
+      ]),
+    });
+  }
+  const withTime = mandatory.map((candidate) => ({
+    candidate,
+    time: candidate.frontierTime,
+  }));
+  if (withTime.some(({ time }) => time?.estimatedTime === undefined)) {
+    return Object.freeze({
+      status: withTime.every(({ time }) => time?.status === "infeasible")
+        ? "infeasible"
+        : "blocked-by-missing-native-authority",
+      actionId: undefined,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort(),
+      ),
+      reasons: Object.freeze([
+        ...withTime.flatMap(({ time }) => time?.reasons ?? []),
+        "one or more mandatory frontier actionability estimates are unavailable",
+      ]),
+    });
+  }
+  const ranked = [...withTime].sort(
+    (left, right) =>
+      (left.time?.estimatedTime ?? Number.POSITIVE_INFINITY) -
+      (right.time?.estimatedTime ?? Number.POSITIVE_INFINITY),
+  );
+  const first = ranked[0];
+  const second = ranked[1];
+  if (first === undefined || first.time?.estimatedTime === undefined)
+    return Object.freeze({
+      status: "blocked-by-missing-native-authority",
+      actionId: undefined,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort(),
+      ),
+      reasons: Object.freeze(["mandatory frontier estimates are unavailable"]),
+    });
+  if (
+    second !== undefined &&
+    second.time?.estimatedTime === first.time.estimatedTime
+  ) {
+    return Object.freeze({
+      status: "blocked-by-missing-native-authority",
+      actionId: undefined,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort(),
+      ),
+      reasons: Object.freeze([
+        "mandatory actions have the same time to affordability, while downstream completion-time evidence is unknown",
+      ]),
+    });
+  }
+  if (!commitmentsKnown)
+    reasons.push(
+      "selection is provisional because shared spending commitments are incomplete",
+    );
+  reasons.push(
+    "selection minimizes observed time to native affordability among verified mandatory prerequisites; terminal-time effects remain unknown",
+  );
+  return Object.freeze({
+    status: "provisional-mandatory-prerequisite-choice",
+    actionId: first.candidate.actionId,
+    comparedActionIds: Object.freeze(
+      mandatory.map(({ actionId }) => actionId).sort(),
+    ),
+    reasons: Object.freeze(reasons),
+  });
 }
 
 export function hasVerifiedNonManaAffordabilityForManaOffer(
@@ -199,6 +376,7 @@ export function evaluateResearchGoalCandidates(
   const relevant = readRelevantResearchActions(input.graph);
   const verifiedFrontier = new Set(input.graph.actionableFrontier);
   const graphIncomplete = input.graph.dependencyEvidence !== "complete";
+  const validityEpoch = `${input.progressionEpoch}|root:${input.rootGeneration ?? "unknown"}|cycle:${input.cycle}`;
   const candidates = input.offers.map((offer) => {
     const paths = relevant.get(offer.actionId);
     const chain = paths?.verified ?? paths?.conditional ?? [];
@@ -347,17 +525,36 @@ export function evaluateResearchGoalCandidates(
       exclusionReason: offer.exclusionReason,
       evidenceFresh: fresh && objectiveMatches,
       downstreamCosts: "unknown" as const,
+      frontierTime:
+        verifiedFrontier.has(offer.actionId) &&
+        dependencyRelation === "declared-prerequisite"
+          ? readFrontierTime(
+              offer.actionId,
+              offer.cost,
+              input.resourceStocks,
+              validityEpoch,
+              input.commitmentsKnown ?? false,
+            )
+          : undefined,
       reasons: Object.freeze([...new Set(reasons)]),
     });
   });
+
+  const frontierSelection = chooseResearchFrontier(
+    input.obligations,
+    candidates,
+    fresh && objectiveMatches && input.graph.targetStatus !== "unavailable",
+    input.commitmentsKnown ?? false,
+  );
 
   return Object.freeze({
     goalId: input.goalId,
     targetActionId: input.targetActionId,
     baselineSelectedActionId: input.baselineSelectedActionId,
     baselineSelectedDisposition: input.baselineSelectedDisposition,
-    preferredActionId: undefined,
-    preference: "not-evaluated",
+    preferredActionId: frontierSelection.actionId,
+    preference: frontierSelection.status,
+    frontierSelection,
     candidates: Object.freeze(candidates),
   });
 }

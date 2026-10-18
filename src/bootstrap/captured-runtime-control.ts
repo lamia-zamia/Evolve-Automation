@@ -6819,6 +6819,74 @@ export function startCapturedRuntime({
             const researchCandidateEvaluation = activeRuntimeMeasure.measure(
               "goal.mad.research-candidates",
               () => {
+                const researchOffers = offers ?? [];
+                const obligationDefinitions = researchDefinitions?.map(
+                  (definition) => ({
+                    actionId: definition.actionId,
+                    grantTechnology: definition.grantTechnology,
+                    grantLevel: definition.grantLevel,
+                    prerequisites:
+                      readFreshCapturedComputedTechRequirements(definition, {
+                        rootGeneration: researchRootGeneration,
+                        progressionEpoch,
+                      }) ?? definition.prerequisites,
+                    hasNativeCondition:
+                      definition.eligibility.hasNativeCondition,
+                    routeRestrictions: definition.eligibility.routeRestrictions,
+                    restrictions: definition.eligibility.restrictions,
+                  }),
+                );
+                const obligationTargetIsEligible =
+                  plan.selectedGoal.id === "prestige:mad" &&
+                  researchApplicability?.get(CAPTURED_MAD_RESEARCH_TECH)
+                    ?.status === "eligible" &&
+                  readCapturedMadTargetCondition(root).status === "eligible";
+                const obligations = classifyMandatoryNativeResearchObligations(
+                  researchPrerequisiteGraph,
+                  {
+                    targetCurrentlyEligible: obligationTargetIsEligible,
+                    definitions: obligationDefinitions,
+                    grantLevels: researchGrantLevels,
+                    applicabilityByActionId: researchApplicability,
+                    offeredActionIds: new Set(
+                      researchOffers.map((offer) => offer.elementId),
+                    ),
+                  },
+                );
+                const currentFrontierIds = new Set(
+                  researchPrerequisiteGraph.actionableFrontier,
+                );
+                const frontierResourceIds = [
+                  ...new Set(
+                    researchOffers
+                      .filter((offer) =>
+                        currentFrontierIds.has(offer.elementId),
+                      )
+                      .flatMap((offer) => Object.keys(offer.cost)),
+                  ),
+                ];
+                const frontierResources = createCapturedResourceSource(
+                  pageCapture.rootState,
+                ).readResources(frontierResourceIds);
+                const validityEpoch = `${progressionEpoch}|root:${researchRootGeneration ?? "unknown"}|cycle:${automationCycle}`;
+                const resourceStocks: GoalResourceStock[] =
+                  frontierResourceIds.flatMap((resourceId) => {
+                    const resource =
+                      frontierResources?.resources.get(resourceId);
+                    return resource?.present
+                      ? [
+                          {
+                            resourceId,
+                            poolId: "anywhere",
+                            amount: resource.amount,
+                            capacity: resource.max,
+                            netRate: resource.rateOfChange,
+                            rateConfidence: "observed",
+                            validityEpoch,
+                          },
+                        ]
+                      : [];
+                  });
                 return evaluateResearchGoalCandidates({
                   goalId: plan.selectedGoal.id,
                   targetActionId: CAPTURED_MAD_RESEARCH_TECH,
@@ -6828,25 +6896,54 @@ export function startCapturedRuntime({
                   cycle: automationCycle,
                   progressionEpoch,
                   rootGeneration: researchRootGeneration,
-                  offers:
-                    offers?.map((offer, index) => {
-                      return {
-                        actionId: offer.elementId,
-                        grantTechnology: offer.grantTechnology,
-                        grantLevel: offer.grantLevel,
-                        index,
-                        generation: offer.generation,
-                        cost: offer.cost,
-                        nativeAffordable: offer.nativeAffordable,
-                        resourceAffordable: undefined,
-                        hasCostConflict: undefined,
-                        hasExplicitExclusion: undefined,
-                      };
-                    }) ?? [],
+                  obligations,
+                  resourceStocks,
+                  commitmentsKnown: false,
+                  offers: researchOffers.map((offer, index) => {
+                    return {
+                      actionId: offer.elementId,
+                      grantTechnology: offer.grantTechnology,
+                      grantLevel: offer.grantLevel,
+                      index,
+                      generation: offer.generation,
+                      cost: offer.cost,
+                      nativeAffordable: offer.nativeAffordable,
+                      resourceAffordable: undefined,
+                      hasCostConflict: undefined,
+                      hasExplicitExclusion: undefined,
+                    };
+                  }),
                   baselineSelectedActionId: undefined,
                 });
               },
             );
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true
+            ) {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              if (isRecord(hooks)) {
+                if (
+                  readProperty(
+                    hooks,
+                    "researchGoalCandidateEvaluationFirst",
+                  ) === undefined
+                )
+                  Reflect.set(
+                    hooks,
+                    "researchGoalCandidateEvaluationFirst",
+                    researchCandidateEvaluation,
+                  );
+                Reflect.set(
+                  hooks,
+                  "researchGoalCandidateEvaluation",
+                  researchCandidateEvaluation,
+                );
+              }
+            }
             const currentOffers = progression.readOfferedTechs();
             const currentTechMad = currentOffers?.find(
               (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH,
@@ -7071,6 +7168,20 @@ export function startCapturedRuntime({
                   .join(";");
                 reportDiagnostic(
                   `goal.mad research candidates goal=${researchCandidateEvaluation.goalId} economicPreference=${researchCandidateEvaluation.preference} baseline=${researchCandidateEvaluation.baselineSelectedActionId ?? "unobserved"}:${researchCandidateEvaluation.baselineSelectedDisposition ?? "unavailable"} offers=${candidateSummary}`,
+                );
+                const selectedFrontier =
+                  researchCandidateEvaluation.frontierSelection;
+                const frontierTimes = selectedFrontier.comparedActionIds
+                  .map((actionId) => {
+                    const candidate =
+                      researchCandidateEvaluation.candidates.find(
+                        (entry) => entry.actionId === actionId,
+                      );
+                    return `${actionId}:${goalEtaDisplay(candidate?.frontierTime?.estimatedTime)}`;
+                  })
+                  .join(",");
+                reportDiagnostic(
+                  `goal.mad frontier selection status=${selectedFrontier.status} action=${selectedFrontier.actionId ?? "none"} compared=${frontierTimes || "none"} terminalEffects=unknown commitments=unobserved reason=${selectedFrontier.reasons[0] ?? "none"}`,
                 );
               }
             }

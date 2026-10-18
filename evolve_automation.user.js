@@ -18546,6 +18546,111 @@
   }
 
   // src/domain/progression/research-goal-candidates.ts
+  var RESEARCH_FRONTIER_POOL = "anywhere";
+  function readFrontierTime(actionId, cost, stocks, validityEpoch, commitmentsKnown) {
+    if (stocks === void 0) return;
+    let requirements = Object.entries(cost).map(([resourceId, amount]) => ({
+      resourceId,
+      poolId: RESEARCH_FRONTIER_POOL,
+      amount
+    }));
+    return evaluateGoalFeasibility(
+      actionId,
+      requirements,
+      stocks,
+      [],
+      validityEpoch,
+      commitmentsKnown
+    );
+  }
+  function chooseResearchFrontier(obligations, candidates, validEvidence, commitmentsKnown) {
+    let reasons = [];
+    if (!validEvidence || obligations?.status !== "verified")
+      return Object.freeze({
+        status: "blocked-by-missing-native-authority",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([]),
+        reasons: Object.freeze([
+          ...obligations?.reasons ?? [],
+          "current native prerequisite authority is unavailable"
+        ])
+      });
+    let current = new Set(
+      candidates.filter(
+        (candidate) => candidate.actionability === "current-native-offer" && candidate.pathApplicability === "eligible" && candidate.dependencyRelation === "declared-prerequisite" && candidate.explicitlyExcluded !== !0 && candidate.reservationConflict !== !0
+      ).map((candidate) => candidate.actionId)
+    ), alternatives = obligations.alternativeGroups.flatMap(
+      (group) => group.actionIds.filter((actionId) => current.has(actionId))
+    );
+    if (alternatives.length > 0)
+      return Object.freeze({
+        status: "ambiguous-alternatives",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([...new Set(alternatives)].sort()),
+        reasons: Object.freeze([
+          "native prerequisite graph contains current OR alternatives without comparable terminal-time evidence"
+        ])
+      });
+    let mandatory = candidates.filter(
+      (candidate) => obligations.mandatoryActionIds.includes(candidate.actionId) && current.has(candidate.actionId)
+    );
+    if (mandatory.length === 0)
+      return Object.freeze({
+        status: "no-required-frontier",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([]),
+        reasons: Object.freeze([
+          "no current verified mandatory action is available in the goal frontier"
+        ])
+      });
+    let withTime = mandatory.map((candidate) => ({
+      candidate,
+      time: candidate.frontierTime
+    }));
+    if (withTime.some(({ time }) => time?.estimatedTime === void 0))
+      return Object.freeze({
+        status: withTime.every(({ time }) => time?.status === "infeasible") ? "infeasible" : "blocked-by-missing-native-authority",
+        actionId: void 0,
+        comparedActionIds: Object.freeze(
+          mandatory.map(({ actionId }) => actionId).sort()
+        ),
+        reasons: Object.freeze([
+          ...withTime.flatMap(({ time }) => time?.reasons ?? []),
+          "one or more mandatory frontier actionability estimates are unavailable"
+        ])
+      });
+    let ranked = [...withTime].sort(
+      (left, right) => (left.time?.estimatedTime ?? Number.POSITIVE_INFINITY) - (right.time?.estimatedTime ?? Number.POSITIVE_INFINITY)
+    ), first = ranked[0], second = ranked[1];
+    return first === void 0 || first.time?.estimatedTime === void 0 ? Object.freeze({
+      status: "blocked-by-missing-native-authority",
+      actionId: void 0,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort()
+      ),
+      reasons: Object.freeze(["mandatory frontier estimates are unavailable"])
+    }) : second !== void 0 && second.time?.estimatedTime === first.time.estimatedTime ? Object.freeze({
+      status: "blocked-by-missing-native-authority",
+      actionId: void 0,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort()
+      ),
+      reasons: Object.freeze([
+        "mandatory actions have the same time to affordability, while downstream completion-time evidence is unknown"
+      ])
+    }) : (commitmentsKnown || reasons.push(
+      "selection is provisional because shared spending commitments are incomplete"
+    ), reasons.push(
+      "selection minimizes observed time to native affordability among verified mandatory prerequisites; terminal-time effects remain unknown"
+    ), Object.freeze({
+      status: "provisional-mandatory-prerequisite-choice",
+      actionId: first.candidate.actionId,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort()
+      ),
+      reasons: Object.freeze(reasons)
+    }));
+  }
   function hasVerifiedNonManaAffordabilityForManaOffer(cost, nonManaAffordable) {
     return (cost.Mana ?? 0) <= 0 || nonManaAffordable === !0;
   }
@@ -18605,7 +18710,7 @@
     );
   }
   function evaluateResearchGoalCandidates(input) {
-    let fresh = matchingResearchOffers(input.graph, input), objectiveMatches = input.graph.targetActionId === input.targetActionId, relevant = readRelevantResearchActions(input.graph), verifiedFrontier = new Set(input.graph.actionableFrontier), graphIncomplete = input.graph.dependencyEvidence !== "complete", candidates = input.offers.map((offer) => {
+    let fresh = matchingResearchOffers(input.graph, input), objectiveMatches = input.graph.targetActionId === input.targetActionId, relevant = readRelevantResearchActions(input.graph), verifiedFrontier = new Set(input.graph.actionableFrontier), graphIncomplete = input.graph.dependencyEvidence !== "complete", validityEpoch = `${input.progressionEpoch}|root:${input.rootGeneration ?? "unknown"}|cycle:${input.cycle}`, candidates = input.offers.map((offer) => {
       let paths = relevant.get(offer.actionId), chain = paths?.verified ?? paths?.conditional ?? [], gate = input.graph.actions.find(
         (action) => action.actionId === offer.actionId
       ), chainReasons = chain.flatMap(
@@ -18651,16 +18756,29 @@
         exclusionReason: offer.exclusionReason,
         evidenceFresh: fresh && objectiveMatches,
         downstreamCosts: "unknown",
+        frontierTime: verifiedFrontier.has(offer.actionId) && dependencyRelation === "declared-prerequisite" ? readFrontierTime(
+          offer.actionId,
+          offer.cost,
+          input.resourceStocks,
+          validityEpoch,
+          input.commitmentsKnown ?? !1
+        ) : void 0,
         reasons: Object.freeze([...new Set(reasons)])
       });
-    });
+    }), frontierSelection = chooseResearchFrontier(
+      input.obligations,
+      candidates,
+      fresh && objectiveMatches && input.graph.targetStatus !== "unavailable",
+      input.commitmentsKnown ?? !1
+    );
     return Object.freeze({
       goalId: input.goalId,
       targetActionId: input.targetActionId,
       baselineSelectedActionId: input.baselineSelectedActionId,
       baselineSelectedDisposition: input.baselineSelectedDisposition,
-      preferredActionId: void 0,
-      preference: "not-evaluated",
+      preferredActionId: frontierSelection.actionId,
+      preference: frontierSelection.status,
+      frontierSelection,
       candidates: Object.freeze(candidates)
     });
   }
@@ -61683,28 +61801,81 @@ Only continue if you trust the source. Injected code:
               madControl !== void 0 && madControl.methods.includes("arm") && madControl.methods.includes("launch")
             ), researchCandidateEvaluation = activeRuntimeMeasure.measure(
               "goal.mad.research-candidates",
-              () => evaluateResearchGoalCandidates({
-                goalId: plan.selectedGoal.id,
-                targetActionId: CAPTURED_MAD_RESEARCH_TECH,
-                goalSatisfied: researchPrerequisiteGraph.targetStatus === "satisfied",
-                graph: researchPrerequisiteGraph,
-                cycle: automationCycle,
-                progressionEpoch,
-                rootGeneration: researchRootGeneration,
-                offers: offers?.map((offer, index) => ({
-                  actionId: offer.elementId,
-                  grantTechnology: offer.grantTechnology,
-                  grantLevel: offer.grantLevel,
-                  index,
-                  generation: offer.generation,
-                  cost: offer.cost,
-                  nativeAffordable: offer.nativeAffordable,
-                  resourceAffordable: void 0,
-                  hasCostConflict: void 0,
-                  hasExplicitExclusion: void 0
-                })) ?? [],
-                baselineSelectedActionId: void 0
-              })
+              () => {
+                let researchOffers = offers ?? [], obligationDefinitions = researchDefinitions?.map(
+                  (definition) => ({
+                    actionId: definition.actionId,
+                    grantTechnology: definition.grantTechnology,
+                    grantLevel: definition.grantLevel,
+                    prerequisites: readFreshCapturedComputedTechRequirements(definition, {
+                      rootGeneration: researchRootGeneration,
+                      progressionEpoch
+                    }) ?? definition.prerequisites,
+                    hasNativeCondition: definition.eligibility.hasNativeCondition,
+                    routeRestrictions: definition.eligibility.routeRestrictions,
+                    restrictions: definition.eligibility.restrictions
+                  })
+                ), obligationTargetIsEligible = plan.selectedGoal.id === "prestige:mad" && researchApplicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status === "eligible" && readCapturedMadTargetCondition(root).status === "eligible", obligations = classifyMandatoryNativeResearchObligations(
+                  researchPrerequisiteGraph,
+                  {
+                    targetCurrentlyEligible: obligationTargetIsEligible,
+                    definitions: obligationDefinitions,
+                    grantLevels: researchGrantLevels,
+                    applicabilityByActionId: researchApplicability,
+                    offeredActionIds: new Set(
+                      researchOffers.map((offer) => offer.elementId)
+                    )
+                  }
+                ), currentFrontierIds = new Set(
+                  researchPrerequisiteGraph.actionableFrontier
+                ), frontierResourceIds = [
+                  ...new Set(
+                    researchOffers.filter(
+                      (offer) => currentFrontierIds.has(offer.elementId)
+                    ).flatMap((offer) => Object.keys(offer.cost))
+                  )
+                ], frontierResources = createCapturedResourceSource(
+                  pageCapture2.rootState
+                ).readResources(frontierResourceIds), validityEpoch = `${progressionEpoch}|root:${researchRootGeneration ?? "unknown"}|cycle:${automationCycle}`, resourceStocks = frontierResourceIds.flatMap((resourceId) => {
+                  let resource = frontierResources?.resources.get(resourceId);
+                  return resource?.present ? [
+                    {
+                      resourceId,
+                      poolId: "anywhere",
+                      amount: resource.amount,
+                      capacity: resource.max,
+                      netRate: resource.rateOfChange,
+                      rateConfidence: "observed",
+                      validityEpoch
+                    }
+                  ] : [];
+                });
+                return evaluateResearchGoalCandidates({
+                  goalId: plan.selectedGoal.id,
+                  targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+                  goalSatisfied: researchPrerequisiteGraph.targetStatus === "satisfied",
+                  graph: researchPrerequisiteGraph,
+                  cycle: automationCycle,
+                  progressionEpoch,
+                  rootGeneration: researchRootGeneration,
+                  obligations,
+                  resourceStocks,
+                  commitmentsKnown: !1,
+                  offers: researchOffers.map((offer, index) => ({
+                    actionId: offer.elementId,
+                    grantTechnology: offer.grantTechnology,
+                    grantLevel: offer.grantLevel,
+                    index,
+                    generation: offer.generation,
+                    cost: offer.cost,
+                    nativeAffordable: offer.nativeAffordable,
+                    resourceAffordable: void 0,
+                    hasCostConflict: void 0,
+                    hasExplicitExclusion: void 0
+                  })),
+                  baselineSelectedActionId: void 0
+                });
+              }
             ), currentOffers = progression.readOfferedTechs(), currentTechMad = currentOffers?.find(
               (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH
             ), currentTechMadControl = pageCapture2.controls.resolve(
@@ -61821,6 +61992,15 @@ Only continue if you trust the source. Injected code:
                 }).join(";");
                 reportDiagnostic(
                   `goal.mad research candidates goal=${researchCandidateEvaluation.goalId} economicPreference=${researchCandidateEvaluation.preference} baseline=${researchCandidateEvaluation.baselineSelectedActionId ?? "unobserved"}:${researchCandidateEvaluation.baselineSelectedDisposition ?? "unavailable"} offers=${candidateSummary}`
+                );
+                let selectedFrontier = researchCandidateEvaluation.frontierSelection, frontierTimes = selectedFrontier.comparedActionIds.map((actionId) => {
+                  let candidate = researchCandidateEvaluation.candidates.find(
+                    (entry) => entry.actionId === actionId
+                  );
+                  return `${actionId}:${goalEtaDisplay(candidate?.frontierTime?.estimatedTime)}`;
+                }).join(",");
+                reportDiagnostic(
+                  `goal.mad frontier selection status=${selectedFrontier.status} action=${selectedFrontier.actionId ?? "none"} compared=${frontierTimes || "none"} terminalEffects=unknown commitments=unobserved reason=${selectedFrontier.reasons[0] ?? "none"}`
                 );
               }
             }
