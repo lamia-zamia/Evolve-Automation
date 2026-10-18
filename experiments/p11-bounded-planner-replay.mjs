@@ -97,13 +97,13 @@ for (const fixture of source.fixtures) {
         rows,
         resourceIds,
       );
-      const eventCycle = cycle - 1;
-      const invalidationReasons = invalidationByCycle.get(eventCycle);
+      const invalidationReasons = invalidationByCycle.get(cycle) ?? new Set();
+      const observedInvalidation = invalidationReasons.size > 0;
       const tokenChanged =
         input !== undefined &&
         JSON.stringify(input.candidates) !==
           JSON.stringify(nextInput.candidates);
-      if (invalidationReasons || tokenChanged) {
+      if (observedInvalidation || tokenChanged) {
         if (continuation || valid) restartedPlans += 1;
         continuation = startContinuation(nextInput);
         valid = false;
