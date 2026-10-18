@@ -66,6 +66,21 @@ export function validateP12GCapture(capture, expectedInputs) {
     capture.currentOfferEvidence?.offer?.elementId,
     "current offer evidence is missing or mismatched",
   );
+  assert.deepEqual(
+    capture.offer?.cost,
+    capture.currentOfferEvidence?.offer?.cost,
+    "current offer price disagrees with the captured offer",
+  );
+  assert.equal(
+    capture.offer?.generation,
+    capture.currentOfferEvidence?.offer?.generation,
+    "current offer generation disagrees with the captured offer",
+  );
+  assert.equal(
+    capture.offer?.offerSetIdentity,
+    capture.currentOfferEvidence?.offer?.offerSetIdentity,
+    "current offer set identity disagrees with the captured offer",
+  );
   assert.equal(
     capture.currentOfferEvidence?.period,
     capture.period,

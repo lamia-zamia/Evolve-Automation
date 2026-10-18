@@ -85,6 +85,48 @@ assert.throws(
 assert.throws(
   () =>
     validateP12GCapture(
+      {
+        ...capture,
+        currentOfferEvidence: {
+          ...capture.currentOfferEvidence,
+          offer: { ...offer, cost: { Knowledge: 11, Alloy: 2 } },
+        },
+      },
+      expectedInputs,
+    ),
+  /price disagrees/,
+);
+assert.throws(
+  () =>
+    validateP12GCapture(
+      {
+        ...capture,
+        currentOfferEvidence: {
+          ...capture.currentOfferEvidence,
+          offer: { ...offer, generation: 5 },
+        },
+      },
+      expectedInputs,
+    ),
+  /generation disagrees/,
+);
+assert.throws(
+  () =>
+    validateP12GCapture(
+      {
+        ...capture,
+        currentOfferEvidence: {
+          ...capture.currentOfferEvidence,
+          offer: { ...offer, offerSetIdentity: "different-set" },
+        },
+      },
+      expectedInputs,
+    ),
+  /offer set identity disagrees/,
+);
+assert.throws(
+  () =>
+    validateP12GCapture(
       { ...capture, exportSave: exportSave + "tampered" },
       expectedInputs,
     ),
