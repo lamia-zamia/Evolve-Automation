@@ -97,7 +97,7 @@ const input = (overrides = {}) => ({
   const evaluation = evaluateResearchGoalCandidates(input());
   assert.equal(evaluation.baselineSelectedActionId, "tech-luxury");
   assert.equal(evaluation.preferredActionId, undefined);
-  assert.equal(evaluation.preference, "not-evaluated");
+  assert.equal(evaluation.preference, "blocked-by-missing-native-authority");
   assert.equal(evaluation.candidates[0]?.relevance, "verified-prerequisite");
   assert.equal(evaluation.candidates[0]?.index, 0);
   assert.equal(evaluation.candidates[0]?.grantTechnology, "ore");
@@ -108,6 +108,225 @@ const input = (overrides = {}) => ({
     "tech-ore",
   ]);
   assert.equal(evaluation.candidates[1]?.relevance, "unrelated");
+}
+
+{
+  const madGraph = (blackPowderApplicability = "eligible") =>
+    planNativeResearchPrerequisites({
+      targetActionId: "tech-mad",
+      definitions: [
+        definition("tech-mad", "mad", [
+          { technologyId: "explosives", requiredLevel: 1 },
+          { technologyId: "high_tech", requiredLevel: 1 },
+        ]),
+        definition("tech-black_powder", "explosives"),
+        definition("tech-mad_science", "high_tech"),
+      ],
+      grantLevels: new Map([
+        ["mad", 0],
+        ["explosives", 0],
+        ["high_tech", 0],
+      ]),
+      applicabilityByActionId: new Map([
+        ["tech-mad", { status: "eligible", reasons: [] }],
+        [
+          "tech-black_powder",
+          { status: blackPowderApplicability, reasons: [] },
+        ],
+        ["tech-mad_science", { status: "eligible", reasons: [] }],
+      ]),
+      offeredActionIds: new Set(["tech-black_powder", "tech-mad_science"]),
+      offerGenerations: new Map([
+        ["tech-black_powder", 4],
+        ["tech-mad_science", 8],
+      ]),
+      cycle: 12,
+      progressionEpoch: "run:5",
+      rootGeneration: 3,
+      maxDepth: 12,
+      maxActions: 40,
+    });
+  const madPrices = Object.freeze({
+    "tech-black_powder": Object.freeze({
+      Knowledge: 4500,
+      Mana: 100,
+      Crystal: 250,
+      Coal: 300,
+    }),
+    "tech-mad_science": Object.freeze({
+      Money: 10000,
+      Mana: 50,
+      Knowledge: 6750,
+      Crystal: 1000,
+      Aluminium: 750,
+    }),
+  });
+  const resourceAmounts = {
+    Money: 10000,
+    Knowledge: 6750,
+    Mana: 10,
+    Crystal: 1000,
+    Coal: 300,
+    Aluminium: 750,
+  };
+  const makeMadInput = ({
+    manaAmount = 10,
+    coalRate = 0.5,
+    coalAmount = 300,
+    aluminiumAmount = 750,
+    blackPowderManaPrice = 100,
+    blackPowderApplicability = "eligible",
+  } = {}) => {
+    const targetGraph = madGraph(blackPowderApplicability);
+    const validityEpoch = "run:5|root:3|cycle:12";
+    const resourceStocks = Object.entries({
+      ...resourceAmounts,
+      Mana: manaAmount,
+      Coal: coalAmount,
+      Aluminium: aluminiumAmount,
+    }).map(([resourceId, amount]) => ({
+      resourceId,
+      poolId: "anywhere",
+      amount,
+      capacity: 100000,
+      netRate: resourceId === "Mana" ? 2 : resourceId === "Coal" ? coalRate : 1,
+      rateConfidence: "observed",
+      validityEpoch,
+    }));
+    return input({
+      targetActionId: "tech-mad",
+      graph: targetGraph,
+      obligations: {
+        status: "verified",
+        mandatoryActionIds: ["tech-black_powder", "tech-mad_science"],
+        alternativeGroups: [],
+        reasons: [],
+      },
+      resourceStocks,
+      commitmentsKnown: false,
+      offers: [
+        {
+          actionId: "tech-black_powder",
+          grantTechnology: "explosives",
+          grantLevel: 1,
+          index: 0,
+          generation: 4,
+          cost: {
+            ...madPrices["tech-black_powder"],
+            Mana: blackPowderManaPrice,
+          },
+          nativeAffordable: false,
+          resourceAffordable: false,
+          hasCostConflict: undefined,
+          hasExplicitExclusion:
+            blackPowderApplicability === "excluded" ? true : false,
+        },
+        {
+          actionId: "tech-mad_science",
+          grantTechnology: "high_tech",
+          grantLevel: 1,
+          index: 1,
+          generation: 8,
+          cost: madPrices["tech-mad_science"],
+          nativeAffordable: false,
+          resourceAffordable: false,
+          hasCostConflict: undefined,
+          hasExplicitExclusion: false,
+        },
+      ],
+    });
+  };
+  const baseline = evaluateResearchGoalCandidates(makeMadInput());
+  assert.deepEqual(
+    baseline.frontierSelection.comparedActionIds,
+    ["tech-black_powder", "tech-mad_science"],
+    "the saved MAD evidence treats both direct AND requirements as mandatory",
+  );
+  assert.equal(
+    baseline.frontierSelection.status,
+    "provisional-mandatory-prerequisite-choice",
+  );
+  assert.equal(
+    baseline.frontierSelection.actionId,
+    "tech-mad_science",
+    "the 50-Mana offer is actionable sooner than the 100-Mana offer at the same observed Mana rate",
+  );
+  assert.equal(
+    baseline.candidates.find(
+      (candidate) => candidate.actionId === "tech-black_powder",
+    )?.frontierTime?.estimatedTime,
+    45,
+    "the current 100-Mana native price determines the wait at the observed Mana rate",
+  );
+  assert.ok(
+    baseline.frontierSelection.reasons.some((reason) =>
+      reason.includes("commitments are incomplete"),
+    ),
+    "incomplete spend-owner coverage remains explicit",
+  );
+
+  const fasterCoal = evaluateResearchGoalCandidates(
+    makeMadInput({
+      coalAmount: 0,
+      coalRate: 20,
+      aluminiumAmount: 0,
+    }),
+  );
+  assert.equal(
+    fasterCoal.frontierSelection.actionId,
+    "tech-black_powder",
+    "a changed current production rate can change the selected mandatory frontier",
+  );
+  const changedPrice = evaluateResearchGoalCandidates(
+    makeMadInput({ coalRate: 20, blackPowderManaPrice: 25 }),
+  );
+  assert.equal(
+    changedPrice.frontierSelection.actionId,
+    "tech-black_powder",
+    "a changed native price can change the selected mandatory frontier",
+  );
+  const changedStock = evaluateResearchGoalCandidates(
+    makeMadInput({ manaAmount: 100 }),
+  );
+  assert.equal(
+    changedStock.frontierSelection.status,
+    "blocked-by-missing-native-authority",
+    "when both choices are immediately affordable, unknown downstream completion time is not treated as a tie",
+  );
+  const changedApplicability = evaluateResearchGoalCandidates(
+    makeMadInput({ blackPowderApplicability: "excluded" }),
+  );
+  assert.equal(
+    changedApplicability.frontierSelection.actionId,
+    "tech-mad_science",
+    "a native applicability change removes the excluded alternative from selection",
+  );
+  const unresolvedOr = evaluateResearchGoalCandidates({
+    ...makeMadInput(),
+    obligations: {
+      status: "verified",
+      mandatoryActionIds: [],
+      alternativeGroups: [
+        {
+          requirementId: "research:choice:1",
+          actionIds: ["tech-black_powder", "tech-mad_science"],
+        },
+      ],
+      reasons: [],
+    },
+  });
+  assert.equal(
+    unresolvedOr.frontierSelection.status,
+    "ambiguous-alternatives",
+    "an OR gate remains ambiguous without complete terminal-time evidence",
+  );
+  assert.equal(
+    evaluateResearchGoalCandidates({
+      ...makeMadInput(),
+      obligations: undefined,
+    }).frontierSelection.status,
+    "blocked-by-missing-native-authority",
+  );
 }
 
 {
