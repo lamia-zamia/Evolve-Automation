@@ -1347,6 +1347,41 @@ export function startCapturedRuntime({
             generationsCurrent,
         });
       });
+      const readResearchResourceSamples = (
+        offers:
+          readonly { cost: Readonly<Record<string, number>> }[] | undefined,
+        root: unknown,
+      ) => {
+        const resourceIds = new Set(
+          (offers ?? []).flatMap((offer) => Object.keys(offer.cost)),
+        );
+        const sample =
+          root === undefined
+            ? undefined
+            : createCapturedResourceSource(pageCapture.rootState).readResources(
+                resourceIds,
+              );
+        return [...resourceIds].map((resourceId) => {
+          const resource = sample?.resources.get(resourceId);
+          return Object.freeze({
+            resourceId,
+            present: resource?.present ?? false,
+            holding:
+              resource?.present === true && Number.isFinite(resource.amount)
+                ? resource.amount
+                : undefined,
+            capacity:
+              resource?.present === true && Number.isFinite(resource.max)
+                ? resource.max
+                : undefined,
+            netRate:
+              resource?.present === true &&
+              Number.isFinite(resource.rateOfChange)
+                ? resource.rateOfChange
+                : undefined,
+          });
+        });
+      };
       const readCurrentResearchCatalog = (
         actionId: unknown,
         forceFresh: unknown,
@@ -1397,28 +1432,7 @@ export function startCapturedRuntime({
           typeof actionId === "string"
             ? pageCapture.controls.resolve(actionId)
             : undefined;
-        const costResourceIds = new Set(
-          (offers ?? []).flatMap((offer) => Object.keys(offer.cost)),
-        );
-        const resourceSamples = [...costResourceIds].map((resourceId) => {
-          const resource = readProperty(
-            readProperty(root, "resource"),
-            resourceId,
-          );
-          const holding = readProperty(resource, "amount");
-          const capacity = readProperty(resource, "max");
-          return Object.freeze({
-            resourceId,
-            holding:
-              typeof holding === "number" && Number.isFinite(holding)
-                ? holding
-                : undefined,
-            capacity:
-              typeof capacity === "number" && Number.isFinite(capacity)
-                ? capacity
-                : undefined,
-          });
-        });
+        const resourceSamples = readResearchResourceSamples(offers, root);
         const generationsCurrent =
           offers !== undefined &&
           offers.every(
@@ -1474,6 +1488,13 @@ export function startCapturedRuntime({
         "readCurrentResearchCatalog",
         readCurrentResearchCatalog,
       );
+      Reflect.set(hooks, "readCurrentResearchResourceSamples", () => {
+        const root = pageCapture.rootState.readRoot();
+        return readResearchResourceSamples(
+          progression.readOfferedTechs(),
+          root,
+        );
+      });
       Reflect.set(hooks, "invokeResearchActionForTest", (actionId: unknown) => {
         if (typeof actionId !== "string")
           return Object.freeze({ status: "invalid-action-id" });

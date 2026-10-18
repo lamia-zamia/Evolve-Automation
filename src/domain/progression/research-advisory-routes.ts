@@ -135,11 +135,28 @@ interface CandidateEvidence {
 const requirementKey = (technologyId: string, level: number) =>
   `research:${technologyId}:${level}`;
 const sortedUnique = (values: Iterable<string>) => [...new Set(values)];
+const DEFAULT_MAX_DEPENDENCY_EXPANSIONS = 65_536;
+const DEFAULT_MAX_DEPENDENCY_DEPTH = 512;
+const DEFAULT_MAX_CANDIDATES = 128;
 
 /** Advisory graph only. It never certifies mandatory work or authorizes spending. */
 export function planAdvisoryResearchRoutes(
   input: Readonly<AdvisoryResearchRouteInput>,
 ): Readonly<AdvisoryResearchRoutePlan> {
+  const validBudget = (value: number, fallback: number) =>
+    Number.isSafeInteger(value) && value >= 0 ? value : fallback;
+  const maxDependencyExpansions = validBudget(
+    input.maxDependencyExpansions,
+    DEFAULT_MAX_DEPENDENCY_EXPANSIONS,
+  );
+  const maxDependencyDepth = validBudget(
+    input.maxDependencyDepth,
+    DEFAULT_MAX_DEPENDENCY_DEPTH,
+  );
+  const maxCandidates = validBudget(
+    input.maxCandidates,
+    DEFAULT_MAX_CANDIDATES,
+  );
   const phases = {
     indexDefinitions: 0,
     expandDependencies: 0,
@@ -168,6 +185,12 @@ export function planAdvisoryResearchRoutes(
     phases,
   };
   const reasons: string[] = [];
+  if (
+    maxDependencyExpansions !== input.maxDependencyExpansions ||
+    maxDependencyDepth !== input.maxDependencyDepth ||
+    maxCandidates !== input.maxCandidates
+  )
+    reasons.push("invalid dependency budget replaced with bounded default");
   const unavailable =
     input.definitions === undefined ||
     input.grantLevels === undefined ||
@@ -184,7 +207,7 @@ export function planAdvisoryResearchRoutes(
       phases: Object.freeze({ ...phases }),
     });
   const consume = (reason: string) => {
-    if (work.operations >= Math.max(0, input.maxDependencyExpansions)) {
+    if (work.operations >= maxDependencyExpansions) {
       work.truncated = true;
       work.truncationReasons.push(reason);
       return false;
@@ -194,7 +217,7 @@ export function planAdvisoryResearchRoutes(
   };
   const consumeMany = (count: number, reason: string) => {
     const units = Math.max(0, Math.ceil(count));
-    if (units > Math.max(0, input.maxDependencyExpansions) - work.operations) {
+    if (units > maxDependencyExpansions - work.operations) {
       work.truncated = true;
       work.truncationReasons.push(reason);
       return false;
@@ -322,7 +345,7 @@ export function planAdvisoryResearchRoutes(
       return existing;
     }
     if (!consume("total-operation-budget")) return undefined;
-    if (depth > input.maxDependencyDepth) {
+    if (depth > maxDependencyDepth) {
       work.truncated = true;
       work.truncationReasons.push("dependency-depth-budget");
       return undefined;
@@ -354,7 +377,7 @@ export function planAdvisoryResearchRoutes(
       return existing;
     }
     if (!consume("total-operation-budget")) return undefined;
-    if (depth > input.maxDependencyDepth) {
+    if (depth > maxDependencyDepth) {
       work.truncated = true;
       work.truncationReasons.push("dependency-depth-budget");
       return undefined;
@@ -531,8 +554,9 @@ export function planAdvisoryResearchRoutes(
     }
     return false;
   };
-  while (queue.length > 0 && !work.truncated) {
-    const state = queue.shift()!;
+  let queueHead = 0;
+  while (queueHead < queue.length && !work.truncated) {
+    const state = queue[queueHead++]!;
     if (!consume("total-operation-budget")) break;
     phases.discoverCandidates += 1;
     const stateKey = `${state.actionId}|${state.excluded ? 1 : 0}|${state.conditional ? 1 : 0}`;
@@ -560,7 +584,7 @@ export function planAdvisoryResearchRoutes(
       let evidence = candidateEvidence.get(state.actionId);
       if (evidence === undefined) {
         if (!consume("candidate-budget")) break;
-        if (work.candidateEvaluations >= input.maxCandidates) {
+        if (work.candidateEvaluations >= maxCandidates) {
           work.truncated = true;
           work.truncationReasons.push("candidate-count-budget");
           break;
@@ -665,7 +689,7 @@ export function planAdvisoryResearchRoutes(
         });
         work.peakPendingWalkStates = Math.max(
           work.peakPendingWalkStates,
-          queue.length,
+          queue.length - queueHead,
         );
       }
       if (work.truncationReasons.includes("witness-construction-budget")) break;
@@ -679,7 +703,7 @@ export function planAdvisoryResearchRoutes(
     )
       continue;
     if (!consume("candidate-budget")) break;
-    if (work.candidateEvaluations >= input.maxCandidates) {
+    if (work.candidateEvaluations >= maxCandidates) {
       work.truncated = true;
       work.truncationReasons.push("candidate-count-budget");
       break;

@@ -456,6 +456,62 @@ const setup = (definitions, grants, offers, extra = {}) => ({
   assert.equal(limited.work.operations, 22);
   assert.ok(limited.work.retainedActionWitnesses > 0);
   assert.ok(limited.work.retainedReasonReferences <= limited.work.operations);
+
+  const invalidBudget = planAdvisoryResearchRoutes(
+    setup(
+      definitions,
+      [
+        ["goal", 0],
+        ["a", 0],
+        ["b", 0],
+        ["c", 0],
+      ],
+      [offer("c")],
+      { maxDependencyExpansions: Number.NaN },
+    ),
+  );
+  assert.ok(invalidBudget.work.operations <= 65_536);
+  assert.ok(
+    invalidBudget.reasons.includes(
+      "invalid dependency budget replaced with bounded default",
+    ),
+  );
+
+  const overLimitDefinitions = Array.from({ length: 65_537 }, (_, index) =>
+    action(`unused-${index}`, "unused"),
+  );
+  const overLimit = planAdvisoryResearchRoutes(
+    setup(overLimitDefinitions, [["goal", 0]], [], {
+      maxDependencyExpansions: Number.NaN,
+    }),
+  );
+  assert.equal(overLimit.status, "incomplete");
+  assert.equal(overLimit.work.truncated, true);
+  assert.ok(overLimit.work.operations <= 65_536);
+
+  const overCandidateLimit = planAdvisoryResearchRoutes(
+    setup(
+      [
+        action("terminal", "goal", [req("choice")]),
+        ...Array.from({ length: 129 }, (_, index) =>
+          action(`choice-${index}`, "choice"),
+        ),
+      ],
+      [
+        ["goal", 0],
+        ["choice", 0],
+      ],
+      Array.from({ length: 129 }, (_, index) => offer(`choice-${index}`)),
+      { maxDependencyExpansions: 20_000, maxCandidates: Number.NaN },
+    ),
+  );
+  assert.equal(overCandidateLimit.status, "incomplete");
+  assert.equal(overCandidateLimit.work.candidateEvaluations, 128);
+  assert.ok(
+    overCandidateLimit.reasons.includes(
+      "invalid dependency budget replaced with bounded default",
+    ),
+  );
 }
 
 {

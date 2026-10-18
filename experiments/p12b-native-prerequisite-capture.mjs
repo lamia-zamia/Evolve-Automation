@@ -16,6 +16,7 @@ import {
 } from "../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
 import { planNativeResearchPrerequisites } from "../src/domain/progression/research-prerequisite-planning.ts";
 import { planAdvisoryResearchRoutes } from "../src/domain/progression/research-advisory-routes.ts";
+import { projectAdvisoryResearchResources } from "../src/domain/progression/advisory-resource-projection.ts";
 import {
   bindNativeResearchEligibilityEvidence,
   classifyMandatoryNativeResearchObligations,
@@ -179,6 +180,7 @@ function summarizeCatalog(catalog) {
       catalog?.current === true && catalog?.objectKeysRestored === true
         ? "passed"
         : "failed-or-unavailable",
+    resourceSamples: catalog?.resourceSamples,
     unofferedComputedActionIds: definitions
       .filter(
         (definition) =>
@@ -234,6 +236,22 @@ function evaluatePlanner(catalog) {
     rootGeneration: catalog.rootGeneration,
     progressionEpoch: catalog.progressionEpoch,
   };
+  const repeatMeasure = (callback, repeats = 5) => {
+    callback();
+    const samplesMs = [];
+    for (let index = 0; index < repeats; index += 1) {
+      const started = performance.now();
+      callback();
+      samplesMs.push(performance.now() - started);
+    }
+    const ordered = [...samplesMs].sort((left, right) => left - right);
+    return {
+      repeats,
+      medianMs: ordered[Math.floor(ordered.length / 2)],
+      maxMs: ordered.at(-1),
+      samplesMs,
+    };
+  };
   const snapshot = createEffectiveCapturedTechPrerequisiteSnapshot(
     catalog.definitions,
     context,
@@ -241,9 +259,13 @@ function evaluatePlanner(catalog) {
   const grantLevels = new Map(catalog.grantLevels ?? []);
   const applicability = new Map(catalog.applicability ?? []);
   const offers = catalog.offers;
+  const resourceEpoch = `${context.progressionEpoch}|root:${context.rootGeneration}|offers:${offers
+    .map((offer) => `${offer.elementId}:${offer.generation}`)
+    .join(",")}`;
   const offerGenerations = new Map(
     offers.map((offer) => [offer.elementId, offer.generation]),
   );
+  const dependencyGraphStarted = performance.now();
   const graph = planNativeResearchPrerequisites({
     targetActionId: "tech-mad",
     definitions: snapshot.definitions,
@@ -257,6 +279,22 @@ function evaluatePlanner(catalog) {
     maxActions: 256,
     applicabilityByActionId: applicability,
   });
+  const dependencyGraphElapsedMs = performance.now() - dependencyGraphStarted;
+  const dependencyGraphRepeated = repeatMeasure(() =>
+    planNativeResearchPrerequisites({
+      targetActionId: "tech-mad",
+      definitions: snapshot.definitions,
+      grantLevels,
+      offeredActionIds: new Set(offers.map((offer) => offer.elementId)),
+      offerGenerations,
+      cycle: 0,
+      progressionEpoch: context.progressionEpoch,
+      rootGeneration: context.rootGeneration,
+      maxDepth: 16,
+      maxActions: 256,
+      applicabilityByActionId: applicability,
+    }),
+  );
   const targetApplicability = applicability.get("tech-mad");
   const targetCondition = catalog.madTargetCondition;
   const targetEligibility = combineCapturedTechEligibility([
@@ -309,7 +347,8 @@ function evaluatePlanner(catalog) {
     })),
     baselineSelectedActionId: undefined,
   });
-  const advisoryRoutes = planAdvisoryResearchRoutes({
+  const witnessMaterializationStarted = performance.now();
+  const advisoryInput = {
     targetActionId: "tech-mad",
     definitions: snapshot.definitions,
     grantLevels,
@@ -320,14 +359,72 @@ function evaluatePlanner(catalog) {
       nativeAffordable: offer.nativeAffordable,
     })),
     applicabilityByActionId: applicability,
-    validityEpoch: context.progressionEpoch,
+    validityEpoch: resourceEpoch,
     rootGeneration: context.rootGeneration,
     progressionEpoch: context.progressionEpoch,
     maxDependencyExpansions: 65_536,
     maxDependencyDepth: 512,
     maxCandidates: 128,
     terminalEligibility: targetEligibility,
-  });
+    resourceStocks: (catalog.resourceSamples ?? []).flatMap((sample) =>
+      sample.present &&
+      sample.holding !== undefined &&
+      sample.capacity !== undefined &&
+      sample.netRate !== undefined
+        ? [
+            {
+              resourceId: sample.resourceId,
+              poolId: "anywhere",
+              amount: sample.holding,
+              capacity: sample.capacity,
+              netRate: sample.netRate,
+              rateConfidence: "observed",
+              validityEpoch: resourceEpoch,
+            },
+          ]
+        : [],
+    ),
+    commitmentsKnown: false,
+  };
+  const advisoryRoutes = planAdvisoryResearchRoutes(advisoryInput);
+  const witnessMaterializationElapsedMs =
+    performance.now() - witnessMaterializationStarted;
+  const witnessMaterializationRepeated = repeatMeasure(() =>
+    planAdvisoryResearchRoutes(advisoryInput),
+  );
+  const economicEvaluationStarted = performance.now();
+  const resourceProjectionInput = {
+    routes: advisoryRoutes,
+    prices: offers.map((offer) => ({
+      actionId: offer.elementId,
+      price: Object.entries(offer.cost).map(([resourceId, amount]) => ({
+        resourceId,
+        amount,
+      })),
+    })),
+    observations: catalog.resourceSamples?.map((sample) => ({
+      resourceId: sample.resourceId,
+      amount: sample.present ? sample.holding : undefined,
+      capacity: sample.present ? sample.capacity : undefined,
+      netRate: sample.present ? sample.netRate : undefined,
+      rateConfidence: "observed",
+      validityEpoch: resourceEpoch,
+    })),
+    commitments: [],
+    commitmentsKnown: false,
+    validityEpoch: resourceEpoch,
+    mandatoryEvidence:
+      obligations.status === "complete" ? "complete" : "partial",
+    mandatoryActionIds: obligations.mandatoryActionIds,
+  };
+  const resourceProjection = projectAdvisoryResearchResources(
+    resourceProjectionInput,
+  );
+  const economicEvaluationElapsedMs =
+    performance.now() - economicEvaluationStarted;
+  const economicEvaluationRepeated = repeatMeasure(() =>
+    projectAdvisoryResearchResources(resourceProjectionInput),
+  );
   const requirementStatuses = Object.groupBy(
     graph.requirements,
     (gate) => gate.status,
@@ -431,6 +528,17 @@ function evaluatePlanner(catalog) {
     },
     frontierSelection: evaluation.frontierSelection,
     advisoryRoutes,
+    resourceProjection,
+    measurement: {
+      dependencyGraphElapsedMs,
+      witnessMaterializationElapsedMs,
+      economicEvaluationElapsedMs,
+      repeated: {
+        dependencyGraph: dependencyGraphRepeated,
+        advisoryTraversalAndWitnesses: witnessMaterializationRepeated,
+        economicEvaluation: economicEvaluationRepeated,
+      },
+    },
     candidateCount: evaluation.candidates.length,
   };
 }
@@ -482,6 +590,38 @@ async function run(label, bundle, captureEnabled = false, diagnostic = false) {
         ),
         "explicit request must capture native computed requirements",
       );
+    const resourceObservationBenchmark = [];
+    if (diagnostic && catalog?.current) {
+      for (let repeat = 0; repeat < 5; repeat += 1) {
+        const started = performance.now();
+        await session.evaluate((count) => {
+          const read =
+            window.__EA_TEST_HOOKS__?.readCurrentResearchResourceSamples;
+          if (typeof read !== "function") return 0;
+          let result;
+          for (let index = 0; index < count; index += 1) result = read();
+          return Array.isArray(result) ? result.length : 0;
+        }, 64);
+        resourceObservationBenchmark.push(performance.now() - started);
+      }
+    }
+    const orderedResourceObservationBenchmark = [
+      ...resourceObservationBenchmark,
+    ].sort((left, right) => left - right);
+    const resourceObservationBenchmarkSummary =
+      resourceObservationBenchmark.length === 0
+        ? undefined
+        : {
+            repeats: resourceObservationBenchmark.length,
+            readsPerRepeat: 64,
+            medianBatchWallMs:
+              orderedResourceObservationBenchmark[
+                Math.floor(orderedResourceObservationBenchmark.length / 2)
+              ],
+            maxBatchWallMs: orderedResourceObservationBenchmark.at(-1),
+            batchWallSamplesMs: resourceObservationBenchmark,
+            clockIncludesRunnerBoundary: true,
+          };
     await session.advance(periods);
     const state = await session.readState();
     const diagnostics = await session.diagnostics();
@@ -525,6 +665,7 @@ async function run(label, bundle, captureEnabled = false, diagnostic = false) {
         diagnostic && catalog?.current ? evaluatePlanner(catalog) : undefined,
       captureElapsedMs: catalog?.captureElapsedMs,
       diagnosticWallMs,
+      resourceObservationBenchmark: resourceObservationBenchmarkSummary,
       runtimeEvaluation: diagnostic
         ? await session.evaluate(() => {
             const evaluation =
@@ -720,6 +861,8 @@ try {
       catalog: independentCapture.catalog,
       planner: independentCapture.planner,
       captureCallWallMs: independentCapture.diagnosticWallMs,
+      resourceObservationBenchmark:
+        independentCapture.resourceObservationBenchmark,
       explicitlyForcedDiagnosticDraws: 1,
       stateHash: independentCapture.stateHash,
       statePreservedAgainstP12AMode:

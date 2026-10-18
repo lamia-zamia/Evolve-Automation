@@ -99,6 +99,14 @@ const report = {
       currentAffordability: candidate.currentAffordability,
       reasons: candidate.reasons,
     })),
+    resourceProjection: planner.resourceProjection,
+    measurement: {
+      ...planner.measurement,
+      protectedNativeCaptureAndResourceSampleWallMs:
+        capture.explicitIndependentCapture.captureCallWallMs,
+      externalResourceObservation:
+        capture.explicitIndependentCapture.resourceObservationBenchmark,
+    },
   },
   existingP12AFrontierSelection: capture.existingP12AMode.frontier,
   diagnosticResearchActionInvocations:
