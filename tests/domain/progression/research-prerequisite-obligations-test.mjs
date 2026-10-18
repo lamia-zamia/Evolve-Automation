@@ -5,6 +5,7 @@ import {
   classifyMandatoryResearchPrerequisiteObligations,
   planIndependentResearchResourceClaims,
 } from "../../../src/domain/progression/research-prerequisite-obligations.ts";
+import { planNativeResearchPrerequisites } from "../../../src/domain/progression/research-prerequisite-planning.ts";
 
 const requirement = (
   id,
@@ -104,6 +105,29 @@ const nativeDefinition = (
   restrictions: [],
 });
 
+const nativeGraph = (
+  targetActionId,
+  definitions,
+  frontier,
+  grantLevels,
+  applicabilityByActionId,
+) =>
+  planNativeResearchPrerequisites({
+    targetActionId,
+    definitions,
+    grantLevels,
+    applicabilityByActionId,
+    offeredActionIds: new Set(frontier),
+    offerGenerations: new Map(
+      frontier.map((actionId, index) => [actionId, index + 1]),
+    ),
+    cycle: 1,
+    progressionEpoch: "epoch-1",
+    rootGeneration: 1,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+
 {
   const definitions = [
     nativeDefinition("tech-mad", "prestige", 1, [
@@ -111,6 +135,7 @@ const nativeDefinition = (
       { technologyId: "high_tech", requiredLevel: 7 },
       { technologyId: "uranium", requiredLevel: 1 },
     ]),
+    nativeDefinition("tech-uranium", "uranium", 1),
     nativeDefinition("tech-black_powder", "explosives", 1),
     nativeDefinition("tech-dynamite", "explosives", 2, [
       { technologyId: "explosives", requiredLevel: 1 },
@@ -146,24 +171,29 @@ const nativeDefinition = (
     ),
   ];
   const frontier = ["tech-black_powder", "tech-mad_science"];
-  const currentGraph = {
-    ...graph([], [requirement("research:terminal", "prestige", [])]),
-    targetActionId: "tech-mad",
-    targetStatus: "unsatisfied",
-    actionableFrontier: frontier,
-  };
+  const grantLevels = new Map([
+    ["prestige", 0],
+    ["explosives", 0],
+    ["high_tech", 0],
+    ["uranium", 0],
+  ]);
+  const applicabilityByActionId = new Map([
+    ["tech-black_powder", { status: "eligible" }],
+    ["tech-mad_science", { status: "eligible" }],
+    ["tech-surface_breach", { status: "excluded", reasons: ["iceage route"] }],
+  ]);
+  const currentGraph = nativeGraph(
+    "tech-mad",
+    definitions,
+    frontier,
+    grantLevels,
+    applicabilityByActionId,
+  );
   const result = classifyMandatoryNativeResearchObligations(currentGraph, {
     targetCurrentlyEligible: true,
     definitions,
-    grantLevels: new Map(),
-    applicabilityByActionId: new Map([
-      ["tech-black_powder", { status: "eligible" }],
-      ["tech-mad_science", { status: "eligible" }],
-      [
-        "tech-surface_breach",
-        { status: "excluded", reasons: ["iceage route"] },
-      ],
-    ]),
+    grantLevels,
+    applicabilityByActionId,
     offeredActionIds: new Set(frontier),
   });
   assert.equal(result.status, "verified");
@@ -182,20 +212,25 @@ const nativeDefinition = (
     nativeDefinition("tech-alternate_powder", "explosives", 1),
   ];
   const frontier = ["tech-black_powder", "tech-alternate_powder"];
-  const result = classifyMandatoryNativeResearchObligations(
-    {
-      ...graph([], [requirement("research:terminal", "prestige", [])]),
-      targetActionId: "tech-mad",
-      actionableFrontier: frontier,
-    },
-    {
-      targetCurrentlyEligible: true,
-      definitions,
-      grantLevels: new Map(),
-      applicabilityByActionId: new Map(),
-      offeredActionIds: new Set(frontier),
-    },
+  const grantLevels = new Map([
+    ["prestige", 0],
+    ["explosives", 0],
+  ]);
+  const applicabilityByActionId = new Map();
+  const currentGraph = nativeGraph(
+    "tech-mad",
+    definitions,
+    frontier,
+    grantLevels,
+    applicabilityByActionId,
   );
+  const result = classifyMandatoryNativeResearchObligations(currentGraph, {
+    targetCurrentlyEligible: true,
+    definitions,
+    grantLevels,
+    applicabilityByActionId,
+    offeredActionIds: new Set(frontier),
+  });
   assert.equal(result.status, "verified");
   assert.deepEqual(result.mandatoryActionIds, []);
   assert.ok(result.alternativeGroups.length > 0);
@@ -210,24 +245,47 @@ const nativeDefinition = (
     nativeDefinition("tech-electricity", "high_tech", 2, [
       { technologyId: "high_tech", requiredLevel: 1 },
     ]),
+    nativeDefinition("tech-industrialization", "high_tech", 3, [
+      { technologyId: "high_tech", requiredLevel: 2 },
+    ]),
+    nativeDefinition("tech-electronics", "high_tech", 4, [
+      { technologyId: "high_tech", requiredLevel: 3 },
+    ]),
+    nativeDefinition("tech-fission", "high_tech", 5, [
+      { technologyId: "high_tech", requiredLevel: 4 },
+    ]),
+    nativeDefinition("tech-arpa", "high_tech", 6, [
+      { technologyId: "high_tech", requiredLevel: 5 },
+    ]),
+    nativeDefinition("tech-rocketry", "high_tech", 7, [
+      { technologyId: "high_tech", requiredLevel: 6 },
+    ]),
     nativeDefinition("tech-dynamic_route", "high_tech", 12, [], {
       conditional: true,
     }),
   ];
+  const frontier = ["tech-mad_science"];
+  const grantLevels = new Map([
+    ["prestige", 0],
+    ["high_tech", 0],
+  ]);
+  const applicabilityByActionId = new Map([
+    ["tech-mad_science", { status: "eligible" }],
+  ]);
   const result = classifyMandatoryNativeResearchObligations(
-    {
-      ...graph([], [requirement("research:terminal", "prestige", [])]),
-      targetActionId: "tech-mad",
-      actionableFrontier: ["tech-mad_science"],
-    },
+    nativeGraph(
+      "tech-mad",
+      definitions,
+      frontier,
+      grantLevels,
+      applicabilityByActionId,
+    ),
     {
       targetCurrentlyEligible: true,
       definitions,
-      grantLevels: new Map(),
-      applicabilityByActionId: new Map([
-        ["tech-mad_science", { status: "eligible" }],
-      ]),
-      offeredActionIds: new Set(["tech-mad_science"]),
+      grantLevels,
+      applicabilityByActionId,
+      offeredActionIds: new Set(frontier),
     },
   );
   assert.equal(result.status, "unavailable");
@@ -257,20 +315,28 @@ const nativeDefinition = (
     ]),
   ];
   const frontier = ["tech-steel_containers"];
+  const grantLevels = new Map([
+    ["high_tech", 0],
+    ["steel_container", 0],
+    ["space", 0],
+  ]);
+  const applicabilityByActionId = new Map(
+    definitions.map(({ actionId }) => [actionId, { status: "eligible" }]),
+  );
   const input = {
     targetCurrentlyEligible: true,
     definitions,
-    grantLevels: new Map(),
-    applicabilityByActionId: new Map(
-      definitions.map(({ actionId }) => [actionId, { status: "eligible" }]),
-    ),
+    grantLevels,
+    applicabilityByActionId,
     offeredActionIds: new Set(frontier),
   };
-  const currentGraph = {
-    ...graph([], [requirement("research:terminal", "prestige", [])]),
-    targetActionId: "tech-industrialization",
-    actionableFrontier: frontier,
-  };
+  const currentGraph = nativeGraph(
+    "tech-industrialization",
+    definitions,
+    frontier,
+    grantLevels,
+    applicabilityByActionId,
+  );
   const dominatedAlternatives = classifyMandatoryNativeResearchObligations(
     currentGraph,
     input,
@@ -283,14 +349,26 @@ const nativeDefinition = (
     "steel_container",
     1,
   );
-  const withBypass = classifyMandatoryNativeResearchObligations(currentGraph, {
-    ...input,
-    definitions: [...definitions, genuineBypass],
-    applicabilityByActionId: new Map([
-      ...input.applicabilityByActionId,
-      [genuineBypass.actionId, { status: "eligible" }],
-    ]),
-  });
+  const bypassDefinitions = [...definitions, genuineBypass];
+  const bypassApplicability = new Map([
+    ...input.applicabilityByActionId,
+    [genuineBypass.actionId, { status: "eligible" }],
+  ]);
+  const withBypassGraph = nativeGraph(
+    "tech-industrialization",
+    bypassDefinitions,
+    frontier,
+    grantLevels,
+    bypassApplicability,
+  );
+  const withBypass = classifyMandatoryNativeResearchObligations(
+    withBypassGraph,
+    {
+      ...input,
+      definitions: bypassDefinitions,
+      applicabilityByActionId: bypassApplicability,
+    },
+  );
   assert.equal(withBypass.status, "verified");
   assert.deepEqual(
     withBypass.mandatoryActionIds,

@@ -1,4 +1,4 @@
-# P12A.1 adaptive MAD frontier selection — 2026-10-18
+# P12A.2 adaptive MAD frontier selection — 2026-10-18
 
 ## Decision and boundary
 
@@ -12,7 +12,9 @@ Each diagnostic pass constructs one effective prerequisite snapshot from the cur
 
 The same snapshot feeds prerequisite graph construction and mandatory-obligation classification. The graph cache identity includes the effective prerequisite contents and evidence state, target action, root identity and generation, progression epoch, grant levels, applicability, offered action generations, and MAD control generation. Changes to those inputs rebuild the graph. A cache hit refreshes only cycle and offer freshness metadata after the authority identity matches. Computed evidence does not carry across a root or progression change, or from a valid observation into a stale or incomplete one.
 
-Before ranking, the selector checks that every mandatory obligation is a verified, currently actionable graph frontier and that every verified actionable graph frontier is represented by a mandatory obligation or an alternative group. Contradictions, including current exclusion evidence for a mandatory action, return `blocked-by-missing-native-authority` with a reason. The AND/OR classifier remains conservative.
+Before ranking, the selector binds the supplied native obligation proof to the graph's target, freshness, and effective prerequisite snapshot. Native definitions, grants, and applicability are checked against that same graph evidence; a proof built from contradictory inputs is unavailable. The graph classifier can include unoffered intermediate actions, while the native classifier reports only offered mandatory frontier obligations, so their full mandatory lists are not required to match. Instead, the graph's mandatory actions and OR groups are projected onto its current actionable frontier and structurally checked against the supplied proof. Supplied mandatory actions must be unique current native offers on that frontier, reachable from the selected terminal target through supported graph ancestry, eligible under applicability evidence, and free of explicit exclusion. The projected mandatory frontier must match the supplied proof, and projected OR groups must agree without promoting alternatives into mandatory actions. Every other verified actionable graph frontier must be covered by a mandatory action or an alternative group. Missing, stale, unrelated, excluded, or contradictory evidence returns `blocked-by-missing-native-authority`; unresolved OR alternatives remain ambiguous. Provisional selection still requires the existing resource-feasibility estimates and does not change execution.
+
+The generic two-level regression reproduces the original defect: the graph classifier returns both the unoffered level-two intermediate and the offered level-one prerequisite, while the native classifier returns only the offered level-one action. P12A.1 rejected this valid proof by comparing the lists directly. P12A.2 accepts it provisionally after validating the shared snapshot, target, offer freshness, ancestry, and actionable frontier. The regression also confirms that unrelated or non-frontier caller-supplied mandatory IDs and contradictory native definitions remain blocked.
 
 ## Saved fixture and live limitation
 
@@ -26,7 +28,7 @@ The evaluator reports provisional resource projections only. For the saved live 
 
 `experiments/p12a-mad-frontier-exact.mjs` extracts the baseline userscript from immutable pre-P12A commit `a69d615f09cd012caddd0235d70ce036ea1dda53` and asserts SHA-256 `517642d0c647c29b28795e7ff7acd4a4ddedd4a0b3435a85602935e7336cf1e7`. It asserts the working-tree candidate bundle has a distinct hash and records both identities. The saved fixture, seed 42, epoch `2026-09-21T00:00:00.000Z`, 200-period window, and pinned game commit `db38e2af831907d49aeb5348d678d8d8745d6c3f` are unchanged. The same baseline is selected automatically on repeat runs.
 
-The latest replay used baseline SHA-256 `517642d0c647c29b28795e7ff7acd4a4ddedd4a0b3435a85602935e7336cf1e7` and candidate SHA-256 `e63c9dac1f1c8adb4e31dcf24a3cb5a127638ed04a7f9147238af6f8412a1536`. Baseline A/A, baseline versus production candidate, and test-only observation exports all matched at SHA-256 `9b4a3e7364571db6c6fc858e743ee3610dde162a921132641f1d17c155e7ec67`. Production candidate control usage and native invocation sequences matched baseline exactly; each production arm completed 25 work ticks. Each had one console error.
+The P12A.2 replay used baseline SHA-256 `517642d0c647c29b28795e7ff7acd4a4ddedd4a0b3435a85602935e7336cf1e7` and candidate SHA-256 `0c7c8e447a04ebeba435178a1ae91b2a44e2f152fd522cdfd1b6a85b4e65c7c3`. Baseline A/A, baseline versus production candidate, and test-only observation exports all matched at SHA-256 `9b4a3e7364571db6c6fc858e743ee3610dde162a921132641f1d17c155e7ec67`. Production candidate control usage and native invocation sequences matched baseline exactly; each production arm completed 25 work ticks. Each had one console error.
 
 The save SHA-256 was `b1f22205b78d043a98f914924d965a1ab04af791f1f3d7ce6e0179849892662e`, and the effective settings SHA-256 was `fbf75da786f5aa841212eea5c5848a7a532a9a8afe8d7ccd14f5781895601131`.
 
@@ -34,16 +36,16 @@ Timings below are exclusive measurements from one 25-work-tick candidate window;
 
 | Exclusive phase                          | Samples |   Total | Per work tick | Maximum |
 | ---------------------------------------- | ------: | ------: | ------------: | ------: |
-| `research.offer-acquisition`             |      30 | 18.9 ms |       0.76 ms |  4.1 ms |
-| `research.catalog.registry-read`         |      30 |  6.0 ms |       0.24 ms |  0.4 ms |
-| `research.binding.restate`               |      30 |  0.5 ms |       0.02 ms |  0.1 ms |
-| `goal.mad.prerequisite-preparation`      |      25 | 25.7 ms |       1.03 ms |  1.6 ms |
-| `goal.mad.research-prerequisites`        |      25 | 17.0 ms |       0.68 ms |  1.6 ms |
-| `goal.mad.obligation-classification`     |      25 | 12.2 ms |       0.49 ms |  1.0 ms |
+| `research.offer-acquisition`             |      30 | 18.1 ms |       0.72 ms |  3.8 ms |
+| `research.catalog.registry-read`         |      30 |  4.6 ms |       0.18 ms |  0.3 ms |
+| `research.binding.restate`               |      30 |  0.7 ms |       0.03 ms |  0.1 ms |
+| `goal.mad.prerequisite-preparation`      |      25 | 24.7 ms |       0.99 ms |  1.3 ms |
+| `goal.mad.research-prerequisites`        |      25 | 15.7 ms |       0.63 ms |  1.7 ms |
+| `goal.mad.obligation-classification`     |      25 |  1.8 ms |       0.07 ms |  0.4 ms |
 | `goal.mad.frontier-resource-acquisition` |      25 |  0.2 ms |       0.01 ms |  0.1 ms |
-| `goal.mad.candidate-feasibility-ranking` |      25 | 23.7 ms |       0.95 ms |  2.4 ms |
+| `goal.mad.candidate-feasibility-ranking` |      25 | 19.5 ms |       0.78 ms |  2.0 ms |
 
-Production baseline and candidate each made 30 Research catalog samples and 30 native Research catalog draws; the candidate added none. The P12A.1 candidate recorded 20,850 effective-definition visits, 25 graph builds, 25 candidate evaluations across 435 offers, 25 obligation classifications, and 175 frontier-resource reads. The separate test-only observation bundle added one Research sample and two catalog draws across its window; its instrumentation and forced catalog read are not production behavior. No total time is reported across phases with different sample counts.
+Production baseline and candidate each made 30 Research catalog samples and 30 native Research catalog draws; the candidate added none. The P12A.2 candidate recorded 20,850 effective-definition visits, 25 graph builds, 25 candidate evaluations across 435 offers, 25 obligation classifications, and 175 frontier-resource reads. The separate test-only observation bundle added one Research sample and two catalog draws across its window; its instrumentation and forced catalog read are not production behavior. No total time is reported across phases with different sample counts.
 
 ## Spending safety and verification
 

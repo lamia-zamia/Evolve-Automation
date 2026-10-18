@@ -132,7 +132,6 @@ async function run(label, bundle) {
           "goal.mad.obligation-classification",
           "goal.mad.frontier-resource-acquisition",
           "goal.mad.candidate-feasibility-ranking",
-          "research.computed-requirements.capture-and-draw",
         ];
         return phaseNames.flatMap((name) => {
           const phase = phases[name];
@@ -338,7 +337,7 @@ try {
     bundles: {
       baselineCommit,
       baselineIdentity: "pre-P12A committed production userscript",
-      candidateIdentity: "working-tree P12A.1 production userscript",
+      candidateIdentity: "working-tree P12A.2 production userscript",
       baselineSha256: hash(baselineBundle),
       candidateSha256: hash(candidateBundle),
       candidateTestSha256: hash(testBundle.outputFiles[0].contents),

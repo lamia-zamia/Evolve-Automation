@@ -18549,6 +18549,31 @@
   }
 
   // src/domain/progression/research-prerequisite-obligations.ts
+  function researchPrerequisiteSnapshotIdentity(graph) {
+    return JSON.stringify([
+      graph.provenance,
+      graph.targetActionId,
+      graph.targetStatus,
+      graph.dependencyEvidence,
+      graph.actions.map((action) => [
+        action.actionId,
+        action.grantTechnology,
+        action.grantLevel,
+        action.status,
+        [...action.prerequisiteIds].sort()
+      ]),
+      graph.requirements.map((requirement) => [
+        requirement.id,
+        requirement.technologyId,
+        requirement.requiredLevel,
+        requirement.observedLevel,
+        requirement.declaredStatus,
+        requirement.status,
+        [...requirement.candidateActionIds].sort()
+      ]),
+      [...graph.actionableFrontier].sort()
+    ]);
+  }
   var emptyResearchPath = Object.freeze({
     status: "known",
     mandatoryActionIds: /* @__PURE__ */ new Set(),
@@ -18559,6 +18584,39 @@
     return first === void 0 ? /* @__PURE__ */ new Set() : new Set(
       [...first].filter((actionId) => rest.every((path) => path.has(actionId)))
     );
+  }
+  function nativePrerequisiteInputsMatchGraph(graph, definitions, grantLevels, applicability) {
+    if (graph.dependencyEvidence === "unavailable" || graph.provenance !== "effective-native-research-definition-snapshot" || graph.limits.length > 0 || graph.unavailableFacts.length > 0)
+      return !1;
+    let definitionsById = new Map(
+      definitions.map((definition) => [definition.actionId, definition])
+    );
+    for (let gate of graph.actions) {
+      let definition = definitionsById.get(gate.actionId);
+      if (definition === void 0 || definition.grantTechnology !== gate.grantTechnology || definition.grantLevel !== gate.grantLevel)
+        return !1;
+      if (gate.status === "excluded") {
+        if (applicability.get(gate.actionId)?.status !== "excluded") return !1;
+        continue;
+      }
+      if (gate.status === "frontier" && gate.actionId !== graph.targetActionId)
+        continue;
+      let expectedRequirementIds = definition.prerequisites.kind === "declared" ? definition.prerequisites.requirements.map(
+        ({ technologyId, requiredLevel }) => `research:${technologyId}:${requiredLevel}`
+      ) : [];
+      if (JSON.stringify([...gate.prerequisiteIds].sort()) !== JSON.stringify([...expectedRequirementIds].sort()))
+        return !1;
+    }
+    for (let requirement of graph.requirements) {
+      if (requirement.id !== `research:${requirement.technologyId}:${requirement.requiredLevel}` || requirement.observedLevel !== grantLevels.get(requirement.technologyId))
+        return !1;
+      let expectedCandidates = requirement.observedLevel !== void 0 && requirement.observedLevel >= requirement.requiredLevel ? [] : definitions.filter(
+        (definition) => definition.grantTechnology === requirement.technologyId && definition.grantLevel >= requirement.requiredLevel
+      ).map(({ actionId }) => actionId).sort();
+      if (JSON.stringify([...requirement.candidateActionIds].sort()) !== JSON.stringify(expectedCandidates))
+        return !1;
+    }
+    return !0;
   }
   function classifyMandatoryResearchPrerequisiteObligations(graph, targetCurrentlyEligible) {
     let unavailable2 = (reasons2) => Object.freeze({
@@ -18801,6 +18859,15 @@
     );
     if (definitions.size !== input.definitions.length)
       return unavailable2(["native action identities are duplicated"]);
+    if (!nativePrerequisiteInputsMatchGraph(
+      graph,
+      input.definitions,
+      input.grantLevels,
+      input.applicabilityByActionId
+    ))
+      return unavailable2([
+        "native Research prerequisite inputs contradict the effective graph snapshot"
+      ]);
     let target = definitions.get(graph.targetActionId);
     if (target?.prerequisites.kind !== "declared")
       return unavailable2([
@@ -18874,6 +18941,12 @@
     for (let offeredActionId of graph.actionableFrontier) {
       let candidate = definitions.get(offeredActionId);
       if (candidate === void 0 || !offered.has(offeredActionId)) continue;
+      if (applicability.get(offeredActionId)?.status === "excluded") {
+        uncertaintyReasons.push(
+          `${offeredActionId} is excluded by current native applicability evidence`
+        );
+        continue;
+      }
       let directRequirement = target.prerequisites.requirements.find(
         (requirement) => requirement.technologyId === candidate.grantTechnology
       );
@@ -18893,7 +18966,12 @@
       alternativeGroups: Object.freeze(
         alternativeGroups.map((group) => Object.freeze(group))
       ),
-      reasons: Object.freeze([])
+      reasons: Object.freeze([]),
+      authority: Object.freeze({
+        targetActionId: graph.targetActionId,
+        freshness: graph.freshness,
+        snapshotIdentity: researchPrerequisiteSnapshotIdentity(graph)
+      })
     });
   }
 
@@ -18930,31 +19008,31 @@
     let graphObligations = classifyMandatoryResearchPrerequisiteObligations(
       graph,
       !0
-    ), normalizeObligations = (plan) => ({
-      mandatoryActionIds: [...plan.mandatoryActionIds].sort(),
-      alternativeGroups: plan.alternativeGroups.map((group) => ({
+    ), authority = obligations.authority, currentAuthority = graph.provenance === "effective-native-research-definition-snapshot" && authority?.targetActionId === graph.targetActionId && JSON.stringify(authority.freshness) === JSON.stringify(graph.freshness) && authority.snapshotIdentity === researchPrerequisiteSnapshotIdentity(graph), graphFrontier = new Set(graph.actionableFrontier), normalizeGroups = (groups) => {
+      let normalized = groups.map((group) => ({
         requirementId: group.requirementId,
-        actionIds: [...group.actionIds].sort()
-      })).sort(
+        actionIds: [
+          ...new Set(group.actionIds.filter((id) => graphFrontier.has(id)))
+        ].sort()
+      })).filter((group) => group.actionIds.length > 0).sort(
         (left, right) => left.requirementId.localeCompare(right.requirementId)
-      )
-    });
-    if (graphObligations.status !== "verified" || JSON.stringify(normalizeObligations(graphObligations)) !== JSON.stringify(normalizeObligations(obligations))) {
-      let graphMandatory = new Set(graphObligations.mandatoryActionIds), suppliedMandatory = new Set(obligations.mandatoryActionIds), unsupportedMandatory = obligations.mandatoryActionIds.find(
-        (actionId) => !graphMandatory.has(actionId)
-      ), omittedMandatory = graphObligations.mandatoryActionIds.find(
-        (actionId) => !suppliedMandatory.has(actionId)
       );
+      return normalized.filter(
+        (group, index) => index === 0 || group.requirementId !== normalized[index - 1]?.requirementId || JSON.stringify(group.actionIds) !== JSON.stringify(normalized[index - 1]?.actionIds)
+      );
+    }, graphMandatoryFrontier = graphObligations.mandatoryActionIds.filter((actionId) => graphFrontier.has(actionId)).sort(), suppliedMandatory = [...new Set(obligations.mandatoryActionIds)].sort(), suppliedMandatoryOutsideFrontier = obligations.mandatoryActionIds.find(
+      (actionId) => !graphFrontier.has(actionId)
+    ), projectedAlternativesMatch = JSON.stringify(normalizeGroups(graphObligations.alternativeGroups)) === JSON.stringify(normalizeGroups(obligations.alternativeGroups));
+    if (!currentAuthority || graphObligations.status !== "verified" || suppliedMandatoryOutsideFrontier !== void 0 || suppliedMandatory.length !== obligations.mandatoryActionIds.length || JSON.stringify(graphMandatoryFrontier) !== JSON.stringify(suppliedMandatory) || !projectedAlternativesMatch)
       return Object.freeze({
         status: "blocked-by-missing-native-authority",
         actionId: void 0,
         comparedActionIds: Object.freeze([]),
         reasons: Object.freeze([
-          graphObligations.status !== "verified" ? `current prerequisite graph cannot independently verify its obligations: ${graphObligations.reasons.join("; ")}` : unsupportedMandatory !== void 0 ? `supplied obligation ${unsupportedMandatory} is not mandatory in the current prerequisite graph` : omittedMandatory !== void 0 ? `graph mandatory action ${omittedMandatory} is missing from the supplied obligations` : "mandatory and alternative obligation evidence contradicts the current prerequisite graph"
+          currentAuthority ? graphObligations.status !== "verified" ? `current prerequisite graph cannot independently verify its obligations: ${graphObligations.reasons.join("; ")}` : suppliedMandatoryOutsideFrontier !== void 0 ? `supplied obligation ${suppliedMandatoryOutsideFrontier} is not on the current actionable frontier` : JSON.stringify(graphMandatoryFrontier) !== JSON.stringify(suppliedMandatory) ? "native mandatory obligations do not match the graph's mandatory current frontier projection" : "mandatory and alternative obligation evidence contradicts the current prerequisite graph" : "supplied native obligations are not bound to the current prerequisite snapshot and freshness"
         ])
       });
-    }
-    let graphFrontier = new Set(graph.actionableFrontier), verifiedActionableFrontier = new Set(
+    let verifiedActionableFrontier = new Set(
       candidates.filter(
         (candidate) => graphFrontier.has(candidate.actionId) && candidate.actionability === "current-native-offer" && candidate.pathApplicability === "eligible" && candidate.dependencyRelation === "declared-prerequisite" && candidate.explicitlyExcluded !== !0
       ).map((candidate) => candidate.actionId)

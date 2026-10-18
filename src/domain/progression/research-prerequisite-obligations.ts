@@ -17,6 +17,39 @@ export interface ResearchPrerequisiteObligationPlan {
     readonly actionIds: readonly string[];
   }>[];
   readonly reasons: readonly string[];
+  readonly authority?: Readonly<{
+    readonly targetActionId: string;
+    readonly freshness: NativeResearchPrerequisiteGraph["freshness"];
+    readonly snapshotIdentity: string;
+  }>;
+}
+
+export function researchPrerequisiteSnapshotIdentity(
+  graph: Readonly<NativeResearchPrerequisiteGraph>,
+): string {
+  return JSON.stringify([
+    graph.provenance,
+    graph.targetActionId,
+    graph.targetStatus,
+    graph.dependencyEvidence,
+    graph.actions.map((action) => [
+      action.actionId,
+      action.grantTechnology,
+      action.grantLevel,
+      action.status,
+      [...action.prerequisiteIds].sort(),
+    ]),
+    graph.requirements.map((requirement) => [
+      requirement.id,
+      requirement.technologyId,
+      requirement.requiredLevel,
+      requirement.observedLevel,
+      requirement.declaredStatus,
+      requirement.status,
+      [...requirement.candidateActionIds].sort(),
+    ]),
+    [...graph.actionableFrontier].sort(),
+  ]);
 }
 
 export interface IndependentResearchClaimPlan {
@@ -45,6 +78,77 @@ function intersectResearchActions(
   return new Set(
     [...first].filter((actionId) => rest.every((path) => path.has(actionId))),
   );
+}
+
+function nativePrerequisiteInputsMatchGraph(
+  graph: Readonly<NativeResearchPrerequisiteGraph>,
+  definitions: readonly NativeResearchActionDefinition[],
+  grantLevels: ReadonlyMap<string, number>,
+  applicability: ReadonlyMap<string, NativeResearchApplicability>,
+): boolean {
+  if (
+    graph.dependencyEvidence === "unavailable" ||
+    graph.provenance !== "effective-native-research-definition-snapshot" ||
+    graph.limits.length > 0 ||
+    graph.unavailableFacts.length > 0
+  )
+    return false;
+  const definitionsById = new Map(
+    definitions.map((definition) => [definition.actionId, definition]),
+  );
+  for (const gate of graph.actions) {
+    const definition = definitionsById.get(gate.actionId);
+    if (
+      definition === undefined ||
+      definition.grantTechnology !== gate.grantTechnology ||
+      definition.grantLevel !== gate.grantLevel
+    )
+      return false;
+    if (gate.status === "excluded") {
+      if (applicability.get(gate.actionId)?.status !== "excluded") return false;
+      continue;
+    }
+    if (gate.status === "frontier" && gate.actionId !== graph.targetActionId)
+      continue;
+    const expectedRequirementIds =
+      definition.prerequisites.kind === "declared"
+        ? definition.prerequisites.requirements.map(
+            ({ technologyId, requiredLevel }) =>
+              `research:${technologyId}:${requiredLevel}`,
+          )
+        : [];
+    if (
+      JSON.stringify([...gate.prerequisiteIds].sort()) !==
+      JSON.stringify([...expectedRequirementIds].sort())
+    )
+      return false;
+  }
+  for (const requirement of graph.requirements) {
+    if (
+      requirement.id !==
+        `research:${requirement.technologyId}:${requirement.requiredLevel}` ||
+      requirement.observedLevel !== grantLevels.get(requirement.technologyId)
+    )
+      return false;
+    const expectedCandidates =
+      requirement.observedLevel !== undefined &&
+      requirement.observedLevel >= requirement.requiredLevel
+        ? []
+        : definitions
+            .filter(
+              (definition) =>
+                definition.grantTechnology === requirement.technologyId &&
+                definition.grantLevel >= requirement.requiredLevel,
+            )
+            .map(({ actionId }) => actionId)
+            .sort();
+    if (
+      JSON.stringify([...requirement.candidateActionIds].sort()) !==
+      JSON.stringify(expectedCandidates)
+    )
+      return false;
+  }
+  return true;
 }
 
 /**
@@ -391,6 +495,17 @@ export function classifyMandatoryNativeResearchObligations(
   );
   if (definitions.size !== input.definitions.length)
     return unavailable(["native action identities are duplicated"]);
+  if (
+    !nativePrerequisiteInputsMatchGraph(
+      graph,
+      input.definitions,
+      input.grantLevels,
+      input.applicabilityByActionId,
+    )
+  )
+    return unavailable([
+      "native Research prerequisite inputs contradict the effective graph snapshot",
+    ]);
   const target = definitions.get(graph.targetActionId);
   if (target?.prerequisites.kind !== "declared")
     return unavailable([
@@ -531,6 +646,12 @@ export function classifyMandatoryNativeResearchObligations(
   for (const offeredActionId of graph.actionableFrontier) {
     const candidate = definitions.get(offeredActionId);
     if (candidate === undefined || !offered.has(offeredActionId)) continue;
+    if (applicability.get(offeredActionId)?.status === "excluded") {
+      uncertaintyReasons.push(
+        `${offeredActionId} is excluded by current native applicability evidence`,
+      );
+      continue;
+    }
     const directRequirement = target.prerequisites.requirements.find(
       (requirement) => requirement.technologyId === candidate.grantTechnology,
     );
@@ -554,5 +675,10 @@ export function classifyMandatoryNativeResearchObligations(
       alternativeGroups.map((group) => Object.freeze(group)),
     ),
     reasons: Object.freeze([]),
+    authority: Object.freeze({
+      targetActionId: graph.targetActionId,
+      freshness: graph.freshness,
+      snapshotIdentity: researchPrerequisiteSnapshotIdentity(graph),
+    }),
   });
 }

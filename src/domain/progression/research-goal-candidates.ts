@@ -6,6 +6,7 @@ import {
 } from "../economy/goal-feasibility.ts";
 import {
   classifyMandatoryResearchPrerequisiteObligations,
+  researchPrerequisiteSnapshotIdentity,
   type ResearchPrerequisiteObligationPlan,
 } from "./research-prerequisite-obligations.ts";
 
@@ -164,46 +165,72 @@ function chooseResearchFrontier(
     graph,
     true,
   );
-  const normalizeObligations = (plan: ResearchPrerequisiteObligationPlan) => ({
-    mandatoryActionIds: [...plan.mandatoryActionIds].sort(),
-    alternativeGroups: plan.alternativeGroups
+  const authority = obligations.authority;
+  const currentAuthority =
+    graph.provenance === "effective-native-research-definition-snapshot" &&
+    authority?.targetActionId === graph.targetActionId &&
+    JSON.stringify(authority.freshness) === JSON.stringify(graph.freshness) &&
+    authority.snapshotIdentity === researchPrerequisiteSnapshotIdentity(graph);
+  const graphFrontier = new Set(graph.actionableFrontier);
+  const normalizeGroups = (
+    groups: ResearchPrerequisiteObligationPlan["alternativeGroups"],
+  ) => {
+    const normalized = groups
       .map((group) => ({
         requirementId: group.requirementId,
-        actionIds: [...group.actionIds].sort(),
+        actionIds: [
+          ...new Set(group.actionIds.filter((id) => graphFrontier.has(id))),
+        ].sort(),
       }))
+      .filter((group) => group.actionIds.length > 0)
       .sort((left, right) =>
         left.requirementId.localeCompare(right.requirementId),
-      ),
-  });
+      );
+    return normalized.filter(
+      (group, index) =>
+        index === 0 ||
+        group.requirementId !== normalized[index - 1]?.requirementId ||
+        JSON.stringify(group.actionIds) !==
+          JSON.stringify(normalized[index - 1]?.actionIds),
+    );
+  };
+  const graphMandatoryFrontier = graphObligations.mandatoryActionIds
+    .filter((actionId) => graphFrontier.has(actionId))
+    .sort();
+  const suppliedMandatory = [...new Set(obligations.mandatoryActionIds)].sort();
+  const suppliedMandatoryOutsideFrontier = obligations.mandatoryActionIds.find(
+    (actionId) => !graphFrontier.has(actionId),
+  );
+  const projectedAlternativesMatch =
+    JSON.stringify(normalizeGroups(graphObligations.alternativeGroups)) ===
+    JSON.stringify(normalizeGroups(obligations.alternativeGroups));
   if (
+    !currentAuthority ||
     graphObligations.status !== "verified" ||
-    JSON.stringify(normalizeObligations(graphObligations)) !==
-      JSON.stringify(normalizeObligations(obligations))
+    suppliedMandatoryOutsideFrontier !== undefined ||
+    suppliedMandatory.length !== obligations.mandatoryActionIds.length ||
+    JSON.stringify(graphMandatoryFrontier) !==
+      JSON.stringify(suppliedMandatory) ||
+    !projectedAlternativesMatch
   ) {
-    const graphMandatory = new Set(graphObligations.mandatoryActionIds);
-    const suppliedMandatory = new Set(obligations.mandatoryActionIds);
-    const unsupportedMandatory = obligations.mandatoryActionIds.find(
-      (actionId) => !graphMandatory.has(actionId),
-    );
-    const omittedMandatory = graphObligations.mandatoryActionIds.find(
-      (actionId) => !suppliedMandatory.has(actionId),
-    );
     return Object.freeze({
       status: "blocked-by-missing-native-authority",
       actionId: undefined,
       comparedActionIds: Object.freeze([]),
       reasons: Object.freeze([
-        graphObligations.status !== "verified"
-          ? `current prerequisite graph cannot independently verify its obligations: ${graphObligations.reasons.join("; ")}`
-          : unsupportedMandatory !== undefined
-            ? `supplied obligation ${unsupportedMandatory} is not mandatory in the current prerequisite graph`
-            : omittedMandatory !== undefined
-              ? `graph mandatory action ${omittedMandatory} is missing from the supplied obligations`
-              : "mandatory and alternative obligation evidence contradicts the current prerequisite graph",
+        !currentAuthority
+          ? "supplied native obligations are not bound to the current prerequisite snapshot and freshness"
+          : graphObligations.status !== "verified"
+            ? `current prerequisite graph cannot independently verify its obligations: ${graphObligations.reasons.join("; ")}`
+            : suppliedMandatoryOutsideFrontier !== undefined
+              ? `supplied obligation ${suppliedMandatoryOutsideFrontier} is not on the current actionable frontier`
+              : JSON.stringify(graphMandatoryFrontier) !==
+                  JSON.stringify(suppliedMandatory)
+                ? "native mandatory obligations do not match the graph's mandatory current frontier projection"
+                : "mandatory and alternative obligation evidence contradicts the current prerequisite graph",
       ]),
     });
   }
-  const graphFrontier = new Set(graph.actionableFrontier);
   const verifiedActionableFrontier = new Set(
     candidates
       .filter(

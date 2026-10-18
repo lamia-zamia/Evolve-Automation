@@ -5,7 +5,10 @@ import {
   hasVerifiedNonManaAffordabilityForManaOffer,
 } from "../../../src/domain/progression/research-goal-candidates.ts";
 import { planNativeResearchPrerequisites } from "../../../src/domain/progression/research-prerequisite-planning.ts";
-import { classifyMandatoryResearchPrerequisiteObligations } from "../../../src/domain/progression/research-prerequisite-obligations.ts";
+import {
+  classifyMandatoryNativeResearchObligations,
+  classifyMandatoryResearchPrerequisiteObligations,
+} from "../../../src/domain/progression/research-prerequisite-obligations.ts";
 import {
   decodeResearchGoalCandidateResponse,
   installResearchGoalCandidatesWorker,
@@ -126,9 +129,7 @@ const input = (overrides = {}) => ({
   assert.equal(mismatched.preference, "blocked-by-missing-native-authority");
   assert.ok(
     mismatched.frontierSelection.reasons.some((reason) =>
-      reason.includes(
-        "tech-luxury is not mandatory in the current prerequisite graph",
-      ),
+      reason.includes("not bound to the current prerequisite snapshot"),
     ),
     "a mandatory obligation from a different prerequisite snapshot cannot be ranked",
   );
@@ -176,30 +177,198 @@ const input = (overrides = {}) => ({
 }
 
 {
+  const chainDefinitions = [
+    definition("tech-terminal", "terminal", [
+      { technologyId: "tiered", requiredLevel: 2 },
+    ]),
+    definition("tech-tier-one", "tiered"),
+    {
+      ...definition("tech-tier-two", "tiered", [
+        { technologyId: "tiered", requiredLevel: 1 },
+      ]),
+      grantLevel: 2,
+    },
+  ];
+  const chainOffers = [
+    {
+      actionId: "tech-tier-one",
+      grantTechnology: "tiered",
+      grantLevel: 1,
+      index: 0,
+      generation: 9,
+      cost: Object.freeze({ Knowledge: 100 }),
+      nativeAffordable: true,
+      resourceAffordable: true,
+      hasCostConflict: false,
+      hasExplicitExclusion: false,
+    },
+  ];
+  const chainGraph = planNativeResearchPrerequisites({
+    targetActionId: "tech-terminal",
+    definitions: chainDefinitions,
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["tiered", 0],
+    ]),
+    applicabilityByActionId: new Map(
+      chainDefinitions.map(({ actionId }) => [
+        actionId,
+        { status: "eligible", reasons: [] },
+      ]),
+    ),
+    offeredActionIds: new Set(["tech-tier-one"]),
+    offerGenerations: new Map([["tech-tier-one", 9]]),
+    cycle: 12,
+    progressionEpoch: "run:5",
+    rootGeneration: 3,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+  const graphProof = classifyMandatoryResearchPrerequisiteObligations(
+    chainGraph,
+    true,
+  );
+  const nativeProof = classifyMandatoryNativeResearchObligations(chainGraph, {
+    targetCurrentlyEligible: true,
+    definitions: chainDefinitions,
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["tiered", 0],
+    ]),
+    applicabilityByActionId: new Map(
+      chainDefinitions.map(({ actionId }) => [
+        actionId,
+        { status: "eligible", reasons: [] },
+      ]),
+    ),
+    offeredActionIds: new Set(["tech-tier-one"]),
+  });
+  assert.equal(graphProof.status, "verified");
+  assert.deepEqual(graphProof.mandatoryActionIds, [
+    "tech-tier-one",
+    "tech-tier-two",
+  ]);
+  assert.equal(nativeProof.status, "verified");
+  assert.deepEqual(nativeProof.mandatoryActionIds, ["tech-tier-one"]);
+
+  const contradictoryNativeProof = classifyMandatoryNativeResearchObligations(
+    chainGraph,
+    {
+      targetCurrentlyEligible: true,
+      definitions: [
+        definition("tech-terminal", "terminal", [
+          { technologyId: "tiered", requiredLevel: 1 },
+        ]),
+        ...chainDefinitions.slice(1),
+      ],
+      grantLevels: new Map([
+        ["terminal", 0],
+        ["tiered", 0],
+      ]),
+      applicabilityByActionId: new Map(),
+      offeredActionIds: new Set(["tech-tier-one"]),
+    },
+  );
+  assert.equal(
+    contradictoryNativeProof.status,
+    "unavailable",
+    "a native definition for B1 cannot certify a graph whose terminal requires B2",
+  );
+
+  const evaluation = evaluateResearchGoalCandidates(
+    input({
+      targetActionId: "tech-terminal",
+      graph: chainGraph,
+      offers: chainOffers,
+      obligations: nativeProof,
+      resourceStocks: [
+        {
+          resourceId: "Knowledge",
+          poolId: "anywhere",
+          amount: 0,
+          capacity: 1000,
+          netRate: 1,
+          rateConfidence: "observed",
+          validityEpoch: "run:5|root:3|cycle:12",
+        },
+      ],
+      commitmentsKnown: true,
+    }),
+  );
+  assert.equal(
+    evaluation.frontierSelection.status,
+    "provisional-mandatory-prerequisite-choice",
+    "a current mandatory frontier remains selectable when the graph also contains its unoffered intermediate",
+  );
+  assert.equal(evaluation.preferredActionId, "tech-tier-one");
+
+  for (const [mandatoryActionIds, reason] of [
+    [["tech-unrelated"], "unrelated mandatory action"],
+    [["tech-tier-two"], "unoffered intermediate is not a current frontier"],
+  ]) {
+    const unsupported = evaluateResearchGoalCandidates(
+      input({
+        targetActionId: "tech-terminal",
+        graph: chainGraph,
+        offers: chainOffers,
+        obligations: { ...nativeProof, mandatoryActionIds },
+      }),
+    );
+    assert.equal(
+      unsupported.frontierSelection.status,
+      "blocked-by-missing-native-authority",
+      reason,
+    );
+  }
+
+  const staleProofGraph = {
+    ...chainGraph,
+    requirements: chainGraph.requirements.map((requirement) =>
+      requirement.technologyId === "tiered"
+        ? { ...requirement, requiredLevel: requirement.requiredLevel + 1 }
+        : requirement,
+    ),
+  };
+  const staleProof = evaluateResearchGoalCandidates(
+    input({
+      targetActionId: "tech-terminal",
+      graph: staleProofGraph,
+      offers: chainOffers,
+      obligations: nativeProof,
+    }),
+  );
+  assert.equal(
+    staleProof.frontierSelection.status,
+    "blocked-by-missing-native-authority",
+    "obligations captured for another prerequisite snapshot cannot be reused",
+  );
+}
+
+{
+  const madDefinitions = [
+    definition("tech-mad", "mad", [
+      { technologyId: "explosives", requiredLevel: 1 },
+      { technologyId: "high_tech", requiredLevel: 1 },
+    ]),
+    definition("tech-black_powder", "explosives"),
+    definition("tech-mad_science", "high_tech"),
+  ];
+  const madApplicability = (blackPowderApplicability) =>
+    new Map([
+      ["tech-mad", { status: "eligible", reasons: [] }],
+      ["tech-black_powder", { status: blackPowderApplicability, reasons: [] }],
+      ["tech-mad_science", { status: "eligible", reasons: [] }],
+    ]);
   const madGraph = (blackPowderApplicability = "eligible") =>
     planNativeResearchPrerequisites({
       targetActionId: "tech-mad",
-      definitions: [
-        definition("tech-mad", "mad", [
-          { technologyId: "explosives", requiredLevel: 1 },
-          { technologyId: "high_tech", requiredLevel: 1 },
-        ]),
-        definition("tech-black_powder", "explosives"),
-        definition("tech-mad_science", "high_tech"),
-      ],
+      definitions: madDefinitions,
       grantLevels: new Map([
         ["mad", 0],
         ["explosives", 0],
         ["high_tech", 0],
       ]),
-      applicabilityByActionId: new Map([
-        ["tech-mad", { status: "eligible", reasons: [] }],
-        [
-          "tech-black_powder",
-          { status: blackPowderApplicability, reasons: [] },
-        ],
-        ["tech-mad_science", { status: "eligible", reasons: [] }],
-      ]),
+      applicabilityByActionId: madApplicability(blackPowderApplicability),
       offeredActionIds: new Set(["tech-black_powder", "tech-mad_science"]),
       offerGenerations: new Map([
         ["tech-black_powder", 4],
@@ -261,12 +430,17 @@ const input = (overrides = {}) => ({
     return input({
       targetActionId: "tech-mad",
       graph: targetGraph,
-      obligations: {
-        status: "verified",
-        mandatoryActionIds: ["tech-black_powder", "tech-mad_science"],
-        alternativeGroups: [],
-        reasons: [],
-      },
+      obligations: classifyMandatoryNativeResearchObligations(targetGraph, {
+        targetCurrentlyEligible: true,
+        definitions: madDefinitions,
+        grantLevels: new Map([
+          ["mad", 0],
+          ["explosives", 0],
+          ["high_tech", 0],
+        ]),
+        applicabilityByActionId: madApplicability(blackPowderApplicability),
+        offeredActionIds: new Set(["tech-black_powder", "tech-mad_science"]),
+      }),
       resourceStocks,
       commitmentsKnown: false,
       offers: [
@@ -395,8 +569,25 @@ const input = (overrides = {}) => ({
     maxDepth: 12,
     maxActions: 40,
   });
-  const unresolvedOrObligations =
-    classifyMandatoryResearchPrerequisiteObligations(unresolvedOrGraph, true);
+  const unresolvedOrObligations = classifyMandatoryNativeResearchObligations(
+    unresolvedOrGraph,
+    {
+      targetCurrentlyEligible: true,
+      definitions: [
+        definition("tech-mad", "mad", [
+          { technologyId: "choice", requiredLevel: 1 },
+        ]),
+        definition("tech-black_powder", "choice"),
+        definition("tech-mad_science", "choice"),
+      ],
+      grantLevels: new Map([
+        ["mad", 0],
+        ["choice", 0],
+      ]),
+      applicabilityByActionId: new Map(),
+      offeredActionIds: new Set(["tech-black_powder", "tech-mad_science"]),
+    },
+  );
   const unresolvedOr = evaluateResearchGoalCandidates({
     ...makeMadInput(),
     graph: unresolvedOrGraph,
@@ -488,8 +679,27 @@ const input = (overrides = {}) => ({
 }
 
 {
+  const staleNativeProof = classifyMandatoryNativeResearchObligations(graph, {
+    targetCurrentlyEligible: true,
+    definitions: [
+      definition("tech-terminal", "terminal", [
+        { technologyId: "ore", requiredLevel: 1 },
+      ]),
+      definition("tech-ore", "ore"),
+      definition("tech-luxury", "luxury"),
+    ],
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["ore", 0],
+      ["luxury", 0],
+    ]),
+    applicabilityByActionId: new Map(),
+    offeredActionIds: new Set(["tech-ore", "tech-luxury"]),
+  });
+  assert.equal(staleNativeProof.status, "verified");
   const staleGeneration = evaluateResearchGoalCandidates(
     input({
+      obligations: staleNativeProof,
       offers: input().offers.map((candidate) =>
         candidate.actionId === "tech-ore"
           ? { ...candidate, generation: candidate.generation + 1 }
@@ -498,6 +708,11 @@ const input = (overrides = {}) => ({
     }),
   );
   assert.equal(staleGeneration.preferredActionId, undefined);
+  assert.equal(
+    staleGeneration.frontierSelection.status,
+    "blocked-by-missing-native-authority",
+    "a current native proof cannot survive an offer generation change",
+  );
   assert.ok(
     staleGeneration.candidates.every(
       (candidate) => candidate.relevance === "unavailable",
@@ -600,6 +815,65 @@ const input = (overrides = {}) => ({
     evaluation.preferredActionId,
     undefined,
     "current native offer membership establishes actionability, not economic desirability",
+  );
+}
+
+{
+  const definitions = [
+    {
+      ...definition("tech-terminal", "terminal"),
+      prerequisites: {
+        kind: "conditional",
+        reason: "computed requirements missing",
+      },
+    },
+    definition("tech-ore", "ore"),
+  ];
+  const missingComputedGraph = planNativeResearchPrerequisites({
+    targetActionId: "tech-terminal",
+    definitions,
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["ore", 0],
+    ]),
+    offeredActionIds: new Set(["tech-ore"]),
+    offerGenerations: new Map([["tech-ore", 4]]),
+    cycle: 12,
+    progressionEpoch: "run:5",
+    rootGeneration: 3,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+  const nativeProof = classifyMandatoryNativeResearchObligations(
+    missingComputedGraph,
+    {
+      targetCurrentlyEligible: true,
+      definitions,
+      grantLevels: new Map([
+        ["terminal", 0],
+        ["ore", 0],
+      ]),
+      applicabilityByActionId: new Map(),
+      offeredActionIds: new Set(["tech-ore"]),
+    },
+  );
+  assert.equal(nativeProof.status, "unavailable");
+  const evaluation = evaluateResearchGoalCandidates(
+    input({
+      graph: missingComputedGraph,
+      offers: [
+        {
+          ...input().offers[0],
+          generation: 4,
+        },
+      ],
+      obligations: nativeProof,
+    }),
+  );
+  assert.equal(
+    evaluation.frontierSelection.status,
+    "blocked-by-missing-native-authority",
+    "missing computed prerequisite evidence cannot produce a frontier selection",
   );
 }
 
