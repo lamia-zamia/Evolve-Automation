@@ -15,6 +15,26 @@ export interface ResearchBottleneckObservation {
         offerSetIdentity?: string | undefined;
         cost: Readonly<Record<string, number>>;
         nativeAffordable?: boolean | undefined;
+        /** Draw-bound price, verdict, and stock evidence; cached rows omit this when unproven. */
+        affordabilityDraw?: Readonly<{
+          observationId: string;
+          period: number;
+          rootGeneration: number;
+          progressionEpoch: string;
+          offerGeneration: number;
+          cost: Readonly<Record<string, number>>;
+          nativeAffordable?: boolean | undefined;
+          resources: Readonly<
+            Record<
+              string,
+              Readonly<{
+                amount: number | undefined;
+                capacity: number | undefined;
+                netRate: number | undefined;
+              }>
+            >
+          >;
+        }>;
       }>
     | undefined;
   readonly resources: Readonly<
@@ -27,12 +47,18 @@ export interface ResearchBottleneckObservation {
       }>
     >
   >;
+  readonly resourcesObservationId?: string | undefined;
   readonly decision?: Readonly<{
     boundary: boolean;
     selectedActionId?: string | undefined;
     invocationPeriod?: number | undefined;
     nativeAffordable?: boolean | undefined;
     resourceAffordable?: boolean | undefined;
+    affordabilityObservationId?: string | undefined;
+    resourceObservationId?: string | undefined;
+    offerGeneration?: number | undefined;
+    rootGeneration?: number | undefined;
+    progressionEpoch?: string | undefined;
     reservation?: "none" | "conflict" | "unavailable" | undefined;
   }>;
   readonly commitments?: Readonly<{
@@ -161,12 +187,55 @@ function blockersAt(
       kind === "capacity" ||
       kind === "resource-evidence-unknown",
   );
+  const draw = offer.affordabilityDraw;
+  const drawEvidenceCurrent =
+    draw !== undefined &&
+    draw.observationId.length > 0 &&
+    Number.isSafeInteger(draw.period) &&
+    draw.period <= observation.period &&
+    draw.rootGeneration === observation.rootGeneration &&
+    draw.progressionEpoch === observation.progressionEpoch &&
+    draw.offerGeneration === offer.generation &&
+    draw.nativeAffordable === offer.nativeAffordable &&
+    JSON.stringify(draw.cost) === JSON.stringify(offer.cost) &&
+    Object.keys(offer.cost).every((resourceId) =>
+      Number.isFinite(draw.resources[resourceId]?.amount),
+    );
+  const drawHasShortage =
+    drawEvidenceCurrent &&
+    Object.entries(offer.cost).some(
+      ([resourceId, price]) =>
+        draw.resources[resourceId]!.amount! < price ||
+        (Number.isFinite(draw.resources[resourceId]!.capacity) &&
+          draw.resources[resourceId]!.capacity! < price),
+    );
   if (offer.nativeAffordable === false && !hasResourceBlocker)
-    blockers.push({ kind: "native-unaffordable-unknown" });
+    blockers.push({
+      kind:
+        drawEvidenceCurrent && !drawHasShortage
+          ? "native-unaffordable-unknown"
+          : "stale-affordability-evidence",
+      ...(draw === undefined
+        ? { freshness: "not-established" }
+        : { drawObservationId: draw.observationId }),
+    });
   if (
     observation.decision?.boundary === true &&
     observation.decision.nativeAffordable === false &&
-    !hasResourceBlocker
+    draw?.nativeAffordable === false &&
+    !blockers.some(({ kind }) => kind === "native-unaffordable-unknown") &&
+    !hasResourceBlocker &&
+    observation.decision.affordabilityObservationId !== undefined &&
+    observation.decision.affordabilityObservationId === draw?.observationId &&
+    observation.decision.resourceObservationId ===
+      observation.decision.affordabilityObservationId &&
+    observation.resourcesObservationId ===
+      observation.decision.resourceObservationId &&
+    observation.decision.offerGeneration === offer.generation &&
+    observation.decision.rootGeneration === observation.rootGeneration &&
+    observation.decision.progressionEpoch === observation.progressionEpoch &&
+    drawEvidenceCurrent &&
+    !drawHasShortage
   )
     blockers.push({ kind: "native-unaffordable-unknown" });
 
@@ -279,6 +348,7 @@ export function attributeResearchBottleneck(
       kind === "resource-evidence-unknown" ||
       kind === "permission-unknown" ||
       kind === "native-unaffordable-unknown" ||
+      kind === "stale-affordability-evidence" ||
       (kind === "eligibility" &&
         (evidence === "unknown" || evidence === "unavailable")) ||
       (kind === "research-queue" && evidence === "unavailable"),
@@ -353,6 +423,7 @@ export function attributeResearchBottleneck(
         kind === "capacity" ||
         kind === "resource-evidence-unknown" ||
         kind === "other-commitments-unknown" ||
+        kind === "stale-affordability-evidence" ||
         (kind === "decision-evidence-unavailable" &&
           entry.decision?.boundary !== true),
     ),
@@ -369,7 +440,8 @@ export function attributeResearchBottleneck(
         kind !== "permission-disabled" &&
         kind !== "eligibility" &&
         kind !== "research-queue" &&
-        kind !== "native-unaffordable-unknown",
+        kind !== "native-unaffordable-unknown" &&
+        kind !== "stale-affordability-evidence",
     )
       ? {
           kind: lastObservedConstraint.kind,

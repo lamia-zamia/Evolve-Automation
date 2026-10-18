@@ -5,6 +5,17 @@ import { attributeResearchBottleneck } from "../../../src/domain/economy/researc
 function observation(period, resources, overrides = {}) {
   const generation = overrides.generation ?? 1;
   const cost = overrides.cost ?? { Knowledge: 10 };
+  const resourceSamples = Object.fromEntries(
+    Object.entries(resources).map(([resourceId, amount]) => [
+      resourceId,
+      {
+        amount,
+        capacity: overrides.capacities?.[resourceId] ?? 100,
+        netRate: overrides.rates?.[resourceId] ?? 1,
+      },
+    ]),
+  );
+  const draw = overrides.draw;
   return {
     period,
     rootGeneration: overrides.rootGeneration ?? 1,
@@ -23,17 +34,25 @@ function observation(period, resources, overrides = {}) {
             offerSetIdentity: overrides.offerSetIdentity ?? "set-1",
             cost,
             nativeAffordable: overrides.nativeAffordable,
+            ...(draw === undefined
+              ? {}
+              : {
+                  affordabilityDraw: {
+                    observationId: draw.observationId ?? `draw-${period}`,
+                    period: draw.period ?? period,
+                    rootGeneration: draw.rootGeneration ?? 1,
+                    progressionEpoch: draw.progressionEpoch ?? "progression-1",
+                    offerGeneration: draw.offerGeneration ?? generation,
+                    cost: draw.cost ?? cost,
+                    nativeAffordable: draw.nativeAffordable,
+                    resources: draw.resources ?? resourceSamples,
+                  },
+                }),
           },
-    resources: Object.fromEntries(
-      Object.entries(resources).map(([resourceId, amount]) => [
-        resourceId,
-        {
-          amount,
-          capacity: overrides.capacities?.[resourceId] ?? 100,
-          netRate: overrides.rates?.[resourceId] ?? 1,
-        },
-      ]),
-    ),
+    resources: resourceSamples,
+    ...(overrides.resourcesObservationId === undefined
+      ? {}
+      : { resourcesObservationId: overrides.resourcesObservationId }),
     commitments: overrides.commitments ?? {
       coverage: "complete",
       items: [],
@@ -320,6 +339,7 @@ const unexplainedNativeGate = attributeResearchBottleneck([
     {
       cost: { Crystal: 10 },
       nativeAffordable: false,
+      draw: { nativeAffordable: false },
     },
   ),
   observation(
@@ -345,6 +365,122 @@ assert.equal(
   2,
 );
 assert.equal(unexplainedNativeGate.provenCriticalPath, undefined);
+
+const cachedUnaffordableThenStockGrowth = attributeResearchBottleneck([
+  observation(1, { Knowledge: 9 }, { nativeAffordable: false }),
+  observation(2, { Knowledge: 20 }, { nativeAffordable: false }),
+]);
+assert.equal(cachedUnaffordableThenStockGrowth.status, "insufficient");
+assert.ok(
+  cachedUnaffordableThenStockGrowth.blockers.some(
+    ({ kind }) => kind === "stale-affordability-evidence",
+  ),
+);
+assert.ok(
+  !cachedUnaffordableThenStockGrowth.blockers.some(
+    ({ kind }) => kind === "native-unaffordable-unknown",
+  ),
+);
+
+const freshRedrawAffordable = attributeResearchBottleneck([
+  observation(1, { Knowledge: 9 }, { nativeAffordable: false }),
+  observation(
+    2,
+    { Knowledge: 20 },
+    {
+      generation: 2,
+      nativeAffordable: true,
+      draw: { nativeAffordable: true },
+      decision: { ...invoked, invocationPeriod: 2 },
+    },
+  ),
+]);
+assert.equal(freshRedrawAffordable.status, "attributed");
+assert.equal(freshRedrawAffordable.provenCriticalPath?.resourceId, "Knowledge");
+
+const staleStockWithoutRedraw = attributeResearchBottleneck([
+  observation(1, { Knowledge: 9 }, { nativeAffordable: false }),
+  observation(2, { Knowledge: 20 }, { nativeAffordable: false }),
+]);
+assert.ok(
+  staleStockWithoutRedraw.blockers.some(
+    ({ kind }) => kind === "stale-affordability-evidence",
+  ),
+);
+
+const sameBoundaryFalseVerdict = attributeResearchBottleneck([
+  observation(
+    1,
+    { Knowledge: 20 },
+    {
+      nativeAffordable: false,
+      draw: { nativeAffordable: false },
+      resourcesObservationId: "draw-1",
+      decision: {
+        boundary: true,
+        nativeAffordable: false,
+        affordabilityObservationId: "draw-1",
+        resourceObservationId: "draw-1",
+        offerGeneration: 1,
+        rootGeneration: 1,
+        progressionEpoch: "progression-1",
+        reservation: "none",
+      },
+    },
+  ),
+]);
+assert.ok(
+  sameBoundaryFalseVerdict.blockers.some(
+    ({ kind }) => kind === "native-unaffordable-unknown",
+  ),
+);
+
+const mismatchedDrawEpoch = attributeResearchBottleneck([
+  observation(
+    1,
+    { Knowledge: 20 },
+    {
+      nativeAffordable: false,
+      draw: { nativeAffordable: false, progressionEpoch: "old-epoch" },
+    },
+  ),
+]);
+assert.ok(
+  mismatchedDrawEpoch.blockers.some(
+    ({ kind }) => kind === "stale-affordability-evidence",
+  ),
+);
+
+const delayedSelectionAfterFreshAffordability = attributeResearchBottleneck([
+  observation(
+    1,
+    { Knowledge: 20 },
+    {
+      nativeAffordable: true,
+      draw: { nativeAffordable: true },
+    },
+  ),
+  observation(
+    2,
+    { Knowledge: 21 },
+    {
+      nativeAffordable: true,
+      draw: { nativeAffordable: true, period: 1, observationId: "draw-1" },
+      decision: {
+        boundary: true,
+        selectedActionId: "tech-other",
+        nativeAffordable: true,
+        resourceAffordable: true,
+        reservation: "none",
+      },
+    },
+  ),
+]);
+assert.ok(
+  delayedSelectionAfterFreshAffordability.blockers.some(
+    ({ kind }) => kind === "affordable-not-selected",
+  ),
+);
 
 const rootInvalidated = attributeResearchBottleneck([
   observation(1, { Knowledge: 2 }),
