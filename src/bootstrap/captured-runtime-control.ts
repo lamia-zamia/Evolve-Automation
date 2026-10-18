@@ -71,11 +71,11 @@ import { canAfford } from "../domain/game-world.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
 import { readEvolveRouteIdentity } from "../adapters/evolve/progression-epoch.ts";
 import {
+  createEffectiveCapturedTechPrerequisiteSnapshot,
   readCapturedMadTargetCondition,
   readCapturedTechApplicability,
   readFreshCapturedComputedTechRequirements,
 } from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
-import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
@@ -987,10 +987,10 @@ export function startCapturedRuntime({
   let capturedPrestigeGoal = "Standard";
   let capturedResetCommittedThisCycle = false;
   let lastMadGoalDiagnostic = "";
-  let lastResearchDefinitions: readonly CapturedTechDefinition[] | undefined;
   let lastResearchGraphKey = "";
   let lastResearchGraph: NativeResearchPrerequisiteGraph | undefined;
-  let researchRegistryRevision = 0;
+  const researchRootIdentities = new WeakMap<object, number>();
+  let nextResearchRootIdentity = 1;
   const readResearchGrantLevels = createCapturedTechPrerequisiteLevelReader();
   let capturedMechCycleHasPendingWork = false;
   const capturedMercenary = createCapturedMercenary({
@@ -6653,8 +6653,6 @@ export function startCapturedRuntime({
             const offers = progression.readOfferedTechs();
             const researchDefinitions =
               progression.readResearchActionDefinitions();
-            if (lastResearchDefinitions !== researchDefinitions)
-              researchRegistryRevision += 1;
             const researchGrantLevels = readResearchGrantLevels(
               root,
               researchDefinitions,
@@ -6663,8 +6661,21 @@ export function startCapturedRuntime({
               root,
               researchDefinitions,
             );
-            const researchOfferIdentity =
-              offers?.map((offer) => offer.elementId).sort() ?? undefined;
+            const prerequisiteSnapshot = activeRuntimeMeasure.measure(
+              "goal.mad.prerequisite-preparation",
+              () =>
+                createEffectiveCapturedTechPrerequisiteSnapshot(
+                  researchDefinitions,
+                  {
+                    rootGeneration: researchRootGeneration,
+                    progressionEpoch,
+                  },
+                ),
+            );
+            diagnostics?.recordCount(
+              "goal.mad.effective-prerequisite-definitions",
+              prerequisiteSnapshot.definitions?.length ?? 0,
+            );
             const researchOfferGenerations =
               offers
                 ?.map((offer): readonly [string, number] => [
@@ -6673,10 +6684,22 @@ export function startCapturedRuntime({
                 ])
                 .sort(([first], [second]) => first.localeCompare(second)) ??
               undefined;
+            let rootIdentity: number | undefined;
+            if (root !== null && typeof root === "object") {
+              rootIdentity = researchRootIdentities.get(root);
+              if (rootIdentity === undefined) {
+                rootIdentity = nextResearchRootIdentity++;
+                researchRootIdentities.set(root, rootIdentity);
+              }
+            }
+            const currentMadControl =
+              pageCapture.controls.resolve(CAPTURED_MAD_CONTROL);
             const nextResearchGraphKey = JSON.stringify({
-              registryRevision: researchRegistryRevision,
+              targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+              rootIdentity,
               progressionEpoch,
               rootGeneration: researchRootGeneration,
+              effectivePrerequisites: prerequisiteSnapshot.identity,
               levels:
                 researchGrantLevels === undefined
                   ? undefined
@@ -6685,30 +6708,22 @@ export function startCapturedRuntime({
                 researchApplicability === undefined
                   ? undefined
                   : [...researchApplicability],
-              offers: researchOfferIdentity,
+              offerGenerations: researchOfferGenerations,
+              madControlGeneration: currentMadControl?.generation,
             });
             let researchPrerequisiteGraph: NativeResearchPrerequisiteGraph;
+            const cachedResearchGraph = lastResearchGraph;
             if (
-              lastResearchGraph === undefined ||
-              lastResearchDefinitions !== researchDefinitions ||
+              cachedResearchGraph === undefined ||
               lastResearchGraphKey !== nextResearchGraphKey
             ) {
+              diagnostics?.recordCount("goal.mad.graph-cache.rebuilds", 1);
               researchPrerequisiteGraph = activeRuntimeMeasure.measure(
                 "goal.mad.research-prerequisites",
                 () =>
                   planNativeResearchPrerequisites({
                     targetActionId: CAPTURED_MAD_RESEARCH_TECH,
-                    definitions: researchDefinitions?.map((definition) => ({
-                      actionId: definition.actionId,
-                      grantTechnology: definition.grantTechnology,
-                      grantLevel: definition.grantLevel,
-                      prerequisites: definition.prerequisites,
-                      hasNativeCondition:
-                        definition.eligibility.hasNativeCondition,
-                      routeRestrictions:
-                        definition.eligibility.routeRestrictions,
-                      restrictions: definition.eligibility.restrictions,
-                    })),
+                    definitions: prerequisiteSnapshot.definitions,
                     grantLevels: researchGrantLevels,
                     ...(researchApplicability === undefined
                       ? {}
@@ -6733,26 +6748,33 @@ export function startCapturedRuntime({
                     maxActions: 256,
                   }),
               );
-              lastResearchDefinitions = researchDefinitions;
               lastResearchGraphKey = nextResearchGraphKey;
               lastResearchGraph = researchPrerequisiteGraph;
             } else {
-              researchPrerequisiteGraph = Object.freeze({
-                ...lastResearchGraph,
-                freshness: Object.freeze({
-                  ...lastResearchGraph.freshness,
-                  cycle: automationCycle,
-                  offerGenerations:
-                    researchOfferGenerations === undefined
-                      ? undefined
-                      : Object.freeze(
-                          researchOfferGenerations.map(
-                            ([actionId, generation]) =>
-                              Object.freeze([actionId, generation] as const),
-                          ),
-                        ),
-                }),
-              });
+              diagnostics?.recordCount("goal.mad.graph-cache.hits", 1);
+              researchPrerequisiteGraph = activeRuntimeMeasure.measure(
+                "goal.mad.research-graph-cache-reuse",
+                () =>
+                  Object.freeze({
+                    ...cachedResearchGraph,
+                    freshness: Object.freeze({
+                      ...cachedResearchGraph.freshness,
+                      cycle: automationCycle,
+                      offerGenerations:
+                        researchOfferGenerations === undefined
+                          ? undefined
+                          : Object.freeze(
+                              researchOfferGenerations.map(
+                                ([actionId, generation]) =>
+                                  Object.freeze([
+                                    actionId,
+                                    generation,
+                                  ] as const),
+                              ),
+                            ),
+                    }),
+                  }),
+              );
             }
             const researchRequirementById = new Map(
               researchPrerequisiteGraph.requirements.map((gate) => [
@@ -6760,11 +6782,12 @@ export function startCapturedRuntime({
                 gate,
               ]),
             );
-            const researchTargetDefinition = researchDefinitions?.find(
-              (definition) =>
-                definition.actionId ===
-                researchPrerequisiteGraph.targetActionId,
-            );
+            const researchTargetDefinition =
+              prerequisiteSnapshot.definitions?.find(
+                (definition) =>
+                  definition.actionId ===
+                  researchPrerequisiteGraph.targetActionId,
+              );
             const researchDirectRequirements =
               researchTargetDefinition?.prerequisites.kind === "declared"
                 ? researchTargetDefinition.prerequisites.requirements
@@ -6817,41 +6840,38 @@ export function startCapturedRuntime({
                 madControl.methods.includes("launch"),
             );
             const researchCandidateEvaluation = activeRuntimeMeasure.measure(
-              "goal.mad.research-candidates",
+              "goal.mad.research-candidate-evaluation",
               () => {
                 const researchOffers = offers ?? [];
-                const obligationDefinitions = researchDefinitions?.map(
-                  (definition) => ({
-                    actionId: definition.actionId,
-                    grantTechnology: definition.grantTechnology,
-                    grantLevel: definition.grantLevel,
-                    prerequisites:
-                      readFreshCapturedComputedTechRequirements(definition, {
-                        rootGeneration: researchRootGeneration,
-                        progressionEpoch,
-                      }) ?? definition.prerequisites,
-                    hasNativeCondition:
-                      definition.eligibility.hasNativeCondition,
-                    routeRestrictions: definition.eligibility.routeRestrictions,
-                    restrictions: definition.eligibility.restrictions,
-                  }),
+                diagnostics?.recordCount("goal.mad.candidate-evaluations", 1);
+                diagnostics?.recordCount(
+                  "goal.mad.candidate-offers",
+                  researchOffers.length,
                 );
                 const obligationTargetIsEligible =
                   plan.selectedGoal.id === "prestige:mad" &&
                   researchApplicability?.get(CAPTURED_MAD_RESEARCH_TECH)
                     ?.status === "eligible" &&
                   readCapturedMadTargetCondition(root).status === "eligible";
-                const obligations = classifyMandatoryNativeResearchObligations(
-                  researchPrerequisiteGraph,
-                  {
-                    targetCurrentlyEligible: obligationTargetIsEligible,
-                    definitions: obligationDefinitions,
-                    grantLevels: researchGrantLevels,
-                    applicabilityByActionId: researchApplicability,
-                    offeredActionIds: new Set(
-                      researchOffers.map((offer) => offer.elementId),
+                const obligations = activeRuntimeMeasure.measure(
+                  "goal.mad.obligation-classification",
+                  () =>
+                    classifyMandatoryNativeResearchObligations(
+                      researchPrerequisiteGraph,
+                      {
+                        targetCurrentlyEligible: obligationTargetIsEligible,
+                        definitions: prerequisiteSnapshot.definitions,
+                        grantLevels: researchGrantLevels,
+                        applicabilityByActionId: researchApplicability,
+                        offeredActionIds: new Set(
+                          researchOffers.map((offer) => offer.elementId),
+                        ),
+                      },
                     ),
-                  },
+                );
+                diagnostics?.recordCount(
+                  "goal.mad.obligation-classifications",
+                  1,
                 );
                 const currentFrontierIds = new Set(
                   researchPrerequisiteGraph.actionableFrontier,
@@ -6865,9 +6885,17 @@ export function startCapturedRuntime({
                       .flatMap((offer) => Object.keys(offer.cost)),
                   ),
                 ];
-                const frontierResources = createCapturedResourceSource(
-                  pageCapture.rootState,
-                ).readResources(frontierResourceIds);
+                const frontierResources = activeRuntimeMeasure.measure(
+                  "goal.mad.frontier-resource-acquisition",
+                  () =>
+                    createCapturedResourceSource(
+                      pageCapture.rootState,
+                    ).readResources(frontierResourceIds),
+                );
+                diagnostics?.recordCount(
+                  "goal.mad.frontier-resource-reads",
+                  frontierResourceIds.length,
+                );
                 const validityEpoch = `${progressionEpoch}|root:${researchRootGeneration ?? "unknown"}|cycle:${automationCycle}`;
                 const resourceStocks: GoalResourceStock[] =
                   frontierResourceIds.flatMap((resourceId) => {
@@ -6887,34 +6915,38 @@ export function startCapturedRuntime({
                         ]
                       : [];
                   });
-                return evaluateResearchGoalCandidates({
-                  goalId: plan.selectedGoal.id,
-                  targetActionId: CAPTURED_MAD_RESEARCH_TECH,
-                  goalSatisfied:
-                    researchPrerequisiteGraph.targetStatus === "satisfied",
-                  graph: researchPrerequisiteGraph,
-                  cycle: automationCycle,
-                  progressionEpoch,
-                  rootGeneration: researchRootGeneration,
-                  obligations,
-                  resourceStocks,
-                  commitmentsKnown: false,
-                  offers: researchOffers.map((offer, index) => {
-                    return {
-                      actionId: offer.elementId,
-                      grantTechnology: offer.grantTechnology,
-                      grantLevel: offer.grantLevel,
-                      index,
-                      generation: offer.generation,
-                      cost: offer.cost,
-                      nativeAffordable: offer.nativeAffordable,
-                      resourceAffordable: undefined,
-                      hasCostConflict: undefined,
-                      hasExplicitExclusion: undefined,
-                    };
-                  }),
-                  baselineSelectedActionId: undefined,
-                });
+                return activeRuntimeMeasure.measure(
+                  "goal.mad.candidate-feasibility-ranking",
+                  () =>
+                    evaluateResearchGoalCandidates({
+                      goalId: plan.selectedGoal.id,
+                      targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+                      goalSatisfied:
+                        researchPrerequisiteGraph.targetStatus === "satisfied",
+                      graph: researchPrerequisiteGraph,
+                      cycle: automationCycle,
+                      progressionEpoch,
+                      rootGeneration: researchRootGeneration,
+                      obligations,
+                      resourceStocks,
+                      commitmentsKnown: false,
+                      offers: researchOffers.map((offer, index) => {
+                        return {
+                          actionId: offer.elementId,
+                          grantTechnology: offer.grantTechnology,
+                          grantLevel: offer.grantLevel,
+                          index,
+                          generation: offer.generation,
+                          cost: offer.cost,
+                          nativeAffordable: offer.nativeAffordable,
+                          resourceAffordable: undefined,
+                          hasCostConflict: undefined,
+                          hasExplicitExclusion: undefined,
+                        };
+                      }),
+                      baselineSelectedActionId: undefined,
+                    }),
+                );
               },
             );
             if (

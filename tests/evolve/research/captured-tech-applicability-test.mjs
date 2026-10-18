@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 
 import {
+  createEffectiveCapturedTechPrerequisiteSnapshot,
   readCapturedMadTargetCondition,
   readCapturedTechApplicability,
 } from "../../../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
+import { planNativeResearchPrerequisites } from "../../../src/domain/progression/research-prerequisite-planning.ts";
+import { classifyMandatoryResearchPrerequisiteObligations } from "../../../src/domain/progression/research-prerequisite-obligations.ts";
 
 const definition = (actionId, eligibility) => ({ actionId, eligibility });
 const definitions = [
@@ -114,5 +117,156 @@ assert.equal(
   "eligible",
 );
 assert.equal(readCapturedMadTargetCondition(null).status, "unknown");
+
+{
+  const definitions = [
+    {
+      registryKey: "tech-terminal",
+      actionId: "tech-terminal",
+      grantTechnology: "terminal",
+      grantLevel: 1,
+      prerequisites: {
+        kind: "declared",
+        requirements: [{ technologyId: "static", requiredLevel: 1 }],
+      },
+      eligibility: {
+        hasNativeCondition: true,
+        routeRestrictions: ["standard"],
+        restrictions: [],
+      },
+    },
+    {
+      registryKey: "tech-static",
+      actionId: "tech-static",
+      grantTechnology: "static",
+      grantLevel: 1,
+      prerequisites: { kind: "declared", requirements: [] },
+      eligibility: {
+        hasNativeCondition: false,
+        routeRestrictions: undefined,
+        restrictions: [],
+      },
+    },
+    {
+      registryKey: "tech-computed",
+      actionId: "tech-computed",
+      grantTechnology: "computed",
+      grantLevel: 1,
+      prerequisites: { kind: "conditional", reason: "native predicate" },
+      eligibility: {
+        hasNativeCondition: false,
+        routeRestrictions: undefined,
+        restrictions: [],
+      },
+    },
+  ];
+  const context = { rootGeneration: 7, progressionEpoch: "run:9" };
+  const baseline = createEffectiveCapturedTechPrerequisiteSnapshot(
+    definitions,
+    context,
+  );
+  assert.deepEqual(
+    baseline.definitions?.[2]?.prerequisites,
+    { kind: "conditional", reason: "native predicate" },
+    "missing computed evidence retains the original uncertainty",
+  );
+
+  definitions[0].computedRequirements = [
+    {
+      actionId: "tech-terminal",
+      registryKey: "tech-terminal",
+      actionIdentity: 1,
+      reqsIdentity: 2,
+      source: "native-actionReqs-during-drawTech",
+      effectiveEra: "standard",
+      arguments: { era: "standard", wiki: false, offset: undefined },
+      rootGeneration: 7,
+      progressionEpoch: "run:9",
+      captureGeneration: 15,
+      requirements: [{ technologyId: "computed", requiredLevel: 1 }],
+      nativeCallCount: 1,
+      status: "observed",
+      complete: true,
+      validation: "valid",
+    },
+  ];
+  const fresh = createEffectiveCapturedTechPrerequisiteSnapshot(
+    definitions,
+    context,
+  );
+  assert.notEqual(
+    fresh.identity,
+    baseline.identity,
+    "fresh computed evidence changes identity even when the registry array is unchanged",
+  );
+  const graph = planNativeResearchPrerequisites({
+    targetActionId: "tech-terminal",
+    definitions: fresh.definitions,
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["static", 0],
+      ["computed", 0],
+    ]),
+    offeredActionIds: new Set(["tech-computed"]),
+    offerGenerations: new Map([["tech-computed", 3]]),
+    cycle: 1,
+    progressionEpoch: "run:9",
+    rootGeneration: 7,
+    maxDepth: 8,
+    maxActions: 20,
+  });
+  const obligations = classifyMandatoryResearchPrerequisiteObligations(
+    graph,
+    true,
+  );
+  assert.deepEqual(graph.actionableFrontier, ["tech-computed"]);
+  assert.deepEqual(obligations.mandatoryActionIds, ["tech-computed"]);
+  assert.deepEqual(
+    fresh.definitions?.[0]?.routeRestrictions,
+    ["standard"],
+    "route eligibility remains separately represented alongside computed requirements",
+  );
+
+  const changed = {
+    ...definitions[0],
+    computedRequirements: [
+      {
+        ...definitions[0].computedRequirements[0],
+        requirements: [{ technologyId: "static", requiredLevel: 2 }],
+      },
+    ],
+  };
+  const changedSnapshot = createEffectiveCapturedTechPrerequisiteSnapshot(
+    [changed, ...definitions.slice(1)],
+    context,
+  );
+  assert.notEqual(changedSnapshot.identity, fresh.identity);
+  assert.deepEqual(changedSnapshot.definitions?.[0]?.prerequisites, {
+    kind: "declared",
+    requirements: [{ technologyId: "static", requiredLevel: 2 }],
+  });
+
+  const expired = createEffectiveCapturedTechPrerequisiteSnapshot(definitions, {
+    rootGeneration: 8,
+    progressionEpoch: "run:9",
+  });
+  assert.notEqual(expired.identity, fresh.identity);
+  assert.deepEqual(
+    expired.definitions?.[0]?.prerequisites,
+    definitions[0].prerequisites,
+    "expired computed evidence falls back to the original declaration",
+  );
+  definitions[0].computedRequirements[0].complete = false;
+  const incomplete = createEffectiveCapturedTechPrerequisiteSnapshot(
+    definitions,
+    context,
+  );
+  assert.deepEqual(
+    incomplete.definitions?.[0]?.prerequisites,
+    definitions[0].prerequisites,
+    "incomplete computed evidence cannot clear prerequisite uncertainty",
+  );
+  assert.notEqual(incomplete.identity, fresh.identity);
+}
 
 console.log("captured static Research applicability tests passed");

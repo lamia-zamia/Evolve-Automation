@@ -87,7 +87,7 @@ export interface NativeResearchPrerequisiteGraph {
   readonly cycles: readonly (readonly string[])[];
   readonly limits: readonly string[];
   readonly unavailableFacts: readonly string[];
-  readonly provenance: "retained-native-static-research-registry";
+  readonly provenance: "effective-native-research-definition-snapshot";
   readonly freshness: Readonly<{
     readonly cycle: number;
     readonly progressionEpoch: string;
@@ -564,7 +564,7 @@ export function planNativeResearchPrerequisites(
     cycles: Object.freeze(cycles.map((cycle) => Object.freeze(cycle))),
     limits: Object.freeze(limits),
     unavailableFacts: Object.freeze([...new Set(unavailableFacts)]),
-    provenance: "retained-native-static-research-registry",
+    provenance: "effective-native-research-definition-snapshot",
     freshness: Object.freeze({
       cycle: input.cycle,
       progressionEpoch: input.progressionEpoch,

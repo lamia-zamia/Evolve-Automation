@@ -12238,7 +12238,7 @@
       let tally = createCountTally(diagnostics);
       epochChanged && tally.count("research.observation.invalidated.progression"), rowBindingsChanged && tally.count("research.observation.invalidated.bindings"), clearResearchSample(), offeredSampleEpoch = currentEpoch, scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE);
     }, readCurrentOfferedTechs = () => (invalidateStaleCapturedResearchObservation(epoch.read()), lastOffered), sampleOfferedTechs = (requester = "direct") => {
-      let tally = createCountTally(diagnostics);
+      let tally = createCountTally(diagnostics), measure = createPhaseMeasure(diagnostics);
       tally.count("research.observation.requests"), tally.count(`research.observation.requester.${requester}`);
       let includeGranted = dependencies.needGrantedTechs?.() === !0, currentEpoch = epoch.read();
       if (invalidateStaleCapturedResearchObservation(currentEpoch), offeredSampleEpoch === void 0 && (offeredSampleEpoch = currentEpoch), offeredSampleAttempted && !(includeGranted && !grantedSampleAttempted)) {
@@ -12256,13 +12256,16 @@
       let computedRequirementsContext = dependencies.readComputedResearchRequirementsEnabled?.() === !0 ? Object.freeze({
         rootGeneration: epoch.readRootGeneration(),
         progressionEpoch: currentEpoch
-      }) : void 0, held = scopes.read(
-        includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
-        () => offered.read({
-          ...includeGranted ? { includeGranted } : {},
-          ...computedRequirementsContext === void 0 ? {} : { computedRequirementsContext }
-        }),
-        (previous, next) => sameOfferPrices(previous.offered, next.offered)
+      }) : void 0, held = measure(
+        "research.offer-acquisition",
+        () => scopes.read(
+          includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
+          () => offered.read({
+            ...includeGranted ? { includeGranted } : {},
+            ...computedRequirementsContext === void 0 ? {} : { computedRequirementsContext }
+          }),
+          (previous, next) => sameOfferPrices(previous.offered, next.offered)
+        )
       );
       if (offeredSampleAttempted = !0, offeredSampleEpoch = currentEpoch, includeGranted && (grantedSampleAttempted = !0), held !== void 0) {
         let value = offered.restate(held);
@@ -18531,7 +18534,7 @@
       cycles: Object.freeze(cycles.map((cycle) => Object.freeze(cycle))),
       limits: Object.freeze(limits),
       unavailableFacts: Object.freeze([...new Set(unavailableFacts)]),
-      provenance: "retained-native-static-research-registry",
+      provenance: "effective-native-research-definition-snapshot",
       freshness: Object.freeze({
         cycle: input.cycle,
         progressionEpoch: input.progressionEpoch,
@@ -18542,244 +18545,6 @@
           )
         )
       })
-    });
-  }
-
-  // src/domain/progression/research-goal-candidates.ts
-  var RESEARCH_FRONTIER_POOL = "anywhere";
-  function readFrontierTime(actionId, cost, stocks, validityEpoch, commitmentsKnown) {
-    if (stocks === void 0) return;
-    let requirements = Object.entries(cost).map(([resourceId, amount]) => ({
-      resourceId,
-      poolId: RESEARCH_FRONTIER_POOL,
-      amount
-    }));
-    return evaluateGoalFeasibility(
-      actionId,
-      requirements,
-      stocks,
-      [],
-      validityEpoch,
-      commitmentsKnown
-    );
-  }
-  function chooseResearchFrontier(obligations, candidates, validEvidence, commitmentsKnown) {
-    let reasons = [];
-    if (!validEvidence || obligations?.status !== "verified")
-      return Object.freeze({
-        status: "blocked-by-missing-native-authority",
-        actionId: void 0,
-        comparedActionIds: Object.freeze([]),
-        reasons: Object.freeze([
-          ...obligations?.reasons ?? [],
-          "current native prerequisite authority is unavailable"
-        ])
-      });
-    let current = new Set(
-      candidates.filter(
-        (candidate) => candidate.actionability === "current-native-offer" && candidate.pathApplicability === "eligible" && candidate.dependencyRelation === "declared-prerequisite" && candidate.explicitlyExcluded !== !0 && candidate.reservationConflict !== !0
-      ).map((candidate) => candidate.actionId)
-    ), alternatives = obligations.alternativeGroups.flatMap(
-      (group) => group.actionIds.filter((actionId) => current.has(actionId))
-    );
-    if (alternatives.length > 0)
-      return Object.freeze({
-        status: "ambiguous-alternatives",
-        actionId: void 0,
-        comparedActionIds: Object.freeze([...new Set(alternatives)].sort()),
-        reasons: Object.freeze([
-          "native prerequisite graph contains current OR alternatives without comparable terminal-time evidence"
-        ])
-      });
-    let mandatory = candidates.filter(
-      (candidate) => obligations.mandatoryActionIds.includes(candidate.actionId) && current.has(candidate.actionId)
-    );
-    if (mandatory.length === 0)
-      return Object.freeze({
-        status: "no-required-frontier",
-        actionId: void 0,
-        comparedActionIds: Object.freeze([]),
-        reasons: Object.freeze([
-          "no current verified mandatory action is available in the goal frontier"
-        ])
-      });
-    let withTime = mandatory.map((candidate) => ({
-      candidate,
-      time: candidate.frontierTime
-    }));
-    if (withTime.some(({ time }) => time?.estimatedTime === void 0))
-      return Object.freeze({
-        status: withTime.every(({ time }) => time?.status === "infeasible") ? "infeasible" : "blocked-by-missing-native-authority",
-        actionId: void 0,
-        comparedActionIds: Object.freeze(
-          mandatory.map(({ actionId }) => actionId).sort()
-        ),
-        reasons: Object.freeze([
-          ...withTime.flatMap(({ time }) => time?.reasons ?? []),
-          "one or more mandatory frontier actionability estimates are unavailable"
-        ])
-      });
-    let ranked = [...withTime].sort(
-      (left, right) => (left.time?.estimatedTime ?? Number.POSITIVE_INFINITY) - (right.time?.estimatedTime ?? Number.POSITIVE_INFINITY)
-    ), first = ranked[0], second = ranked[1];
-    return first === void 0 || first.time?.estimatedTime === void 0 ? Object.freeze({
-      status: "blocked-by-missing-native-authority",
-      actionId: void 0,
-      comparedActionIds: Object.freeze(
-        mandatory.map(({ actionId }) => actionId).sort()
-      ),
-      reasons: Object.freeze(["mandatory frontier estimates are unavailable"])
-    }) : second !== void 0 && second.time?.estimatedTime === first.time.estimatedTime ? Object.freeze({
-      status: "blocked-by-missing-native-authority",
-      actionId: void 0,
-      comparedActionIds: Object.freeze(
-        mandatory.map(({ actionId }) => actionId).sort()
-      ),
-      reasons: Object.freeze([
-        "mandatory actions have the same time to affordability, while downstream completion-time evidence is unknown"
-      ])
-    }) : (commitmentsKnown || reasons.push(
-      "selection is provisional because shared spending commitments are incomplete"
-    ), reasons.push(
-      "selection minimizes observed time to native affordability among verified mandatory prerequisites; terminal-time effects remain unknown"
-    ), Object.freeze({
-      status: "provisional-mandatory-prerequisite-choice",
-      actionId: first.candidate.actionId,
-      comparedActionIds: Object.freeze(
-        mandatory.map(({ actionId }) => actionId).sort()
-      ),
-      reasons: Object.freeze(reasons)
-    }));
-  }
-  function hasVerifiedNonManaAffordabilityForManaOffer(cost, nonManaAffordable) {
-    return (cost.Mana ?? 0) <= 0 || nonManaAffordable === !0;
-  }
-  function matchingResearchOffers(graph, input) {
-    let observed2 = graph.freshness.offerGenerations;
-    if (observed2 === void 0 || input.rootGeneration === void 0 || graph.freshness.cycle !== input.cycle || graph.freshness.progressionEpoch !== input.progressionEpoch || graph.freshness.rootGeneration !== input.rootGeneration || observed2.length !== input.offers.length)
-      return !1;
-    let byId = new Map(input.offers.map((offer) => [offer.actionId, offer]));
-    return byId.size !== input.offers.length ? !1 : observed2.every(([actionId, generation]) => {
-      let offer = byId.get(actionId);
-      return offer !== void 0 && offer.generation === generation;
-    });
-  }
-  function readRelevantResearchActions(graph) {
-    let actions = new Map(
-      graph.actions.map((action) => [action.actionId, action])
-    ), requirements = new Map(
-      graph.requirements.map((gate) => [gate.id, gate])
-    ), paths = /* @__PURE__ */ new Map(), visited = /* @__PURE__ */ new Set(), queue = [], target = actions.get(graph.targetActionId);
-    for (target !== void 0 && queue.push({
-      actionId: target.actionId,
-      // Eligibility of the terminal action does not change its declared dependency edges.
-      conditional: !1,
-      chain: [target.actionId]
-    }); queue.length > 0; ) {
-      let current = queue.shift();
-      if (current === void 0) break;
-      let stateKey = `${current.actionId}:${current.conditional ? "conditional" : "verified"}`;
-      if (visited.has(stateKey)) continue;
-      visited.add(stateKey);
-      let path = paths.get(current.actionId) ?? {};
-      current.conditional ? path.conditional ??= current.chain : path.verified ??= current.chain, paths.set(current.actionId, path);
-      let action = actions.get(current.actionId);
-      if (action !== void 0)
-        for (let requirementId of action.prerequisiteIds) {
-          let gate = requirements.get(requirementId), requirementIsConditional = gate?.status === "conditional" || gate?.status === "unavailable";
-          for (let candidateId of gate?.candidateActionIds ?? []) {
-            let candidate = actions.get(candidateId);
-            if (candidate?.status === "excluded") continue;
-            let conditional = requirementIsConditional || candidate?.status === "conditional" || candidate?.status === "unavailable";
-            queue.push({
-              actionId: candidateId,
-              conditional,
-              chain: [...current.chain, candidateId]
-            });
-          }
-        }
-    }
-    return new Map(
-      [...paths].map(([actionId, path]) => [
-        actionId,
-        Object.freeze({
-          verified: path.verified,
-          conditional: path.conditional
-        })
-      ])
-    );
-  }
-  function evaluateResearchGoalCandidates(input) {
-    let fresh = matchingResearchOffers(input.graph, input), objectiveMatches = input.graph.targetActionId === input.targetActionId, relevant = readRelevantResearchActions(input.graph), verifiedFrontier = new Set(input.graph.actionableFrontier), graphIncomplete = input.graph.dependencyEvidence !== "complete", validityEpoch = `${input.progressionEpoch}|root:${input.rootGeneration ?? "unknown"}|cycle:${input.cycle}`, candidates = input.offers.map((offer) => {
-      let paths = relevant.get(offer.actionId), chain = paths?.verified ?? paths?.conditional ?? [], gate = input.graph.actions.find(
-        (action) => action.actionId === offer.actionId
-      ), chainReasons = chain.flatMap(
-        (actionId) => input.graph.actions.find((action) => action.actionId === actionId)?.reasons ?? []
-      ), reasons = [], relevance, dependencyRelation = paths?.verified !== void 0 || paths?.conditional !== void 0 ? "declared-prerequisite" : graphIncomplete ? "unknown" : "none", pathApplicability = input.graph.actions.find(
-        (action) => action.actionId === input.targetActionId
-      )?.status === "excluded" || gate?.status === "excluded" ? "excluded" : paths?.conditional !== void 0 || gate?.status === "conditional" || gate?.status === "unavailable" ? "conditional" : "eligible";
-      return !fresh || !objectiveMatches || input.graph.targetStatus === "unavailable" ? (relevance = "unavailable", reasons.push(
-        objectiveMatches ? "prerequisite graph or offer evidence is unavailable or stale" : "prerequisite graph targets a different selected objective"
-      )) : input.goalSatisfied || input.graph.targetStatus === "satisfied" ? (relevance = "unrelated", reasons.push("selected terminal goal is already satisfied")) : paths?.verified !== void 0 ? (relevance = "verified-prerequisite", reasons.push(
-        "action lies on a statically declared prerequisite path; terminal applicability is separate"
-      ), verifiedFrontier.has(offer.actionId) || reasons.push("candidate is not independently confirmed as actionable"), reasons.push(...chainReasons), chain.length > 0 && reasons.push(`chain ${chain.join(" -> ")}`)) : paths?.conditional !== void 0 || chain.length > 0 || gate?.status === "conditional" || gate?.status === "unavailable" || gate?.status === "excluded" ? (relevance = "conditional-prerequisite", reasons.push(...chainReasons, ...gate?.reasons ?? []), chain.length > 0 && reasons.push(`conditional chain ${chain.join(" -> ")}`)) : graphIncomplete ? (relevance = "unavailable", reasons.push(
-        "graph incompleteness prevents ruling out a prerequisite path"
-      )) : offer.optionalInvestmentEffectKnown === !0 ? (relevance = "optional-investment", reasons.push(
-        "supported economic effect exists without a hard prerequisite edge"
-      )) : (relevance = "unrelated", reasons.push(
-        "no hard prerequisite relationship appears in the complete known graph"
-      )), offer.nativeAffordable || reasons.push("native affordability verdict is false"), offer.resourceAffordable === !1 && reasons.push("captured resources are insufficient for this price"), offer.resourceAffordable === void 0 && reasons.push("captured resource sufficiency is unavailable"), offer.hasCostConflict && reasons.push("cost is reserved by a higher-priority commitment"), offer.hasCostConflict === void 0 && reasons.push(
-        offer.reservationEvidence === "not-evaluated" ? "Research owner skipped reservation checks because native/resource affordability was denied" : "cost reservation evidence is unavailable"
-      ), offer.hasExplicitExclusion && reasons.push("explicit Research exclusion applies"), offer.hasExplicitExclusion === void 0 && reasons.push(
-        offer.explicitExclusionEvidence === "not-evaluated" ? "Research owner skipped exclusion checks because native/resource affordability was denied" : "explicit Research exclusion evidence is unavailable"
-      ), Object.freeze({
-        goalId: input.goalId,
-        targetActionId: input.targetActionId,
-        actionId: offer.actionId,
-        grantTechnology: offer.grantTechnology,
-        grantLevel: offer.grantLevel,
-        index: offer.index,
-        relevance,
-        dependencyRelation,
-        pathApplicability,
-        actionability: fresh ? "current-native-offer" : "unknown",
-        chainActionIds: Object.freeze(chain),
-        cost: offer.cost,
-        nativeAffordable: offer.nativeAffordable,
-        affordability: offer.nativeAffordable ? "native-affordable" : "native-denied",
-        resourceAffordability: offer.resourceAffordable === void 0 ? "unknown" : offer.resourceAffordable ? "affordable" : "insufficient",
-        reservationConflict: offer.hasCostConflict,
-        explicitlyExcluded: offer.hasExplicitExclusion,
-        reservationEvidence: offer.reservationEvidence ?? (offer.hasCostConflict === void 0 ? "not-observed" : offer.hasCostConflict ? "conflict" : "none"),
-        explicitExclusionEvidence: offer.explicitExclusionEvidence ?? (offer.hasExplicitExclusion === void 0 ? "not-observed" : offer.hasExplicitExclusion ? "excluded" : "none"),
-        reservationReason: offer.reservationReason,
-        exclusionReason: offer.exclusionReason,
-        evidenceFresh: fresh && objectiveMatches,
-        downstreamCosts: "unknown",
-        frontierTime: verifiedFrontier.has(offer.actionId) && dependencyRelation === "declared-prerequisite" ? readFrontierTime(
-          offer.actionId,
-          offer.cost,
-          input.resourceStocks,
-          validityEpoch,
-          input.commitmentsKnown ?? !1
-        ) : void 0,
-        reasons: Object.freeze([...new Set(reasons)])
-      });
-    }), frontierSelection = chooseResearchFrontier(
-      input.obligations,
-      candidates,
-      fresh && objectiveMatches && input.graph.targetStatus !== "unavailable",
-      input.commitmentsKnown ?? !1
-    );
-    return Object.freeze({
-      goalId: input.goalId,
-      targetActionId: input.targetActionId,
-      baselineSelectedActionId: input.baselineSelectedActionId,
-      baselineSelectedDisposition: input.baselineSelectedDisposition,
-      preferredActionId: frontierSelection.actionId,
-      preference: frontierSelection.status,
-      frontierSelection,
-      candidates: Object.freeze(candidates)
     });
   }
 
@@ -19132,6 +18897,295 @@
     });
   }
 
+  // src/domain/progression/research-goal-candidates.ts
+  var RESEARCH_FRONTIER_POOL = "anywhere";
+  function readFrontierTime(actionId, cost, stocks, validityEpoch, commitmentsKnown) {
+    if (stocks === void 0) return;
+    let requirements = Object.entries(cost).map(([resourceId, amount]) => ({
+      resourceId,
+      poolId: RESEARCH_FRONTIER_POOL,
+      amount
+    }));
+    return evaluateGoalFeasibility(
+      actionId,
+      requirements,
+      stocks,
+      [],
+      validityEpoch,
+      commitmentsKnown
+    );
+  }
+  function chooseResearchFrontier(obligations, graph, candidates, validEvidence, commitmentsKnown) {
+    let reasons = [];
+    if (!validEvidence || obligations?.status !== "verified")
+      return Object.freeze({
+        status: "blocked-by-missing-native-authority",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([]),
+        reasons: Object.freeze([
+          ...obligations?.reasons ?? [],
+          "current native prerequisite authority is unavailable"
+        ])
+      });
+    let graphObligations = classifyMandatoryResearchPrerequisiteObligations(
+      graph,
+      !0
+    ), normalizeObligations = (plan) => ({
+      mandatoryActionIds: [...plan.mandatoryActionIds].sort(),
+      alternativeGroups: plan.alternativeGroups.map((group) => ({
+        requirementId: group.requirementId,
+        actionIds: [...group.actionIds].sort()
+      })).sort(
+        (left, right) => left.requirementId.localeCompare(right.requirementId)
+      )
+    });
+    if (graphObligations.status !== "verified" || JSON.stringify(normalizeObligations(graphObligations)) !== JSON.stringify(normalizeObligations(obligations))) {
+      let graphMandatory = new Set(graphObligations.mandatoryActionIds), suppliedMandatory = new Set(obligations.mandatoryActionIds), unsupportedMandatory = obligations.mandatoryActionIds.find(
+        (actionId) => !graphMandatory.has(actionId)
+      ), omittedMandatory = graphObligations.mandatoryActionIds.find(
+        (actionId) => !suppliedMandatory.has(actionId)
+      );
+      return Object.freeze({
+        status: "blocked-by-missing-native-authority",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([]),
+        reasons: Object.freeze([
+          graphObligations.status !== "verified" ? `current prerequisite graph cannot independently verify its obligations: ${graphObligations.reasons.join("; ")}` : unsupportedMandatory !== void 0 ? `supplied obligation ${unsupportedMandatory} is not mandatory in the current prerequisite graph` : omittedMandatory !== void 0 ? `graph mandatory action ${omittedMandatory} is missing from the supplied obligations` : "mandatory and alternative obligation evidence contradicts the current prerequisite graph"
+        ])
+      });
+    }
+    let graphFrontier = new Set(graph.actionableFrontier), verifiedActionableFrontier = new Set(
+      candidates.filter(
+        (candidate) => graphFrontier.has(candidate.actionId) && candidate.actionability === "current-native-offer" && candidate.pathApplicability === "eligible" && candidate.dependencyRelation === "declared-prerequisite" && candidate.explicitlyExcluded !== !0
+      ).map((candidate) => candidate.actionId)
+    ), obligationFrontier = /* @__PURE__ */ new Set([
+      ...obligations.mandatoryActionIds,
+      ...obligations.alternativeGroups.flatMap((group) => group.actionIds)
+    ]), inconsistentMandatory = obligations.mandatoryActionIds.find(
+      (actionId) => !verifiedActionableFrontier.has(actionId)
+    ), uncoveredGraphAction = [...verifiedActionableFrontier].find(
+      (actionId) => !obligationFrontier.has(actionId)
+    );
+    if (inconsistentMandatory !== void 0 || uncoveredGraphAction !== void 0) {
+      let excludedMandatory = inconsistentMandatory === void 0 ? void 0 : candidates.find(
+        (candidate) => candidate.actionId === inconsistentMandatory
+      )?.explicitlyExcluded === !0, reason = inconsistentMandatory !== void 0 ? excludedMandatory ? `obligation ${inconsistentMandatory} is excluded by current native applicability evidence` : `obligation ${inconsistentMandatory} is not a verified actionable frontier in the current prerequisite graph` : `graph frontier ${uncoveredGraphAction} is absent from the current mandatory and alternative obligations`;
+      return Object.freeze({
+        status: "blocked-by-missing-native-authority",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([]),
+        reasons: Object.freeze([reason])
+      });
+    }
+    let current = new Set(
+      candidates.filter(
+        (candidate) => candidate.actionability === "current-native-offer" && candidate.pathApplicability === "eligible" && candidate.dependencyRelation === "declared-prerequisite" && candidate.explicitlyExcluded !== !0 && candidate.reservationConflict !== !0
+      ).map((candidate) => candidate.actionId)
+    ), alternatives = obligations.alternativeGroups.flatMap(
+      (group) => group.actionIds.filter((actionId) => current.has(actionId))
+    );
+    if (alternatives.length > 0)
+      return Object.freeze({
+        status: "ambiguous-alternatives",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([...new Set(alternatives)].sort()),
+        reasons: Object.freeze([
+          "native prerequisite graph contains current OR alternatives without comparable terminal-time evidence"
+        ])
+      });
+    let mandatory = candidates.filter(
+      (candidate) => obligations.mandatoryActionIds.includes(candidate.actionId) && current.has(candidate.actionId)
+    );
+    if (mandatory.length === 0)
+      return Object.freeze({
+        status: "no-required-frontier",
+        actionId: void 0,
+        comparedActionIds: Object.freeze([]),
+        reasons: Object.freeze([
+          "no current verified mandatory action is available in the goal frontier"
+        ])
+      });
+    let withTime = mandatory.map((candidate) => ({
+      candidate,
+      time: candidate.frontierTime
+    }));
+    if (withTime.some(({ time }) => time?.estimatedTime === void 0))
+      return Object.freeze({
+        status: withTime.every(({ time }) => time?.status === "infeasible") ? "infeasible" : "blocked-by-missing-native-authority",
+        actionId: void 0,
+        comparedActionIds: Object.freeze(
+          mandatory.map(({ actionId }) => actionId).sort()
+        ),
+        reasons: Object.freeze([
+          ...withTime.flatMap(({ time }) => time?.reasons ?? []),
+          "one or more mandatory frontier actionability estimates are unavailable"
+        ])
+      });
+    let ranked = [...withTime].sort(
+      (left, right) => (left.time?.estimatedTime ?? Number.POSITIVE_INFINITY) - (right.time?.estimatedTime ?? Number.POSITIVE_INFINITY)
+    ), first = ranked[0], second = ranked[1];
+    return first === void 0 || first.time?.estimatedTime === void 0 ? Object.freeze({
+      status: "blocked-by-missing-native-authority",
+      actionId: void 0,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort()
+      ),
+      reasons: Object.freeze(["mandatory frontier estimates are unavailable"])
+    }) : second !== void 0 && second.time?.estimatedTime === first.time.estimatedTime ? Object.freeze({
+      status: "blocked-by-missing-native-authority",
+      actionId: void 0,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort()
+      ),
+      reasons: Object.freeze([
+        "mandatory actions have the same time to affordability, while downstream completion-time evidence is unknown"
+      ])
+    }) : (commitmentsKnown || reasons.push(
+      "selection is provisional because shared spending commitments are incomplete"
+    ), reasons.push(
+      "selection minimizes observed time to native affordability among verified mandatory prerequisites; terminal-time effects remain unknown"
+    ), Object.freeze({
+      status: "provisional-mandatory-prerequisite-choice",
+      actionId: first.candidate.actionId,
+      comparedActionIds: Object.freeze(
+        mandatory.map(({ actionId }) => actionId).sort()
+      ),
+      reasons: Object.freeze(reasons)
+    }));
+  }
+  function hasVerifiedNonManaAffordabilityForManaOffer(cost, nonManaAffordable) {
+    return (cost.Mana ?? 0) <= 0 || nonManaAffordable === !0;
+  }
+  function matchingResearchOffers(graph, input) {
+    let observed2 = graph.freshness.offerGenerations;
+    if (observed2 === void 0 || input.rootGeneration === void 0 || graph.freshness.cycle !== input.cycle || graph.freshness.progressionEpoch !== input.progressionEpoch || graph.freshness.rootGeneration !== input.rootGeneration || observed2.length !== input.offers.length)
+      return !1;
+    let byId = new Map(input.offers.map((offer) => [offer.actionId, offer]));
+    return byId.size !== input.offers.length ? !1 : observed2.every(([actionId, generation]) => {
+      let offer = byId.get(actionId);
+      return offer !== void 0 && offer.generation === generation;
+    });
+  }
+  function readRelevantResearchActions(graph) {
+    let actions = new Map(
+      graph.actions.map((action) => [action.actionId, action])
+    ), requirements = new Map(
+      graph.requirements.map((gate) => [gate.id, gate])
+    ), paths = /* @__PURE__ */ new Map(), visited = /* @__PURE__ */ new Set(), queue = [], target = actions.get(graph.targetActionId);
+    for (target !== void 0 && queue.push({
+      actionId: target.actionId,
+      // Eligibility of the terminal action does not change its declared dependency edges.
+      conditional: !1,
+      chain: [target.actionId]
+    }); queue.length > 0; ) {
+      let current = queue.shift();
+      if (current === void 0) break;
+      let stateKey = `${current.actionId}:${current.conditional ? "conditional" : "verified"}`;
+      if (visited.has(stateKey)) continue;
+      visited.add(stateKey);
+      let path = paths.get(current.actionId) ?? {};
+      current.conditional ? path.conditional ??= current.chain : path.verified ??= current.chain, paths.set(current.actionId, path);
+      let action = actions.get(current.actionId);
+      if (action !== void 0)
+        for (let requirementId of action.prerequisiteIds) {
+          let gate = requirements.get(requirementId), requirementIsConditional = gate?.status === "conditional" || gate?.status === "unavailable";
+          for (let candidateId of gate?.candidateActionIds ?? []) {
+            let candidate = actions.get(candidateId);
+            if (candidate?.status === "excluded") continue;
+            let conditional = requirementIsConditional || candidate?.status === "conditional" || candidate?.status === "unavailable";
+            queue.push({
+              actionId: candidateId,
+              conditional,
+              chain: [...current.chain, candidateId]
+            });
+          }
+        }
+    }
+    return new Map(
+      [...paths].map(([actionId, path]) => [
+        actionId,
+        Object.freeze({
+          verified: path.verified,
+          conditional: path.conditional
+        })
+      ])
+    );
+  }
+  function evaluateResearchGoalCandidates(input) {
+    let fresh = matchingResearchOffers(input.graph, input), objectiveMatches = input.graph.targetActionId === input.targetActionId, relevant = readRelevantResearchActions(input.graph), verifiedFrontier = new Set(input.graph.actionableFrontier), graphIncomplete = input.graph.dependencyEvidence !== "complete", validityEpoch = `${input.progressionEpoch}|root:${input.rootGeneration ?? "unknown"}|cycle:${input.cycle}`, candidates = input.offers.map((offer) => {
+      let paths = relevant.get(offer.actionId), chain = paths?.verified ?? paths?.conditional ?? [], gate = input.graph.actions.find(
+        (action) => action.actionId === offer.actionId
+      ), chainReasons = chain.flatMap(
+        (actionId) => input.graph.actions.find((action) => action.actionId === actionId)?.reasons ?? []
+      ), reasons = [], relevance, dependencyRelation = paths?.verified !== void 0 || paths?.conditional !== void 0 ? "declared-prerequisite" : graphIncomplete ? "unknown" : "none", pathApplicability = input.graph.actions.find(
+        (action) => action.actionId === input.targetActionId
+      )?.status === "excluded" || gate?.status === "excluded" ? "excluded" : paths?.conditional !== void 0 || gate?.status === "conditional" || gate?.status === "unavailable" ? "conditional" : "eligible";
+      return !fresh || !objectiveMatches || input.graph.targetStatus === "unavailable" ? (relevance = "unavailable", reasons.push(
+        objectiveMatches ? "prerequisite graph or offer evidence is unavailable or stale" : "prerequisite graph targets a different selected objective"
+      )) : input.goalSatisfied || input.graph.targetStatus === "satisfied" ? (relevance = "unrelated", reasons.push("selected terminal goal is already satisfied")) : paths?.verified !== void 0 ? (relevance = "verified-prerequisite", reasons.push(
+        "action lies on a statically declared prerequisite path; terminal applicability is separate"
+      ), verifiedFrontier.has(offer.actionId) || reasons.push("candidate is not independently confirmed as actionable"), reasons.push(...chainReasons), chain.length > 0 && reasons.push(`chain ${chain.join(" -> ")}`)) : paths?.conditional !== void 0 || chain.length > 0 || gate?.status === "conditional" || gate?.status === "unavailable" || gate?.status === "excluded" ? (relevance = "conditional-prerequisite", reasons.push(...chainReasons, ...gate?.reasons ?? []), chain.length > 0 && reasons.push(`conditional chain ${chain.join(" -> ")}`)) : graphIncomplete ? (relevance = "unavailable", reasons.push(
+        "graph incompleteness prevents ruling out a prerequisite path"
+      )) : offer.optionalInvestmentEffectKnown === !0 ? (relevance = "optional-investment", reasons.push(
+        "supported economic effect exists without a hard prerequisite edge"
+      )) : (relevance = "unrelated", reasons.push(
+        "no hard prerequisite relationship appears in the complete known graph"
+      )), offer.nativeAffordable || reasons.push("native affordability verdict is false"), offer.resourceAffordable === !1 && reasons.push("captured resources are insufficient for this price"), offer.resourceAffordable === void 0 && reasons.push("captured resource sufficiency is unavailable"), offer.hasCostConflict && reasons.push("cost is reserved by a higher-priority commitment"), offer.hasCostConflict === void 0 && reasons.push(
+        offer.reservationEvidence === "not-evaluated" ? "Research owner skipped reservation checks because native/resource affordability was denied" : "cost reservation evidence is unavailable"
+      ), offer.hasExplicitExclusion && reasons.push("explicit Research exclusion applies"), offer.hasExplicitExclusion === void 0 && reasons.push(
+        offer.explicitExclusionEvidence === "not-evaluated" ? "Research owner skipped exclusion checks because native/resource affordability was denied" : "explicit Research exclusion evidence is unavailable"
+      ), Object.freeze({
+        goalId: input.goalId,
+        targetActionId: input.targetActionId,
+        actionId: offer.actionId,
+        grantTechnology: offer.grantTechnology,
+        grantLevel: offer.grantLevel,
+        index: offer.index,
+        relevance,
+        dependencyRelation,
+        pathApplicability,
+        actionability: fresh ? "current-native-offer" : "unknown",
+        chainActionIds: Object.freeze(chain),
+        cost: offer.cost,
+        nativeAffordable: offer.nativeAffordable,
+        affordability: offer.nativeAffordable ? "native-affordable" : "native-denied",
+        resourceAffordability: offer.resourceAffordable === void 0 ? "unknown" : offer.resourceAffordable ? "affordable" : "insufficient",
+        reservationConflict: offer.hasCostConflict,
+        explicitlyExcluded: offer.hasExplicitExclusion,
+        reservationEvidence: offer.reservationEvidence ?? (offer.hasCostConflict === void 0 ? "not-observed" : offer.hasCostConflict ? "conflict" : "none"),
+        explicitExclusionEvidence: offer.explicitExclusionEvidence ?? (offer.hasExplicitExclusion === void 0 ? "not-observed" : offer.hasExplicitExclusion ? "excluded" : "none"),
+        reservationReason: offer.reservationReason,
+        exclusionReason: offer.exclusionReason,
+        evidenceFresh: fresh && objectiveMatches,
+        downstreamCosts: "unknown",
+        frontierTime: verifiedFrontier.has(offer.actionId) && dependencyRelation === "declared-prerequisite" ? readFrontierTime(
+          offer.actionId,
+          offer.cost,
+          input.resourceStocks,
+          validityEpoch,
+          input.commitmentsKnown ?? !1
+        ) : void 0,
+        reasons: Object.freeze([...new Set(reasons)])
+      });
+    }), frontierSelection = chooseResearchFrontier(
+      input.obligations,
+      input.graph,
+      candidates,
+      fresh && objectiveMatches && input.graph.targetStatus !== "unavailable",
+      input.commitmentsKnown ?? !1
+    );
+    return Object.freeze({
+      goalId: input.goalId,
+      targetActionId: input.targetActionId,
+      baselineSelectedActionId: input.baselineSelectedActionId,
+      baselineSelectedDisposition: input.baselineSelectedDisposition,
+      preferredActionId: frontierSelection.actionId,
+      preference: frontierSelection.status,
+      frontierSelection,
+      candidates: Object.freeze(candidates)
+    });
+  }
+
   // src/domain/progression/research-spending-decision.ts
   function resourceNeeds(costs) {
     let needs = [];
@@ -19280,6 +19334,80 @@
       kind: "declared",
       requirements: observation.requirements
     });
+  }
+  function createEffectiveCapturedTechPrerequisiteSnapshot(definitions, context) {
+    if (definitions === void 0)
+      return Object.freeze({ definitions: void 0, identity: "unavailable" });
+    let effective = definitions.map((definition) => {
+      let computed = readFreshCapturedComputedTechRequirements(
+        definition,
+        context
+      );
+      return {
+        definition,
+        prerequisites: computed ?? definition.prerequisites,
+        source: computed === void 0 ? "static" : "computed"
+      };
+    }), identity = JSON.stringify(
+      effective.map(({ definition, prerequisites, source }) => ({
+        actionId: definition.actionId,
+        registryKey: definition.registryKey,
+        grantTechnology: definition.grantTechnology,
+        grantLevel: definition.grantLevel,
+        prerequisites: prerequisiteIdentity(prerequisites),
+        source,
+        computed: (definition.computedRequirements ?? []).map((observation) => ({
+          actionId: observation.actionId,
+          registryKey: observation.registryKey,
+          actionIdentity: observation.actionIdentity,
+          reqsIdentity: observation.reqsIdentity,
+          source: observation.source,
+          effectiveEra: observation.effectiveEra,
+          arguments: observation.arguments,
+          rootGeneration: observation.rootGeneration,
+          progressionEpoch: observation.progressionEpoch,
+          requirements: observation.requirements?.map((requirement) => ({
+            technologyId: requirement.technologyId,
+            requiredLevel: requirement.requiredLevel,
+            applicabilityBoundary: requirement.applicabilityBoundary
+          })) ?? null,
+          status: observation.status,
+          complete: observation.complete,
+          validation: observation.validation
+        })),
+        eligibility: {
+          hasNativeCondition: definition.eligibility.hasNativeCondition,
+          routeRestrictions: definition.eligibility.routeRestrictions,
+          restrictions: definition.eligibility.restrictions
+        }
+      }))
+    );
+    return Object.freeze({
+      definitions: Object.freeze(
+        effective.map(
+          ({ definition, prerequisites }) => Object.freeze({
+            actionId: definition.actionId,
+            grantTechnology: definition.grantTechnology,
+            grantLevel: definition.grantLevel,
+            prerequisites,
+            hasNativeCondition: definition.eligibility.hasNativeCondition,
+            routeRestrictions: definition.eligibility.routeRestrictions,
+            restrictions: definition.eligibility.restrictions
+          })
+        )
+      ),
+      identity
+    });
+  }
+  function prerequisiteIdentity(prerequisites) {
+    return prerequisites.kind === "declared" ? {
+      kind: prerequisites.kind,
+      requirements: prerequisites.requirements.map((requirement) => ({
+        technologyId: requirement.technologyId,
+        requiredLevel: requirement.requiredLevel,
+        applicabilityBoundary: requirement.applicabilityBoundary
+      }))
+    } : { kind: prerequisites.kind, reason: prerequisites.reason };
   }
   function capturedTruth(value) {
     if (value == null) return !1;
@@ -59861,7 +59989,7 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       onActivity
-    }), capturedPrestigeGoal = "Standard", capturedResetCommittedThisCycle = !1, lastMadGoalDiagnostic = "", lastResearchDefinitions, lastResearchGraphKey = "", lastResearchGraph, researchRegistryRevision = 0, readResearchGrantLevels = createCapturedTechPrerequisiteLevelReader(), capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
+    }), capturedPrestigeGoal = "Standard", capturedResetCommittedThisCycle = !1, lastMadGoalDiagnostic = "", lastResearchGraphKey = "", lastResearchGraph, researchRootIdentities = /* @__PURE__ */ new WeakMap(), nextResearchRootIdentity = 1, readResearchGrantLevels = createCapturedTechPrerequisiteLevelReader(), capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
@@ -61699,38 +61827,47 @@ Only continue if you trust the source. Injected code:
           prestige.run();
         }), settings.prestigeType === "mad" && diagnostics?.readPerformanceEnabled() === !0 && runCapturedDiagnosticSafely(
           () => {
-            let root = pageCapture2.rootState.readRoot(), progressionEpoch = progression.readProgressionEpoch(), researchRootGeneration = progression.readRootGeneration(), offers = progression.readOfferedTechs(), researchDefinitions = progression.readResearchActionDefinitions();
-            lastResearchDefinitions !== researchDefinitions && (researchRegistryRevision += 1);
-            let researchGrantLevels = readResearchGrantLevels(
+            let root = pageCapture2.rootState.readRoot(), progressionEpoch = progression.readProgressionEpoch(), researchRootGeneration = progression.readRootGeneration(), offers = progression.readOfferedTechs(), researchDefinitions = progression.readResearchActionDefinitions(), researchGrantLevels = readResearchGrantLevels(
               root,
               researchDefinitions
             ), researchApplicability = readCapturedTechApplicability(
               root,
               researchDefinitions
-            ), researchOfferIdentity = offers?.map((offer) => offer.elementId).sort() ?? void 0, researchOfferGenerations = offers?.map((offer) => [
+            ), prerequisiteSnapshot = activeRuntimeMeasure.measure(
+              "goal.mad.prerequisite-preparation",
+              () => createEffectiveCapturedTechPrerequisiteSnapshot(
+                researchDefinitions,
+                {
+                  rootGeneration: researchRootGeneration,
+                  progressionEpoch
+                }
+              )
+            );
+            diagnostics?.recordCount(
+              "goal.mad.effective-prerequisite-definitions",
+              prerequisiteSnapshot.definitions?.length ?? 0
+            );
+            let researchOfferGenerations = offers?.map((offer) => [
               offer.elementId,
               offer.generation
-            ]).sort(([first], [second]) => first.localeCompare(second)) ?? void 0, nextResearchGraphKey = JSON.stringify({
-              registryRevision: researchRegistryRevision,
+            ]).sort(([first], [second]) => first.localeCompare(second)) ?? void 0, rootIdentity;
+            root !== null && typeof root == "object" && (rootIdentity = researchRootIdentities.get(root), rootIdentity === void 0 && (rootIdentity = nextResearchRootIdentity++, researchRootIdentities.set(root, rootIdentity)));
+            let currentMadControl = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL), nextResearchGraphKey = JSON.stringify({
+              targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+              rootIdentity,
               progressionEpoch,
               rootGeneration: researchRootGeneration,
+              effectivePrerequisites: prerequisiteSnapshot.identity,
               levels: researchGrantLevels === void 0 ? void 0 : [...researchGrantLevels],
               applicability: researchApplicability === void 0 ? void 0 : [...researchApplicability],
-              offers: researchOfferIdentity
-            }), researchPrerequisiteGraph;
-            lastResearchGraph === void 0 || lastResearchDefinitions !== researchDefinitions || lastResearchGraphKey !== nextResearchGraphKey ? (researchPrerequisiteGraph = activeRuntimeMeasure.measure(
+              offerGenerations: researchOfferGenerations,
+              madControlGeneration: currentMadControl?.generation
+            }), researchPrerequisiteGraph, cachedResearchGraph = lastResearchGraph;
+            cachedResearchGraph === void 0 || lastResearchGraphKey !== nextResearchGraphKey ? (diagnostics?.recordCount("goal.mad.graph-cache.rebuilds", 1), researchPrerequisiteGraph = activeRuntimeMeasure.measure(
               "goal.mad.research-prerequisites",
               () => planNativeResearchPrerequisites({
                 targetActionId: CAPTURED_MAD_RESEARCH_TECH,
-                definitions: researchDefinitions?.map((definition) => ({
-                  actionId: definition.actionId,
-                  grantTechnology: definition.grantTechnology,
-                  grantLevel: definition.grantLevel,
-                  prerequisites: definition.prerequisites,
-                  hasNativeCondition: definition.eligibility.hasNativeCondition,
-                  routeRestrictions: definition.eligibility.routeRestrictions,
-                  restrictions: definition.eligibility.restrictions
-                })),
+                definitions: prerequisiteSnapshot.definitions,
                 grantLevels: researchGrantLevels,
                 ...researchApplicability === void 0 ? {} : { applicabilityByActionId: researchApplicability },
                 offeredActionIds: offers === void 0 ? void 0 : new Set(offers.map((offer) => offer.elementId)),
@@ -61746,24 +61883,30 @@ Only continue if you trust the source. Injected code:
                 maxDepth: 16,
                 maxActions: 256
               })
-            ), lastResearchDefinitions = researchDefinitions, lastResearchGraphKey = nextResearchGraphKey, lastResearchGraph = researchPrerequisiteGraph) : researchPrerequisiteGraph = Object.freeze({
-              ...lastResearchGraph,
-              freshness: Object.freeze({
-                ...lastResearchGraph.freshness,
-                cycle: automationCycle,
-                offerGenerations: researchOfferGenerations === void 0 ? void 0 : Object.freeze(
-                  researchOfferGenerations.map(
-                    ([actionId, generation]) => Object.freeze([actionId, generation])
+            ), lastResearchGraphKey = nextResearchGraphKey, lastResearchGraph = researchPrerequisiteGraph) : (diagnostics?.recordCount("goal.mad.graph-cache.hits", 1), researchPrerequisiteGraph = activeRuntimeMeasure.measure(
+              "goal.mad.research-graph-cache-reuse",
+              () => Object.freeze({
+                ...cachedResearchGraph,
+                freshness: Object.freeze({
+                  ...cachedResearchGraph.freshness,
+                  cycle: automationCycle,
+                  offerGenerations: researchOfferGenerations === void 0 ? void 0 : Object.freeze(
+                    researchOfferGenerations.map(
+                      ([actionId, generation]) => Object.freeze([
+                        actionId,
+                        generation
+                      ])
+                    )
                   )
-                )
+                })
               })
-            });
+            ));
             let researchRequirementById = new Map(
               researchPrerequisiteGraph.requirements.map((gate) => [
                 gate.id,
                 gate
               ])
-            ), researchTargetDefinition = researchDefinitions?.find(
+            ), researchTargetDefinition = prerequisiteSnapshot.definitions?.find(
               (definition) => definition.actionId === researchPrerequisiteGraph.targetActionId
             ), researchDirectGates = (researchTargetDefinition?.prerequisites.kind === "declared" ? researchTargetDefinition.prerequisites.requirements : []).flatMap(
               (prerequisite) => {
@@ -61800,33 +61943,33 @@ Only continue if you trust the source. Injected code:
               progressionEpoch,
               madControl !== void 0 && madControl.methods.includes("arm") && madControl.methods.includes("launch")
             ), researchCandidateEvaluation = activeRuntimeMeasure.measure(
-              "goal.mad.research-candidates",
+              "goal.mad.research-candidate-evaluation",
               () => {
-                let researchOffers = offers ?? [], obligationDefinitions = researchDefinitions?.map(
-                  (definition) => ({
-                    actionId: definition.actionId,
-                    grantTechnology: definition.grantTechnology,
-                    grantLevel: definition.grantLevel,
-                    prerequisites: readFreshCapturedComputedTechRequirements(definition, {
-                      rootGeneration: researchRootGeneration,
-                      progressionEpoch
-                    }) ?? definition.prerequisites,
-                    hasNativeCondition: definition.eligibility.hasNativeCondition,
-                    routeRestrictions: definition.eligibility.routeRestrictions,
-                    restrictions: definition.eligibility.restrictions
-                  })
-                ), obligationTargetIsEligible = plan.selectedGoal.id === "prestige:mad" && researchApplicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status === "eligible" && readCapturedMadTargetCondition(root).status === "eligible", obligations = classifyMandatoryNativeResearchObligations(
-                  researchPrerequisiteGraph,
-                  {
-                    targetCurrentlyEligible: obligationTargetIsEligible,
-                    definitions: obligationDefinitions,
-                    grantLevels: researchGrantLevels,
-                    applicabilityByActionId: researchApplicability,
-                    offeredActionIds: new Set(
-                      researchOffers.map((offer) => offer.elementId)
-                    )
-                  }
-                ), currentFrontierIds = new Set(
+                let researchOffers = offers ?? [];
+                diagnostics?.recordCount("goal.mad.candidate-evaluations", 1), diagnostics?.recordCount(
+                  "goal.mad.candidate-offers",
+                  researchOffers.length
+                );
+                let obligationTargetIsEligible = plan.selectedGoal.id === "prestige:mad" && researchApplicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status === "eligible" && readCapturedMadTargetCondition(root).status === "eligible", obligations = activeRuntimeMeasure.measure(
+                  "goal.mad.obligation-classification",
+                  () => classifyMandatoryNativeResearchObligations(
+                    researchPrerequisiteGraph,
+                    {
+                      targetCurrentlyEligible: obligationTargetIsEligible,
+                      definitions: prerequisiteSnapshot.definitions,
+                      grantLevels: researchGrantLevels,
+                      applicabilityByActionId: researchApplicability,
+                      offeredActionIds: new Set(
+                        researchOffers.map((offer) => offer.elementId)
+                      )
+                    }
+                  )
+                );
+                diagnostics?.recordCount(
+                  "goal.mad.obligation-classifications",
+                  1
+                );
+                let currentFrontierIds = new Set(
                   researchPrerequisiteGraph.actionableFrontier
                 ), frontierResourceIds = [
                   ...new Set(
@@ -61834,9 +61977,17 @@ Only continue if you trust the source. Injected code:
                       (offer) => currentFrontierIds.has(offer.elementId)
                     ).flatMap((offer) => Object.keys(offer.cost))
                   )
-                ], frontierResources = createCapturedResourceSource(
-                  pageCapture2.rootState
-                ).readResources(frontierResourceIds), validityEpoch = `${progressionEpoch}|root:${researchRootGeneration ?? "unknown"}|cycle:${automationCycle}`, resourceStocks = frontierResourceIds.flatMap((resourceId) => {
+                ], frontierResources = activeRuntimeMeasure.measure(
+                  "goal.mad.frontier-resource-acquisition",
+                  () => createCapturedResourceSource(
+                    pageCapture2.rootState
+                  ).readResources(frontierResourceIds)
+                );
+                diagnostics?.recordCount(
+                  "goal.mad.frontier-resource-reads",
+                  frontierResourceIds.length
+                );
+                let validityEpoch = `${progressionEpoch}|root:${researchRootGeneration ?? "unknown"}|cycle:${automationCycle}`, resourceStocks = frontierResourceIds.flatMap((resourceId) => {
                   let resource = frontierResources?.resources.get(resourceId);
                   return resource?.present ? [
                     {
@@ -61850,31 +62001,34 @@ Only continue if you trust the source. Injected code:
                     }
                   ] : [];
                 });
-                return evaluateResearchGoalCandidates({
-                  goalId: plan.selectedGoal.id,
-                  targetActionId: CAPTURED_MAD_RESEARCH_TECH,
-                  goalSatisfied: researchPrerequisiteGraph.targetStatus === "satisfied",
-                  graph: researchPrerequisiteGraph,
-                  cycle: automationCycle,
-                  progressionEpoch,
-                  rootGeneration: researchRootGeneration,
-                  obligations,
-                  resourceStocks,
-                  commitmentsKnown: !1,
-                  offers: researchOffers.map((offer, index) => ({
-                    actionId: offer.elementId,
-                    grantTechnology: offer.grantTechnology,
-                    grantLevel: offer.grantLevel,
-                    index,
-                    generation: offer.generation,
-                    cost: offer.cost,
-                    nativeAffordable: offer.nativeAffordable,
-                    resourceAffordable: void 0,
-                    hasCostConflict: void 0,
-                    hasExplicitExclusion: void 0
-                  })),
-                  baselineSelectedActionId: void 0
-                });
+                return activeRuntimeMeasure.measure(
+                  "goal.mad.candidate-feasibility-ranking",
+                  () => evaluateResearchGoalCandidates({
+                    goalId: plan.selectedGoal.id,
+                    targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+                    goalSatisfied: researchPrerequisiteGraph.targetStatus === "satisfied",
+                    graph: researchPrerequisiteGraph,
+                    cycle: automationCycle,
+                    progressionEpoch,
+                    rootGeneration: researchRootGeneration,
+                    obligations,
+                    resourceStocks,
+                    commitmentsKnown: !1,
+                    offers: researchOffers.map((offer, index) => ({
+                      actionId: offer.elementId,
+                      grantTechnology: offer.grantTechnology,
+                      grantLevel: offer.grantLevel,
+                      index,
+                      generation: offer.generation,
+                      cost: offer.cost,
+                      nativeAffordable: offer.nativeAffordable,
+                      resourceAffordable: void 0,
+                      hasCostConflict: void 0,
+                      hasExplicitExclusion: void 0
+                    })),
+                    baselineSelectedActionId: void 0
+                  })
+                );
               }
             ), currentOffers = progression.readOfferedTechs(), currentTechMad = currentOffers?.find(
               (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH

@@ -67,7 +67,10 @@ const graphByRequirement = (graph, id) =>
     "conditional",
     "queue precognition remains unresolved through the retained intermediate ancestry",
   );
-  assert.equal(graph.provenance, "retained-native-static-research-registry");
+  assert.equal(
+    graph.provenance,
+    "effective-native-research-definition-snapshot",
+  );
   assert.deepEqual(graph.actionableFrontier, ["tech-ore"]);
   assert.equal(
     graphByRequirement(graph, "research:power:2").status,

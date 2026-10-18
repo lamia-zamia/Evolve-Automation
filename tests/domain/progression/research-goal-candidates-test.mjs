@@ -5,6 +5,7 @@ import {
   hasVerifiedNonManaAffordabilityForManaOffer,
 } from "../../../src/domain/progression/research-goal-candidates.ts";
 import { planNativeResearchPrerequisites } from "../../../src/domain/progression/research-prerequisite-planning.ts";
+import { classifyMandatoryResearchPrerequisiteObligations } from "../../../src/domain/progression/research-prerequisite-obligations.ts";
 import {
   decodeResearchGoalCandidateResponse,
   installResearchGoalCandidatesWorker,
@@ -108,6 +109,70 @@ const input = (overrides = {}) => ({
     "tech-ore",
   ]);
   assert.equal(evaluation.candidates[1]?.relevance, "unrelated");
+}
+
+{
+  const mismatched = evaluateResearchGoalCandidates(
+    input({
+      obligations: {
+        status: "verified",
+        mandatoryActionIds: ["tech-luxury"],
+        alternativeGroups: [],
+        reasons: [],
+      },
+    }),
+  );
+  assert.equal(mismatched.preferredActionId, undefined);
+  assert.equal(mismatched.preference, "blocked-by-missing-native-authority");
+  assert.ok(
+    mismatched.frontierSelection.reasons.some((reason) =>
+      reason.includes(
+        "tech-luxury is not mandatory in the current prerequisite graph",
+      ),
+    ),
+    "a mandatory obligation from a different prerequisite snapshot cannot be ranked",
+  );
+
+  const coherentGraph = planNativeResearchPrerequisites({
+    targetActionId: "tech-terminal",
+    definitions: [
+      definition("tech-terminal", "terminal", [
+        { technologyId: "luxury", requiredLevel: 1 },
+      ]),
+      definition("tech-ore", "ore"),
+      definition("tech-luxury", "luxury"),
+    ],
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["ore", 0],
+      ["luxury", 0],
+    ]),
+    offeredActionIds: new Set(currentOffers.map((offer) => offer.actionId)),
+    offerGenerations: new Map(
+      currentOffers.map((offer) => [offer.actionId, offer.generation]),
+    ),
+    cycle: 12,
+    progressionEpoch: "run:5",
+    rootGeneration: 3,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+  const coherentObligations = classifyMandatoryResearchPrerequisiteObligations(
+    coherentGraph,
+    true,
+  );
+  const coherent = evaluateResearchGoalCandidates(
+    input({ graph: coherentGraph, obligations: coherentObligations }),
+  );
+  assert.deepEqual(coherentGraph.actionableFrontier, ["tech-luxury"]);
+  assert.deepEqual(coherentObligations.mandatoryActionIds, ["tech-luxury"]);
+  assert.equal(
+    coherent.candidates.find(
+      (candidate) => candidate.actionId === "tech-luxury",
+    )?.relevance,
+    "verified-prerequisite",
+    "the graph and obligation classifier agree when both consume the same effective B requirement",
+  );
 }
 
 {
@@ -297,23 +362,45 @@ const input = (overrides = {}) => ({
     makeMadInput({ blackPowderApplicability: "excluded" }),
   );
   assert.equal(
-    changedApplicability.frontierSelection.actionId,
-    "tech-mad_science",
-    "a native applicability change removes the excluded alternative from selection",
+    changedApplicability.frontierSelection.status,
+    "blocked-by-missing-native-authority",
+    "a mandatory obligation contradicted by current native exclusion evidence is blocked",
   );
+  assert.ok(
+    changedApplicability.frontierSelection.reasons.some((reason) =>
+      reason.includes("excluded by current native applicability evidence"),
+    ),
+  );
+  const unresolvedOrGraph = planNativeResearchPrerequisites({
+    targetActionId: "tech-mad",
+    definitions: [
+      definition("tech-mad", "mad", [
+        { technologyId: "choice", requiredLevel: 1 },
+      ]),
+      definition("tech-black_powder", "choice"),
+      definition("tech-mad_science", "choice"),
+    ],
+    grantLevels: new Map([
+      ["mad", 0],
+      ["choice", 0],
+    ]),
+    offeredActionIds: new Set(["tech-black_powder", "tech-mad_science"]),
+    offerGenerations: new Map([
+      ["tech-black_powder", 4],
+      ["tech-mad_science", 8],
+    ]),
+    cycle: 12,
+    progressionEpoch: "run:5",
+    rootGeneration: 3,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+  const unresolvedOrObligations =
+    classifyMandatoryResearchPrerequisiteObligations(unresolvedOrGraph, true);
   const unresolvedOr = evaluateResearchGoalCandidates({
     ...makeMadInput(),
-    obligations: {
-      status: "verified",
-      mandatoryActionIds: [],
-      alternativeGroups: [
-        {
-          requirementId: "research:choice:1",
-          actionIds: ["tech-black_powder", "tech-mad_science"],
-        },
-      ],
-      reasons: [],
-    },
+    graph: unresolvedOrGraph,
+    obligations: unresolvedOrObligations,
   });
   assert.equal(
     unresolvedOr.frontierSelection.status,

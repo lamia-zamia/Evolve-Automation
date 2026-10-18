@@ -611,6 +611,7 @@ export function createCapturedProgressionControl(
   };
   const sampleOfferedTechs = (requester = "direct") => {
     const tally = createCountTally(diagnostics);
+    const measure = createPhaseMeasure(diagnostics);
     tally.count("research.observation.requests");
     tally.count(`research.observation.requester.${requester}`);
     const includeGranted = dependencies.needGrantedTechs?.() === true;
@@ -655,16 +656,18 @@ export function createCapturedProgressionControl(
             progressionEpoch: currentEpoch,
           }) satisfies CapturedComputedTechRequirementsContext)
         : undefined;
-    const held = scopes.read(
-      includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
-      () =>
-        offered.read({
-          ...(includeGranted ? { includeGranted } : {}),
-          ...(computedRequirementsContext === undefined
-            ? {}
-            : { computedRequirementsContext }),
-        }),
-      (previous, next) => sameOfferPrices(previous.offered, next.offered),
+    const held = measure("research.offer-acquisition", () =>
+      scopes.read(
+        includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
+        () =>
+          offered.read({
+            ...(includeGranted ? { includeGranted } : {}),
+            ...(computedRequirementsContext === undefined
+              ? {}
+              : { computedRequirementsContext }),
+          }),
+        (previous, next) => sameOfferPrices(previous.offered, next.offered),
+      ),
     );
     offeredSampleAttempted = true;
     offeredSampleEpoch = currentEpoch;

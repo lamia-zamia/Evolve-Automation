@@ -2,7 +2,10 @@ import type {
   CapturedComputedTechRequirementsContext,
   CapturedTechDefinition,
 } from "../../../../ports/captured-game-mechanics.ts";
-import type { NativeResearchApplicability } from "../../../../domain/progression/research-prerequisite-planning.ts";
+import type {
+  NativeResearchActionDefinition,
+  NativeResearchApplicability,
+} from "../../../../domain/progression/research-prerequisite-planning.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 type CapturedTechEligibility = CapturedTechDefinition["eligibility"];
@@ -27,6 +30,98 @@ export function readFreshCapturedComputedTechRequirements(
         kind: "declared",
         requirements: observation.requirements,
       });
+}
+
+export interface EffectiveCapturedTechPrerequisiteSnapshot {
+  readonly definitions: readonly NativeResearchActionDefinition[] | undefined;
+  readonly identity: string;
+}
+
+/** Uses only complete current computed requirements and keeps all other declarations uncertain. */
+export function createEffectiveCapturedTechPrerequisiteSnapshot(
+  definitions: readonly CapturedTechDefinition[] | undefined,
+  context: CapturedComputedTechRequirementsContext,
+): Readonly<EffectiveCapturedTechPrerequisiteSnapshot> {
+  if (definitions === undefined)
+    return Object.freeze({ definitions: undefined, identity: "unavailable" });
+
+  const effective = definitions.map((definition) => {
+    const computed = readFreshCapturedComputedTechRequirements(
+      definition,
+      context,
+    );
+    return {
+      definition,
+      prerequisites: computed ?? definition.prerequisites,
+      source: computed === undefined ? "static" : "computed",
+    } as const;
+  });
+  const identity = JSON.stringify(
+    effective.map(({ definition, prerequisites, source }) => ({
+      actionId: definition.actionId,
+      registryKey: definition.registryKey,
+      grantTechnology: definition.grantTechnology,
+      grantLevel: definition.grantLevel,
+      prerequisites: prerequisiteIdentity(prerequisites),
+      source,
+      computed: (definition.computedRequirements ?? []).map((observation) => ({
+        actionId: observation.actionId,
+        registryKey: observation.registryKey,
+        actionIdentity: observation.actionIdentity,
+        reqsIdentity: observation.reqsIdentity,
+        source: observation.source,
+        effectiveEra: observation.effectiveEra,
+        arguments: observation.arguments,
+        rootGeneration: observation.rootGeneration,
+        progressionEpoch: observation.progressionEpoch,
+        requirements:
+          observation.requirements?.map((requirement) => ({
+            technologyId: requirement.technologyId,
+            requiredLevel: requirement.requiredLevel,
+            applicabilityBoundary: requirement.applicabilityBoundary,
+          })) ?? null,
+        status: observation.status,
+        complete: observation.complete,
+        validation: observation.validation,
+      })),
+      eligibility: {
+        hasNativeCondition: definition.eligibility.hasNativeCondition,
+        routeRestrictions: definition.eligibility.routeRestrictions,
+        restrictions: definition.eligibility.restrictions,
+      },
+    })),
+  );
+  return Object.freeze({
+    definitions: Object.freeze(
+      effective.map(({ definition, prerequisites }) =>
+        Object.freeze({
+          actionId: definition.actionId,
+          grantTechnology: definition.grantTechnology,
+          grantLevel: definition.grantLevel,
+          prerequisites,
+          hasNativeCondition: definition.eligibility.hasNativeCondition,
+          routeRestrictions: definition.eligibility.routeRestrictions,
+          restrictions: definition.eligibility.restrictions,
+        }),
+      ),
+    ),
+    identity,
+  });
+}
+
+function prerequisiteIdentity(
+  prerequisites: CapturedTechDefinition["prerequisites"],
+): unknown {
+  return prerequisites.kind === "declared"
+    ? {
+        kind: prerequisites.kind,
+        requirements: prerequisites.requirements.map((requirement) => ({
+          technologyId: requirement.technologyId,
+          requiredLevel: requirement.requiredLevel,
+          applicabilityBoundary: requirement.applicabilityBoundary,
+        })),
+      }
+    : { kind: prerequisites.kind, reason: prerequisites.reason };
 }
 
 function capturedTruth(value: unknown): boolean | undefined {
