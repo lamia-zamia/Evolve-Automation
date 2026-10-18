@@ -26,6 +26,39 @@ export interface ResearchPrerequisiteObligationPlan {
   }>;
 }
 
+export function currentMandatoryResearchEvidence(
+  plan: Readonly<ResearchPrerequisiteObligationPlan>,
+  graph: Readonly<NativeResearchPrerequisiteGraph>,
+  input: Readonly<{
+    goalActionId: string;
+    progressionEpoch: string;
+    rootGeneration: number;
+    offers: ReadonlyMap<string, number>;
+  }>,
+): "complete" | "partial" | "unavailable" {
+  if (plan.status === "unavailable") return "unavailable";
+  const authority = plan.authority;
+  const graphOffers = graph.freshness.offerGenerations;
+  if (
+    authority === undefined ||
+    authority.targetActionId !== input.goalActionId ||
+    graph.targetActionId !== input.goalActionId ||
+    authority.snapshotIdentity !==
+      researchPrerequisiteSnapshotIdentity(graph) ||
+    JSON.stringify(authority.freshness) !== JSON.stringify(graph.freshness) ||
+    graph.freshness.progressionEpoch !== input.progressionEpoch ||
+    graph.freshness.rootGeneration !== input.rootGeneration ||
+    graphOffers === undefined ||
+    graphOffers.length !== input.offers.size ||
+    graphOffers.some(
+      ([actionId, generation]) => input.offers.get(actionId) !== generation,
+    ) ||
+    plan.mandatoryActionIds.some((actionId) => !input.offers.has(actionId))
+  )
+    return "partial";
+  return "complete";
+}
+
 export interface NativeResearchEligibilityEvidence {
   readonly actionId: string;
   readonly status: NativeResearchApplicability["status"];

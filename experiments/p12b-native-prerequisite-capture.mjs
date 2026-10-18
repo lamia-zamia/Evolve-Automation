@@ -20,6 +20,7 @@ import { projectAdvisoryResearchResources } from "../src/domain/progression/advi
 import {
   bindNativeResearchEligibilityEvidence,
   classifyMandatoryNativeResearchObligations,
+  currentMandatoryResearchEvidence,
 } from "../src/domain/progression/research-prerequisite-obligations.ts";
 import { evaluateResearchGoalCandidates } from "../src/domain/progression/research-goal-candidates.ts";
 
@@ -324,6 +325,18 @@ function evaluatePlanner(catalog) {
     applicabilityByActionId: applicability,
     offeredActionIds: new Set(offers.map((offer) => offer.elementId)),
   });
+  const mandatoryEvidence = currentMandatoryResearchEvidence(
+    obligations,
+    graph,
+    {
+      goalActionId: "tech-mad",
+      progressionEpoch: context.progressionEpoch,
+      rootGeneration: context.rootGeneration,
+      offers: new Map(
+        offers.map((offer) => [offer.elementId, offer.generation]),
+      ),
+    },
+  );
   const evaluation = evaluateResearchGoalCandidates({
     goalId: "prestige:mad",
     targetActionId: "tech-mad",
@@ -413,8 +426,7 @@ function evaluatePlanner(catalog) {
     commitments: [],
     commitmentsKnown: false,
     validityEpoch: resourceEpoch,
-    mandatoryEvidence:
-      obligations.status === "complete" ? "complete" : "partial",
+    mandatoryEvidence,
     mandatoryActionIds: obligations.mandatoryActionIds,
   };
   const resourceProjection = projectAdvisoryResearchResources(
@@ -519,6 +531,7 @@ function evaluatePlanner(catalog) {
     },
     obligations: {
       status: obligations.status,
+      resourceProjectionEvidence: mandatoryEvidence,
       inputConsistency: obligations.inputConsistency,
       inputConsistencyReasons: obligations.inputConsistencyReasons,
       terminalEligibility: targetEligibility,
@@ -580,6 +593,15 @@ async function run(label, bundle, captureEnabled = false, diagnostic = false) {
       : undefined;
     const diagnosticWallMs = diagnostic
       ? performance.now() - captureWallStart
+      : undefined;
+    const smelterPlanStarted = performance.now();
+    const smelterPlan = diagnostic
+      ? await session.evaluate(() =>
+          window.__EA_TEST_HOOKS__?.readSmelterPlanForTest?.(),
+        )
+      : undefined;
+    const smelterPlanReadElapsedMs = diagnostic
+      ? performance.now() - smelterPlanStarted
       : undefined;
     if (diagnostic)
       assert.equal(catalog?.current, true, `${label} catalog must be fresh`);
@@ -663,7 +685,11 @@ async function run(label, bundle, captureEnabled = false, diagnostic = false) {
       catalog: diagnostic ? summarizeCatalog(catalog) : undefined,
       planner:
         diagnostic && catalog?.current ? evaluatePlanner(catalog) : undefined,
+      smelterPlan,
+      smelterPermission:
+        diagnostic && settings.autoSmelter === true ? "enabled" : "disabled",
       captureElapsedMs: catalog?.captureElapsedMs,
+      smelterPlanReadElapsedMs,
       diagnosticWallMs,
       resourceObservationBenchmark: resourceObservationBenchmarkSummary,
       runtimeEvaluation: diagnostic
@@ -860,6 +886,9 @@ try {
     explicitIndependentCapture: {
       catalog: independentCapture.catalog,
       planner: independentCapture.planner,
+      smelterPermission: independentCapture.smelterPermission,
+      smelterPlan: independentCapture.smelterPlan,
+      smelterPlanReadElapsedMs: independentCapture.smelterPlanReadElapsedMs,
       captureCallWallMs: independentCapture.diagnosticWallMs,
       resourceObservationBenchmark:
         independentCapture.resourceObservationBenchmark,

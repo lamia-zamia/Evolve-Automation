@@ -173,17 +173,72 @@ for (const [netRate, expectedStatus] of [
     staleResource.candidates[0].currentAffordability.status,
     "unavailable",
   );
+  assert.ok(
+    staleResource.candidates[0].requirements[0].missingAuthority.includes(
+      "stale-resource-observation",
+    ),
+  );
+  assert.equal(staleResource.candidates[0].requirements[0].holding, undefined);
+  assert.equal(staleResource.candidates[0].requirements[0].capacity, undefined);
+  assert.equal(
+    staleResource.candidates[0].requirements[0].observedNetRate,
+    undefined,
+  );
+}
+
+{
+  const input = base({
+    prices: [
+      {
+        actionId: "a",
+        price: [
+          { resourceId: "Knowledge", amount: 10 },
+          { resourceId: "Crystal", amount: 5 },
+        ],
+      },
+    ],
+    routes: routePlan({
+      offers: [
+        {
+          actionId: "a",
+          generation: 1,
+          cost: { Knowledge: 10, Crystal: 5 },
+          nativeAffordable: false,
+        },
+      ],
+    }),
+    observations: [
+      ...base().observations,
+      {
+        resourceId: "Crystal",
+        amount: 1,
+        capacity: 20,
+        netRate: 2,
+        rateConfidence: "stable",
+        validityEpoch: "old-epoch",
+      },
+    ],
+  });
+  const result = projectAdvisoryResearchResources(input);
+  const [knowledge, crystal] = result.candidates[0].requirements;
+  assert.equal(knowledge.holding, 2);
+  assert.equal(knowledge.missingAuthority.length, 0);
+  assert.equal(crystal.holding, undefined);
+  assert.ok(crystal.missingAuthority.includes("stale-resource-observation"));
+  assert.equal(result.candidates[0].currentAffordability.status, "unavailable");
 }
 
 {
   const result = projectAdvisoryResearchResources(
     base({
-      commitments: [{ resourceId: "Knowledge", poolId: "anywhere", amount: 1 }],
+      commitments: [
+        { resourceId: "Knowledge", poolId: "elsewhere", amount: 8 },
+      ],
       commitmentsKnown: false,
     }),
   );
   assert.equal(result.commitments.unknownExternalCommitments, true);
-  assert.equal(result.candidates[0].requirements[0].knownCommitment, 1);
+  assert.equal(result.candidates[0].requirements[0].knownCommitment, 0);
   assert.equal(
     result.candidates[0].requirements[0].externalCommitments,
     "unknown",
@@ -193,6 +248,44 @@ for (const [netRate, expectedStatus] of [
     "unknown",
   );
   assert.equal(result.candidates[0].estimatedTimeToAfford.validated, undefined);
+  assert.equal(
+    result.candidates[0].requirements[0].affordabilityConstraint,
+    "unknown",
+  );
+}
+
+{
+  const input = base({
+    observations: [{ ...base().observations[0], amount: 8 }],
+    commitments: [
+      { resourceId: "Knowledge", poolId: "elsewhere", amount: 7 },
+      { resourceId: "Knowledge", poolId: "anywhere", amount: 2 },
+    ],
+    commitmentsKnown: true,
+  });
+  const result = projectAdvisoryResearchResources(input);
+  const requirement = result.candidates[0].requirements[0];
+  const shared = result.candidates[0].currentAffordability.unmetRequirements[0];
+  assert.equal(requirement.knownCommitment, 2);
+  assert.equal(requirement.affordabilityConstraint, "shortfall");
+  assert.equal(shared.shortfall, 4);
+  assert.equal(requirement.bottleneck, true);
+}
+
+{
+  const input = base({
+    observations: [{ ...base().observations[0], amount: 8 }],
+    commitments: [{ resourceId: "Knowledge", poolId: "anywhere", amount: 2 }],
+    commitmentsKnown: false,
+  });
+  const result = projectAdvisoryResearchResources(input);
+  const requirement = result.candidates[0].requirements[0];
+  const shared = result.candidates[0].currentAffordability.unmetRequirements[0];
+  assert.equal(requirement.externalCommitments, "unknown");
+  assert.equal(requirement.affordabilityConstraint, "unknown");
+  assert.equal(requirement.knownCommitment, 2);
+  assert.equal(requirement.bottleneck, true);
+  assert.equal(shared.shortfall, 4);
 }
 
 {
@@ -411,6 +504,23 @@ for (const [netRate, expectedStatus] of [
     /effects/i,
   );
 
+  const missingAcquisitionCost = projectAdvisoryResearchResources(
+    base({
+      observations: [{ ...base().observations[0], rateConfidence: "stable" }],
+      interventionsByActionId: new Map([
+        [actionId, [{ ...intervention, acquisitionCosts: undefined }]],
+      ]),
+    }),
+  );
+  assert.equal(
+    missingAcquisitionCost.candidates[0].interventionComparison.status,
+    "unavailable",
+  );
+  assert.equal(
+    missingAcquisitionCost.candidates[0].interventionComparison.evidence,
+    undefined,
+  );
+
   const incompleteEffects = projectAdvisoryResearchResources(
     base({
       observations: [{ ...base().observations[0], rateConfidence: "stable" }],
@@ -421,6 +531,178 @@ for (const [netRate, expectedStatus] of [
   );
   assert.equal(
     incompleteEffects.candidates[0].interventionComparison.status,
+    "unavailable",
+  );
+}
+
+{
+  const intervention = (overrides = {}) => ({
+    id: "smelter-steel",
+    goalId: "current-action:a",
+    preconditions: { satisfied: true, reasons: [] },
+    acquisitionCosts: [],
+    productionChanges: [
+      { resourceId: "Knowledge", poolId: "anywhere", netRateDelta: 1 },
+    ],
+    effectsComplete: true,
+    effectAuthority: "validated",
+    validityEpoch: "run|root:1",
+    unavailableReasons: [],
+    ...overrides,
+  });
+  const compare = (overrides = {}, candidate = intervention()) => {
+    const input = base({
+      observations: [{ ...base().observations[0], rateConfidence: "stable" }],
+      interventionsByActionId: new Map([["a", [candidate]]]),
+      ...overrides,
+    });
+    return projectAdvisoryResearchResources(input).candidates[0]
+      .interventionComparison;
+  };
+
+  const plentiful = compare({
+    observations: [
+      { ...base().observations[0], amount: 20, rateConfidence: "stable" },
+    ],
+  });
+  assert.equal(plentiful.evidence.strategies[0].completionTime, 0);
+  assert.equal(plentiful.evidence.winner, "wait");
+
+  const scarce = compare({
+    observations: [
+      { ...base().observations[0], amount: 2, rateConfidence: "stable" },
+    ],
+  });
+  assert.equal(scarce.evidence.strategies[0].completionTime, 8);
+  assert.equal(scarce.evidence.strategies[1].completionTime, 4);
+  assert.equal(scarce.evidence.winner, "smelter-steel");
+
+  const zeroProduction = compare(
+    {
+      observations: [
+        {
+          ...base().observations[0],
+          amount: 2,
+          netRate: 0,
+          rateConfidence: "stable",
+        },
+      ],
+    },
+    intervention({
+      productionChanges: [
+        { resourceId: "Knowledge", poolId: "anywhere", netRateDelta: 1 },
+      ],
+    }),
+  );
+  assert.equal(zeroProduction.evidence.strategies[0].status, "infeasible");
+  assert.equal(zeroProduction.evidence.strategies[1].completionTime, 8);
+  assert.equal(zeroProduction.evidence.winner, "smelter-steel");
+
+  const changedProduction = compare(
+    {
+      observations: [
+        { ...base().observations[0], amount: 2, rateConfidence: "stable" },
+      ],
+    },
+    intervention({
+      productionChanges: [
+        { resourceId: "Knowledge", poolId: "anywhere", netRateDelta: 0 },
+      ],
+    }),
+  );
+  assert.equal(changedProduction.evidence.strategies[1].completionTime, 8);
+  assert.equal(changedProduction.evidence.winner, "wait");
+
+  const missingInput = compare(
+    {},
+    intervention({
+      acquisitionCosts: [{ resourceId: "Ore", poolId: "anywhere", amount: 1 }],
+    }),
+  );
+  assert.equal(missingInput.status, "unavailable");
+  assert.equal(missingInput.evidence, undefined);
+
+  const expensiveAcquisition = compare(
+    {
+      observations: [
+        { ...base().observations[0], amount: 8, rateConfidence: "stable" },
+        {
+          resourceId: "Money",
+          amount: 0,
+          capacity: 200,
+          netRate: 1,
+          rateConfidence: "stable",
+          validityEpoch: "run|root:1",
+        },
+      ],
+    },
+    intervention({
+      acquisitionCosts: [
+        { resourceId: "Money", poolId: "anywhere", amount: 100 },
+      ],
+    }),
+  );
+  assert.equal(expensiveAcquisition.evidence.winner, "wait");
+
+  const capacityBlocked = compare({
+    observations: [
+      { ...base().observations[0], capacity: 9, rateConfidence: "stable" },
+    ],
+  });
+  assert.equal(capacityBlocked.evidence.strategies[0].status, "infeasible");
+  assert.equal(capacityBlocked.evidence.winner, undefined);
+
+  const anotherOwnerCommitted = compare({
+    observations: [
+      { ...base().observations[0], amount: 8, rateConfidence: "stable" },
+    ],
+    commitments: [{ resourceId: "Knowledge", poolId: "anywhere", amount: 2 }],
+    commitmentsKnown: true,
+  });
+  assert.equal(anotherOwnerCommitted.evidence.strategies[0].completionTime, 4);
+
+  const incompleteCommitments = compare({
+    observations: [
+      { ...base().observations[0], amount: 2, rateConfidence: "stable" },
+    ],
+    commitmentsKnown: false,
+  });
+  assert.equal(incompleteCommitments.status, "partial");
+  assert.equal(incompleteCommitments.evidence.winner, undefined);
+
+  const permissionRevoked = compare(
+    {},
+    intervention({
+      preconditions: { satisfied: false, reasons: ["autoSmelter is disabled"] },
+    }),
+  );
+  assert.equal(permissionRevoked.status, "unavailable");
+
+  const selectedRouteChanged = projectAdvisoryResearchResources(
+    base({
+      routes: routePlan({
+        definitions: [
+          action("terminal", "goal", [{ technologyId: "route" }]),
+          action("other", "route"),
+        ],
+        offers: [
+          {
+            actionId: "other",
+            generation: 1,
+            cost: { Knowledge: 10 },
+            nativeAffordable: false,
+          },
+        ],
+      }),
+      prices: [
+        { actionId: "other", price: [{ resourceId: "Knowledge", amount: 10 }] },
+      ],
+      interventionsByActionId: new Map([["a", [intervention()]]]),
+    }),
+  );
+  assert.equal(selectedRouteChanged.candidates[0].actionId, "other");
+  assert.equal(
+    selectedRouteChanged.candidates[0].interventionComparison.status,
     "unavailable",
   );
 }

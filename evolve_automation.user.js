@@ -13688,7 +13688,7 @@
     );
     for (let candidate of candidates) {
       let unavailableReasons = [...candidate.unavailableReasons], provisionalReasons = [];
-      if (candidate.goalId !== goalId && unavailableReasons.push("candidate targets a different goal"), candidate.validityEpoch !== validityEpoch && unavailableReasons.push("candidate marginal observation is stale"), candidate.effectsComplete || provisionalReasons.push("candidate collateral effects are incomplete"), candidate.preconditions.satisfied || unavailableReasons.push(...candidate.preconditions.reasons), candidate.productionChanges === void 0 && unavailableReasons.push("marginal production effect is not established"), unavailableReasons.length > 0) {
+      if (candidate.goalId !== goalId && unavailableReasons.push("candidate targets a different goal"), candidate.validityEpoch !== validityEpoch && unavailableReasons.push("candidate marginal observation is stale"), candidate.effectsComplete || provisionalReasons.push("candidate collateral effects are incomplete"), candidate.preconditions.satisfied || unavailableReasons.push(...candidate.preconditions.reasons), candidate.productionChanges === void 0 && unavailableReasons.push("marginal production effect is not established"), candidate.acquisitionCosts === void 0 && unavailableReasons.push("acquisition costs are not established"), unavailableReasons.length > 0 || candidate.acquisitionCosts === void 0) {
         let unavailable2 = evaluateGoalFeasibility(
           goalId,
           requirements,

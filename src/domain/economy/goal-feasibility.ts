@@ -66,7 +66,7 @@ export interface GoalStrategyCandidate {
     readonly satisfied: boolean;
     readonly reasons: readonly string[];
   }>;
-  readonly acquisitionCosts: readonly GoalResourceNeed[];
+  readonly acquisitionCosts: readonly GoalResourceNeed[] | undefined;
   /** Undefined means no independently established marginal effect is available. */
   readonly productionChanges: readonly GoalProductionChange[] | undefined;
   /** False means the captured effects omit a possible collateral output or cost. */
@@ -475,7 +475,13 @@ export function compareGoalStrategies(
     if (candidate.productionChanges === undefined) {
       unavailableReasons.push("marginal production effect is not established");
     }
-    if (unavailableReasons.length > 0) {
+    if (candidate.acquisitionCosts === undefined) {
+      unavailableReasons.push("acquisition costs are not established");
+    }
+    if (
+      unavailableReasons.length > 0 ||
+      candidate.acquisitionCosts === undefined
+    ) {
       const unavailable = evaluateGoalFeasibility(
         goalId,
         requirements,

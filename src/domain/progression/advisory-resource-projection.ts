@@ -141,6 +141,7 @@ export function projectAdvisoryResearchResources(
   );
   const stocks: GoalResourceStock[] = [...observations.values()].flatMap(
     (observation) =>
+      observation.validityEpoch === input.validityEpoch &&
       validAmount(observation.amount) &&
       observation.capacity !== undefined &&
       Number.isFinite(observation.capacity) &&
@@ -185,12 +186,20 @@ export function projectAdvisoryResearchResources(
             input.commitmentsKnown,
           );
     const requirements = (nativeOffer?.price ?? []).map((price) => {
-      const observed = observations.get(price.resourceId);
+      const sampled = observations.get(price.resourceId);
+      const observed =
+        sampled?.validityEpoch === input.validityEpoch ? sampled : undefined;
       const knownCommitment = input.commitments
-        .filter((item) => item.resourceId === price.resourceId)
+        .filter(
+          (item) =>
+            item.resourceId === price.resourceId && item.poolId === "anywhere",
+        )
         .reduce((sum, item) => sum + item.amount, 0);
       const missingAuthority = [
-        ...(observed === undefined ? ["resource-observation"] : []),
+        ...(sampled === undefined ? ["resource-observation"] : []),
+        ...(sampled !== undefined && observed === undefined
+          ? ["stale-resource-observation"]
+          : []),
         ...(observed?.amount === undefined || !Number.isFinite(observed.amount)
           ? ["holdings"]
           : []),
@@ -205,14 +214,15 @@ export function projectAdvisoryResearchResources(
       ];
       const amount = observed?.amount;
       const cap = observed?.capacity;
-      const reserved = knownCommitment;
-      const shortfall = validAmount(amount)
-        ? price.amount + reserved > amount
-        : undefined;
+      const feasibilityNeed = feasibility?.unmetRequirements.find(
+        (need) =>
+          need.resourceId === price.resourceId && need.poolId === "anywhere",
+      );
+      const shortfall = feasibilityNeed?.shortfall;
       const capacityConstraint =
         cap === undefined || !Number.isFinite(cap)
           ? ("unknown" as const)
-          : cap < 0 || cap >= price.amount + reserved
+          : cap < 0 || cap >= price.amount + knownCommitment
             ? ("sufficient" as const)
             : ("below-price" as const);
       return Object.freeze({
@@ -223,7 +233,7 @@ export function projectAdvisoryResearchResources(
         observedNetRate: observed?.netRate,
         rateConfidence: observed?.rateConfidence,
         missingAuthority: Object.freeze(missingAuthority),
-        knownCommitment: reserved,
+        knownCommitment,
         externalCommitments: input.commitmentsKnown
           ? ("complete" as const)
           : ("unknown" as const),
@@ -234,7 +244,10 @@ export function projectAdvisoryResearchResources(
             : shortfall
               ? ("shortfall" as const)
               : ("covered" as const),
-        bottleneck: candidate.nativeAffordable === false && shortfall === true,
+        bottleneck:
+          candidate.nativeAffordable === false &&
+          shortfall !== undefined &&
+          shortfall > 0,
       });
     });
     const routePotentialNeeds = candidate.dependencyWitness.pathActionIds.map(
@@ -291,6 +304,7 @@ export function projectAdvisoryResearchResources(
           intervention.effectAuthority === "validated" &&
           intervention.validityEpoch === input.validityEpoch &&
           intervention.unavailableReasons.length === 0 &&
+          intervention.acquisitionCosts !== undefined &&
           intervention.acquisitionCosts.every(
             (cost) =>
               cost.poolId === "anywhere" &&
