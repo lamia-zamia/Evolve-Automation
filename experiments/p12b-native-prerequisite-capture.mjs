@@ -323,7 +323,7 @@ function evaluatePlanner(catalog) {
     validityEpoch: context.progressionEpoch,
     rootGeneration: context.rootGeneration,
     progressionEpoch: context.progressionEpoch,
-    maxDependencyExpansions: 4096,
+    maxDependencyExpansions: 65_536,
     maxDependencyDepth: 512,
     maxCandidates: 128,
     terminalEligibility: targetEligibility,

@@ -34,10 +34,12 @@ assert.deepEqual(
   [...expectedFrontier].sort(),
   "Stage 2F native graph frontier changed",
 );
-assert.deepEqual(
-  advisory.candidates.map((candidate) => candidate.actionId).sort(),
-  [...expectedFrontier].sort(),
-  "advisory planner did not characterize every observed frontier offer",
+const advisoryCandidateIds = new Set(
+  advisory.candidates.map((candidate) => candidate.actionId),
+);
+assert.ok(
+  expectedFrontier.every((actionId) => advisoryCandidateIds.has(actionId)),
+  "advisory planner omitted an observed prerequisite frontier offer",
 );
 assert.equal(advisory.selectedActionId, undefined);
 assert.equal(
@@ -92,15 +94,9 @@ const report = {
       cost: candidate.cost,
       nativeAffordable: candidate.nativeAffordable,
       terminalActionId: candidate.terminalActionId,
-      terminalRelationship: candidate.terminalRelationship,
-      knownPrerequisiteChain: candidate.knownPrerequisiteChain,
-      alternativeBranches: candidate.alternativeBranches,
-      missingRequirements: candidate.missingRequirements,
-      nativeConditionsNotValidated: candidate.nativeConditionsNotValidated,
-      excludedRoutes: candidate.excludedRoutes,
-      conditionalFutureSteps: candidate.conditionalFutureSteps,
+      routeEvidence: candidate.routeEvidence,
+      dependencyWitness: candidate.dependencyWitness,
       currentAffordability: candidate.currentAffordability,
-      strategicBenefit: candidate.strategicBenefit,
       reasons: candidate.reasons,
     })),
   },

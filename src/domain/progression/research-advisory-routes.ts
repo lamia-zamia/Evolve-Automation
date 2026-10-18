@@ -32,9 +32,28 @@ export interface AdvisoryResearchRouteInput {
   readonly progressionEpoch: string;
   readonly expectedRootGeneration?: number;
   readonly expectedProgressionEpoch?: string;
+  /** Hard total operation budget across expansion, alternatives, candidates and witnesses. */
   readonly maxDependencyExpansions: number;
   readonly maxDependencyDepth: number;
   readonly maxCandidates: number;
+}
+
+export interface AdvisoryRequirementWitness {
+  readonly id: string;
+  readonly technologyId: string;
+  readonly requiredLevel: number;
+  readonly observedLevel: number | undefined;
+  readonly status: "satisfied" | "unsatisfied" | "unknown" | "excluded";
+  readonly alternativeActionIds: readonly string[];
+  readonly reasons: readonly string[];
+}
+
+export interface AdvisoryActionWitness {
+  readonly actionId: string;
+  /** Each listed requirement is conjunctive; requirement alternatives are disjunctive. */
+  readonly prerequisiteRequirementIds: readonly string[];
+  readonly prerequisiteStatus: "declared" | "unknown";
+  readonly reasons: readonly string[];
 }
 
 export interface AdvisoryResearchCandidate {
@@ -46,15 +65,21 @@ export interface AdvisoryResearchCandidate {
   readonly cost: Readonly<Record<string, number>>;
   readonly nativeAffordable: boolean;
   readonly terminalActionId: string;
-  readonly terminalRelationship: "declared-dependency" | "unknown";
-  readonly knownPrerequisiteChain: readonly string[];
-  readonly alternativeBranches: readonly (readonly string[])[];
-  readonly missingRequirements: readonly string[];
-  readonly nativeConditionsNotValidated: readonly string[];
-  readonly excludedRoutes: readonly string[];
-  readonly conditionalFutureSteps: readonly string[];
+  readonly routeEvidence:
+    | "declared-contribution"
+    | "conditional-contribution"
+    | "excluded"
+    | "unknown"
+    | "unrelated";
+  readonly dependencyWitness: Readonly<{
+    readonly advancesRequirementId: string | undefined;
+    readonly connectedRequirementIds: readonly string[];
+    readonly advancesRequirements: readonly Readonly<AdvisoryRequirementWitness>[];
+    readonly remainingRequirements: readonly Readonly<AdvisoryRequirementWitness>[];
+    readonly pathActionIds: readonly string[];
+    readonly reasons: readonly string[];
+  }>;
   readonly currentAffordability: Readonly<GoalFeasibility> | undefined;
-  readonly strategicBenefit: "proven" | "provisional" | "unquantifiable";
   readonly reasons: readonly string[];
 }
 
@@ -65,45 +90,81 @@ export interface AdvisoryResearchRoutePlan {
   readonly selection: "ordered" | "provisional" | "ambiguous" | "none";
   readonly work: Readonly<{
     nodesVisited: number;
+    actionExpansions: number;
+    requirementExpansions: number;
     alternativesExplored: number;
     cycles: number;
     sharedSubgraphReuse: number;
     truncated: boolean;
     truncationReasons: readonly string[];
     candidateEvaluations: number;
+    operations: number;
+    retainedActionWitnesses: number;
+    retainedRequirementWitnesses: number;
+    retainedCandidateWitnesses: number;
+    retainedPathActionReferences: number;
+    retainedActionRequirementReferences: number;
+    retainedAlternativeReferences: number;
+    retainedCandidateRequirementReferences: number;
+    retainedReasonReferences: number;
+    peakPendingWalkStates: number;
     phases: Readonly<Record<string, number>>;
   }>;
   readonly reasons: readonly string[];
 }
 
-type RoutePath = {
-  actions: string[];
-  missing: string[];
-  conditions: string[];
-  exclusions: string[];
-  conditional: string[];
-};
+interface MutableRequirement extends AdvisoryRequirementWitness {
+  alternativeActionIds: string[];
+  reasons: string[];
+}
+interface MutableAction extends AdvisoryActionWitness {
+  prerequisiteRequirementIds: string[];
+  reasons: string[];
+}
+interface CandidateEvidence {
+  actionIds: string[];
+  connectedRequirementIds: Set<string>;
+  reasons: Set<string>;
+  excludedReasons: Set<string>;
+  conditionalReasons: Set<string>;
+  declaredRoute: boolean;
+  unknownRoute: boolean;
+  pathKinds: Set<string>;
+}
 
 const requirementKey = (technologyId: string, level: number) =>
-  `${technologyId}:${level}`;
+  `research:${technologyId}:${level}`;
+const sortedUnique = (values: Iterable<string>) => [...new Set(values)];
 
-/** Advisory only: current offers remain actionable independently of route certainty. */
+/** Advisory graph only. It never certifies mandatory work or authorizes spending. */
 export function planAdvisoryResearchRoutes(
   input: Readonly<AdvisoryResearchRouteInput>,
 ): Readonly<AdvisoryResearchRoutePlan> {
   const phases = {
     indexDefinitions: 0,
     expandDependencies: 0,
-    evaluateCandidates: 0,
+    discoverCandidates: 0,
   };
   const work = {
     nodesVisited: 0,
+    actionExpansions: 0,
+    requirementExpansions: 0,
     alternativesExplored: 0,
     cycles: 0,
     sharedSubgraphReuse: 0,
     truncated: false,
     truncationReasons: [] as string[],
     candidateEvaluations: 0,
+    operations: 0,
+    retainedActionWitnesses: 0,
+    retainedRequirementWitnesses: 0,
+    retainedCandidateWitnesses: 0,
+    retainedPathActionReferences: 0,
+    retainedActionRequirementReferences: 0,
+    retainedAlternativeReferences: 0,
+    retainedCandidateRequirementReferences: 0,
+    retainedReasonReferences: 0,
+    peakPendingWalkStates: 0,
     phases,
   };
   const reasons: string[] = [];
@@ -116,6 +177,77 @@ export function planAdvisoryResearchRoutes(
       input.expectedRootGeneration !== input.rootGeneration) ||
     (input.expectedProgressionEpoch !== undefined &&
       input.expectedProgressionEpoch !== input.progressionEpoch);
+  const freezeWork = () =>
+    Object.freeze({
+      ...work,
+      truncationReasons: Object.freeze(sortedUnique(work.truncationReasons)),
+      phases: Object.freeze({ ...phases }),
+    });
+  const consume = (reason: string) => {
+    if (work.operations >= Math.max(0, input.maxDependencyExpansions)) {
+      work.truncated = true;
+      work.truncationReasons.push(reason);
+      return false;
+    }
+    work.operations += 1;
+    return true;
+  };
+  const consumeMany = (count: number, reason: string) => {
+    const units = Math.max(0, Math.ceil(count));
+    if (units > Math.max(0, input.maxDependencyExpansions) - work.operations) {
+      work.truncated = true;
+      work.truncationReasons.push(reason);
+      return false;
+    }
+    work.operations += units;
+    return true;
+  };
+  const sortFailure = Symbol("bounded-sort-exhausted");
+  const boundedSort = <T>(
+    values: readonly T[],
+    compare: (left: T, right: T) => number,
+    reason: string,
+  ): T[] | undefined => {
+    if (!consumeMany(values.length, `${reason}-copy-budget`)) return undefined;
+    const copy = [...values];
+    try {
+      return copy.sort((left, right) => {
+        if (!consume(reason)) throw sortFailure;
+        return compare(left, right);
+      });
+    } catch (error) {
+      if (error === sortFailure) return undefined;
+      throw error;
+    }
+  };
+  const incompleteBeforeGraph = (reason: string) => {
+    reasons.push(reason);
+    return Object.freeze({
+      status: "incomplete" as const,
+      candidates: Object.freeze([]),
+      selectedActionId: undefined,
+      selection: "none" as const,
+      work: freezeWork(),
+      reasons: Object.freeze(sortedUnique(reasons)),
+    });
+  };
+  const addActionReason = (node: MutableAction, reason: string) => {
+    if (!consume("reason-witness-budget")) return false;
+    node.reasons.push(reason);
+    work.retainedReasonReferences += 1;
+    return true;
+  };
+  const addRequirementReason = (node: MutableRequirement, reason: string) => {
+    if (!consume("reason-witness-budget")) return false;
+    node.reasons.push(reason);
+    work.retainedReasonReferences += 1;
+    return true;
+  };
+  const retainCandidateReason = (reasons: Set<string>, reason: string) => {
+    if (reasons.has(reason)) return;
+    reasons.add(reason);
+    work.retainedReasonReferences += 1;
+  };
   if (unavailable || stale) {
     reasons.push(
       unavailable
@@ -127,413 +259,642 @@ export function planAdvisoryResearchRoutes(
       candidates: Object.freeze([]),
       selectedActionId: undefined,
       selection: "none",
-      work: Object.freeze({
-        ...work,
-        truncationReasons: Object.freeze([...work.truncationReasons]),
-        phases: Object.freeze({ ...phases }),
-      }),
+      work: freezeWork(),
       reasons: Object.freeze(reasons),
     });
   }
 
-  const definitions = input.definitions!;
-  const grants = input.grantLevels!;
-  const offers = input.offers!;
-  phases.indexDefinitions = definitions.length;
-  const byId = new Map(
-    definitions.map((definition) => [definition.actionId, definition]),
+  const sourceDefinitions = input.definitions!;
+  const sourceOffers = input.offers!;
+  const definitions = boundedSort(
+    sourceDefinitions,
+    (a, b) => a.actionId.localeCompare(b.actionId),
+    "registry-definition-sort-budget",
   );
+  if (definitions === undefined)
+    return incompleteBeforeGraph(
+      "bounded definition indexing exhausted before graph exploration",
+    );
+  const grants = input.grantLevels!;
+  const offers = boundedSort(
+    sourceOffers,
+    (a, b) => a.actionId.localeCompare(b.actionId),
+    "registry-offer-sort-budget",
+  );
+  if (offers === undefined)
+    return incompleteBeforeGraph(
+      "bounded offer indexing exhausted before graph exploration",
+    );
+  const byId = new Map<string, NativeResearchActionDefinition>();
   const byGrant = new Map<string, NativeResearchActionDefinition[]>();
-  for (const definition of definitions) {
-    const entries = byGrant.get(definition.grantTechnology) ?? [];
-    entries.push(definition);
-    byGrant.set(definition.grantTechnology, entries);
+  for (const d of definitions) {
+    if (!consume("registry-index-budget"))
+      return incompleteBeforeGraph(
+        "bounded definition indexing exhausted before graph exploration",
+      );
+    byId.set(d.actionId, d);
+    const list = byGrant.get(d.grantTechnology) ?? [];
+    list.push(d);
+    byGrant.set(d.grantTechnology, list);
   }
-  const offerById = new Map(offers.map((offer) => [offer.actionId, offer]));
-  const actionCache = new Map<string, RoutePath[]>();
-  const requirementCache = new Map<string, RoutePath[]>();
+  const offerById = new Map<string, AdvisoryResearchOffer>();
+  for (const offer of offers) {
+    if (!consume("registry-index-budget"))
+      return incompleteBeforeGraph(
+        "bounded offer indexing exhausted before graph exploration",
+      );
+    offerById.set(offer.actionId, offer);
+  }
+  phases.indexDefinitions = definitions.length;
+  const actionNodes = new Map<string, MutableAction>();
+  const requirementNodes = new Map<string, MutableRequirement>();
+  const expandedActions = new Set<string>();
+  const expandedRequirements = new Set<string>();
   const active = new Set<string>();
-  const actionStack: string[] = [];
-  const candidates = new Map<string, RoutePath[]>();
-  const encounteredExclusions: string[] = [];
-
-  const expandAction = (actionId: string, depth = 0): RoutePath[] => {
-    if (active.has(actionId)) {
-      work.cycles += 1;
-      return [];
-    }
-    const cached = actionCache.get(actionId);
-    if (cached !== undefined) {
+  const unknownPrerequisiteActionIds = new Set<string>();
+  const ensureAction = (
+    id: string,
+    depth: number,
+  ): MutableAction | undefined => {
+    const existing = actionNodes.get(id);
+    if (existing !== undefined) {
       work.sharedSubgraphReuse += 1;
-      return cached;
+      return existing;
     }
-    if (work.nodesVisited >= input.maxDependencyExpansions) {
-      work.truncated = true;
-      work.truncationReasons.push("dependency-expansion-budget");
-      return [];
-    }
-    if (depth >= input.maxDependencyDepth) {
+    if (!consume("total-operation-budget")) return undefined;
+    if (depth > input.maxDependencyDepth) {
       work.truncated = true;
       work.truncationReasons.push("dependency-depth-budget");
-      return [];
+      return undefined;
     }
+    const definition = byId.get(id);
+    if (definition === undefined) return undefined;
+    const node: MutableAction = {
+      actionId: id,
+      prerequisiteRequirementIds: [],
+      prerequisiteStatus:
+        definition.prerequisites.kind === "declared" ? "declared" : "unknown",
+      reasons: [],
+    };
+    actionNodes.set(id, node);
+    work.retainedActionWitnesses += 1;
     work.nodesVisited += 1;
+    work.actionExpansions += 1;
+    return node;
+  };
+  const ensureRequirement = (
+    technologyId: string,
+    requiredLevel: number,
+    depth: number,
+  ): MutableRequirement | undefined => {
+    const id = requirementKey(technologyId, requiredLevel);
+    const existing = requirementNodes.get(id);
+    if (existing !== undefined) {
+      work.sharedSubgraphReuse += 1;
+      return existing;
+    }
+    if (!consume("total-operation-budget")) return undefined;
+    if (depth > input.maxDependencyDepth) {
+      work.truncated = true;
+      work.truncationReasons.push("dependency-depth-budget");
+      return undefined;
+    }
+    const level = grants.get(technologyId);
+    const validLevel =
+      level !== undefined && Number.isFinite(level) && level >= 0;
+    const node: MutableRequirement = {
+      id,
+      technologyId,
+      requiredLevel,
+      observedLevel: validLevel ? level : undefined,
+      status: !validLevel
+        ? "unknown"
+        : level! >= requiredLevel
+          ? "satisfied"
+          : "unsatisfied",
+      alternativeActionIds: [],
+      reasons: [],
+    };
+    if (!validLevel)
+      addRequirementReason(
+        node,
+        `current grant level unavailable: ${technologyId}`,
+      );
+    requirementNodes.set(id, node);
+    work.retainedRequirementWitnesses += 1;
+    return node;
+  };
+  const expandAction = (id: string, depth: number): void => {
+    const node = ensureAction(id, depth);
+    if (node === undefined || expandedActions.has(id)) return;
+    if (active.has(id)) {
+      work.cycles += 1;
+      return;
+    }
+    expandedActions.add(id);
     phases.expandDependencies += 1;
-    const definition = byId.get(actionId);
-    if (definition === undefined) return [];
-    active.add(actionId);
-    actionStack.push(actionId);
-    const app = input.applicabilityByActionId?.get(actionId);
-    const conditions: string[] = [];
-    const exclusions: string[] = [];
-    if (app?.status === "unknown") conditions.push(...app.reasons);
-    if (app?.status === "excluded") exclusions.push(...app.reasons);
-    if (definition.hasNativeCondition)
-      conditions.push("native condition not evaluated");
+    const definition = byId.get(id)!;
+    const applicability =
+      id === input.targetActionId
+        ? (input.terminalEligibility ?? input.applicabilityByActionId?.get(id))
+        : input.applicabilityByActionId?.get(id);
+    if (applicability?.status === "unknown")
+      for (const reason of applicability.reasons)
+        if (!addActionReason(node, reason)) return;
+    if (applicability?.status === "excluded")
+      for (const reason of applicability.reasons)
+        if (!addActionReason(node, `excluded: ${reason}`)) return;
+    if (
+      definition.hasNativeCondition &&
+      !addActionReason(
+        node,
+        id === input.targetActionId
+          ? "terminal native condition not evaluated"
+          : "native condition not evaluated",
+      )
+    )
+      return;
     if (
       definition.routeRestrictions !== undefined &&
-      app?.status !== "eligible"
+      applicability?.status !== "eligible" &&
+      !addActionReason(node, "route restriction not validated")
     )
-      conditions.push("route restriction not validated");
-    if (definition.restrictions.length > 0 && app?.status !== "eligible")
-      conditions.push("trait, gene, or technology restrictions not validated");
-    if (exclusions.length > 0)
-      encounteredExclusions.push(`${actionId}: ${exclusions.join(", ")}`);
-
-    let paths: RoutePath[];
-    if (offerById.has(actionId)) {
-      paths = [
-        {
-          actions: [actionId],
-          missing: [],
-          conditions,
-          exclusions,
-          conditional: [],
-        },
-      ];
-      const candidatePaths = candidates.get(actionId) ?? [];
-      candidatePaths.push({
-        actions: [...actionStack].reverse(),
-        missing: [],
-        conditions,
-        exclusions,
-        conditional: [],
-      });
-      candidates.set(actionId, candidatePaths);
-    } else if (definition.prerequisites.kind !== "declared") {
-      paths = [
-        {
-          actions: [actionId],
-          missing: [],
-          conditions,
-          exclusions,
-          conditional: [
-            definition.prerequisites.reason,
-            "future native offer membership is unvalidated",
-          ],
-        },
-      ];
-    } else {
-      const branches: RoutePath[] = [];
-      for (const prerequisite of definition.prerequisites.requirements) {
-        const level = grants.get(prerequisite.technologyId);
-        if (level === undefined || !Number.isFinite(level) || level < 0) {
-          branches.push({
-            actions: [actionId],
-            missing: [
-              `current grant level unavailable: ${prerequisite.technologyId}`,
-            ],
-            conditions,
-            exclusions,
-            conditional: ["future native offer membership is unvalidated"],
-          });
+      return;
+    if (
+      definition.restrictions.length > 0 &&
+      applicability?.status !== "eligible" &&
+      !addActionReason(
+        node,
+        "trait, gene, or technology restrictions not validated",
+      )
+    )
+      return;
+    if (definition.prerequisites.kind !== "declared") {
+      unknownPrerequisiteActionIds.add(id);
+      addActionReason(node, definition.prerequisites.reason);
+      return;
+    }
+    active.add(id);
+    const prereqs = boundedSort(
+      definition.prerequisites.requirements,
+      (a, b) =>
+        requirementKey(a.technologyId, a.requiredLevel).localeCompare(
+          requirementKey(b.technologyId, b.requiredLevel),
+        ),
+      "prerequisite-order-budget",
+    );
+    if (prereqs === undefined) {
+      active.delete(id);
+      return;
+    }
+    for (const prerequisite of prereqs) {
+      const reqNode = ensureRequirement(
+        prerequisite.technologyId,
+        prerequisite.requiredLevel,
+        depth + 1,
+      );
+      if (reqNode === undefined) continue;
+      if (!consume("total-operation-budget")) break;
+      if (node.prerequisiteRequirementIds.at(-1) !== reqNode.id) {
+        node.prerequisiteRequirementIds.push(reqNode.id);
+        work.retainedActionRequirementReferences += 1;
+      }
+      if (
+        reqNode.status === "satisfied" ||
+        expandedRequirements.has(reqNode.id)
+      )
+        continue;
+      expandedRequirements.add(reqNode.id);
+      work.requirementExpansions += 1;
+      const actions: NativeResearchActionDefinition[] = [];
+      for (const candidate of byGrant.get(reqNode.technologyId) ?? []) {
+        if (!consume("alternative-examination-budget")) break;
+        work.alternativesExplored += 1;
+        if (candidate.grantLevel >= reqNode.requiredLevel)
+          actions.push(candidate);
+      }
+      if (work.truncated) break;
+      for (const candidate of actions) {
+        reqNode.alternativeActionIds.push(candidate.actionId);
+        work.retainedAlternativeReferences += 1;
+        if (active.has(candidate.actionId)) {
+          work.cycles += 1;
           continue;
         }
-        if (level >= prerequisite.requiredLevel) continue;
-        const key = requirementKey(
-          prerequisite.technologyId,
-          prerequisite.requiredLevel,
-        );
-        let routes = requirementCache.get(key);
-        if (routes !== undefined) work.sharedSubgraphReuse += 1;
-        else {
-          const actions = (byGrant.get(prerequisite.technologyId) ?? []).filter(
-            (candidate) => candidate.grantLevel >= prerequisite.requiredLevel,
-          );
-          actions.sort(
-            (left, right) =>
-              Number(offerById.has(right.actionId)) -
-              Number(offerById.has(left.actionId)),
-          );
-          work.alternativesExplored += actions.length;
-          routes = [];
-          if (actions.length === 0)
-            routes.push({
-              actions: [],
-              missing: [
-                `no retained action grants ${prerequisite.technologyId} ${prerequisite.requiredLevel}`,
-              ],
-              conditions: [],
-              exclusions: [],
-              conditional: [],
-            });
-          for (const candidate of actions) {
-            for (const route of expandAction(candidate.actionId, depth + 1)) {
-              if (routes.length >= input.maxDependencyExpansions) {
-                work.truncated = true;
-                work.truncationReasons.push("route-alternative-budget");
-                break;
-              }
-              routes.push(route);
-            }
-          }
-          requirementCache.set(key, routes);
-        }
-        for (const route of routes)
-          branches.push({
-            actions: [...route.actions, actionId],
-            missing: [...route.missing],
-            conditions: [...conditions, ...route.conditions],
-            exclusions: [...exclusions, ...route.exclusions],
-            conditional: [
-              "future native offer membership is unvalidated",
-              ...route.conditional,
-            ],
-          });
+        expandAction(candidate.actionId, depth + 1);
+        if (work.truncated) break;
       }
-      paths =
-        branches.length > 0
-          ? branches
-          : [
-              {
-                actions: [actionId],
-                missing: [],
-                conditions,
-                exclusions,
-                conditional: ["future native offer membership is unvalidated"],
-              },
-            ];
+      if (actions.length === 0)
+        addRequirementReason(
+          reqNode,
+          `no retained action grants ${reqNode.technologyId} ${reqNode.requiredLevel}`,
+        );
     }
-    active.delete(actionId);
-    actionStack.pop();
-    actionCache.set(actionId, paths);
-    return paths;
+    active.delete(id);
   };
 
-  const target = byId.get(input.targetActionId);
-  const otherRequiredBranchEvidence = {
-    missing: [] as string[],
-    conditions: [] as string[],
-    exclusions: [] as string[],
-    conditional: [] as string[],
-  };
-  if (target === undefined) {
+  const targetExists = byId.has(input.targetActionId);
+  if (targetExists) expandAction(input.targetActionId, 0);
+  else
     reasons.push(
       `terminal action ${input.targetActionId} is missing from effective definitions`,
     );
-  } else if (target.prerequisites.kind !== "declared") {
-    reasons.push(target.prerequisites.reason);
-  } else {
-    const terminalApp =
-      input.terminalEligibility ??
-      input.applicabilityByActionId?.get(target.actionId);
-    const terminalConditions = target.hasNativeCondition
-      ? ["terminal native condition not evaluated"]
-      : [];
-    const terminalExclusions =
-      terminalApp?.status === "excluded" ? [...terminalApp.reasons] : [];
-    if (terminalApp?.status === "unknown")
-      terminalConditions.push(...terminalApp.reasons);
-    if (
-      target.routeRestrictions !== undefined &&
-      terminalApp?.status !== "eligible"
-    )
-      terminalConditions.push("terminal route restriction not validated");
-    if (target.restrictions.length > 0 && terminalApp?.status !== "eligible")
-      terminalConditions.push(
-        "terminal trait, gene, or technology restrictions not validated",
-      );
-    const terminalConditional = offerById.has(target.actionId)
-      ? []
-      : ["terminal future native offer membership is unvalidated"];
-    if (terminalExclusions.length > 0)
-      encounteredExclusions.push(
-        `${target.actionId}: ${terminalExclusions.join(", ")}`,
-      );
 
-    for (const prerequisite of target.prerequisites.requirements) {
-      const level = grants.get(prerequisite.technologyId);
-      if (level === undefined || !Number.isFinite(level) || level < 0) {
-        reasons.push(
-          `current grant level unavailable: ${prerequisite.technologyId}`,
-        );
-        continue;
-      }
-      if (level >= prerequisite.requiredLevel) continue;
-      const key = requirementKey(
-        prerequisite.technologyId,
-        prerequisite.requiredLevel,
-      );
-      let routes = requirementCache.get(key);
-      if (routes !== undefined) work.sharedSubgraphReuse += 1;
-      else {
-        const actions = (byGrant.get(prerequisite.technologyId) ?? []).filter(
-          (candidate) => candidate.grantLevel >= prerequisite.requiredLevel,
-        );
-        actions.sort(
-          (left, right) =>
-            Number(offerById.has(right.actionId)) -
-            Number(offerById.has(left.actionId)),
-        );
-        work.alternativesExplored += actions.length;
-        routes = [];
-        if (actions.length === 0)
-          routes.push({
-            actions: [],
-            missing: [
-              `no retained action grants ${prerequisite.technologyId} ${prerequisite.requiredLevel}`,
-            ],
-            conditions: [],
-            exclusions: [],
-            conditional: [],
-          });
-        for (const candidate of actions) {
-          for (const route of expandAction(candidate.actionId, 1)) {
-            if (routes.length >= input.maxDependencyExpansions) {
-              work.truncated = true;
-              work.truncationReasons.push("route-alternative-budget");
-              break;
-            }
-            routes.push(route);
-          }
+  let hasUnknownReachableRequirement = false;
+  const candidateEvidence = new Map<string, CandidateEvidence>();
+  const candidateRequirements = new Map<string, Set<string>>();
+  const visitedStates = new Set<string>();
+  type WalkPath = {
+    readonly actionId: string;
+    readonly previous: WalkPath | undefined;
+  };
+  type WalkState = {
+    readonly actionId: string;
+    readonly excluded: boolean;
+    readonly conditional: boolean;
+    readonly path: WalkPath | undefined;
+  };
+  const queue: WalkState[] = byId.has(input.targetActionId)
+    ? [
+        {
+          actionId: input.targetActionId,
+          excluded: false,
+          conditional: false,
+          path: undefined,
+        },
+      ]
+    : [];
+  const pathContains = (path: WalkPath | undefined, actionId: string) => {
+    for (let cursor = path; cursor !== undefined; cursor = cursor.previous) {
+      if (!consume("cycle-processing-budget")) return undefined;
+      if (cursor.actionId === actionId) return true;
+    }
+    return false;
+  };
+  while (queue.length > 0 && !work.truncated) {
+    const state = queue.shift()!;
+    if (!consume("total-operation-budget")) break;
+    phases.discoverCandidates += 1;
+    const stateKey = `${state.actionId}|${state.excluded ? 1 : 0}|${state.conditional ? 1 : 0}`;
+    if (visitedStates.has(stateKey)) continue;
+    visitedStates.add(stateKey);
+    const node = actionNodes.get(state.actionId);
+    if (node === undefined) continue;
+    const app =
+      state.actionId === input.targetActionId
+        ? (input.terminalEligibility ??
+          input.applicabilityByActionId?.get(state.actionId))
+        : input.applicabilityByActionId?.get(state.actionId);
+    const localExcluded =
+      state.excluded ||
+      app?.status === "excluded" ||
+      node.reasons.some((reason) => reason.startsWith("excluded:"));
+    const localConditional =
+      state.conditional ||
+      app?.status === "unknown" ||
+      node.reasons.some((reason) => !reason.startsWith("excluded:")) ||
+      node.prerequisiteStatus === "unknown" ||
+      !offerById.has(state.actionId);
+    const offer = offerById.get(state.actionId);
+    if (offer !== undefined && state.actionId !== input.targetActionId) {
+      let evidence = candidateEvidence.get(state.actionId);
+      if (evidence === undefined) {
+        if (!consume("candidate-budget")) break;
+        if (work.candidateEvaluations >= input.maxCandidates) {
+          work.truncated = true;
+          work.truncationReasons.push("candidate-count-budget");
+          break;
         }
-        requirementCache.set(key, routes);
-      }
-      for (const route of routes) {
-        const full = {
-          actions: [...route.actions, target.actionId],
-          missing: route.missing,
-          conditions: [...route.conditions, ...terminalConditions],
-          exclusions: [...route.exclusions, ...terminalExclusions],
-          conditional: [...route.conditional, ...terminalConditional],
+        const path: string[] = [];
+        for (
+          let cursor = state.path;
+          cursor !== undefined;
+          cursor = cursor.previous
+        )
+          path.push(cursor.actionId);
+        path.reverse();
+        for (let i = 0; i < path.length + 1; i += 1) {
+          if (!consume("witness-construction-budget")) break;
+        }
+        if (work.truncated) break;
+        if (!consume("witness-construction-budget")) break;
+        evidence = {
+          actionIds: [...path, state.actionId],
+          connectedRequirementIds: new Set(
+            candidateRequirements.get(state.actionId) ?? [],
+          ),
+          reasons: new Set(),
+          excludedReasons: new Set(),
+          conditionalReasons: new Set(),
+          declaredRoute: false,
+          unknownRoute: false,
+          pathKinds: new Set(),
         };
-        const currentOffer = offerById.get(route.actions[0] ?? "");
-        if (currentOffer === undefined) continue;
-        const existing = candidates.get(currentOffer.actionId) ?? [];
-        existing.push(full);
-        candidates.set(currentOffer.actionId, existing);
+        candidateEvidence.set(state.actionId, evidence);
+        work.retainedCandidateWitnesses += 1;
+        work.candidateEvaluations += 1;
+        work.retainedPathActionReferences += evidence.actionIds.length;
       }
-      if (!routes.some((route) => offerById.has(route.actions[0] ?? ""))) {
-        for (const route of routes) {
-          otherRequiredBranchEvidence.missing.push(...route.missing);
-          otherRequiredBranchEvidence.conditions.push(...route.conditions);
-          otherRequiredBranchEvidence.exclusions.push(...route.exclusions);
-          otherRequiredBranchEvidence.conditional.push(...route.conditional);
+      const pathNodes: MutableAction[] = [];
+      for (const id of evidence.actionIds) {
+        if (!consume("candidate-discovery-budget")) break;
+        const pathNode = actionNodes.get(id);
+        if (pathNode === undefined) continue;
+        pathNodes.push(pathNode);
+        if (!consumeMany(pathNode.reasons.length, "candidate-discovery-budget"))
+          break;
+      }
+      if (work.truncationReasons.includes("candidate-discovery-budget")) break;
+      if (localExcluded) {
+        for (const pathNode of pathNodes)
+          for (const reason of pathNode.reasons.filter((value) =>
+            value.startsWith("excluded:"),
+          ))
+            retainCandidateReason(
+              evidence.excludedReasons,
+              reason.slice("excluded:".length).trim(),
+            );
+        evidence.pathKinds.add("excluded");
+      } else if (localConditional) {
+        for (const pathNode of pathNodes)
+          for (const reason of pathNode.reasons.filter(
+            (value) => !value.startsWith("excluded:"),
+          ))
+            retainCandidateReason(evidence.conditionalReasons, reason);
+        retainCandidateReason(
+          evidence.conditionalReasons,
+          "future native offer membership is unvalidated",
+        );
+        evidence.pathKinds.add("conditional");
+      } else {
+        evidence.declaredRoute = true;
+        evidence.pathKinds.add("declared");
+      }
+      if (node.prerequisiteStatus === "unknown") evidence.unknownRoute = true;
+    }
+    if (node.prerequisiteStatus === "unknown") continue;
+    for (const reqId of node.prerequisiteRequirementIds) {
+      const reqNode = requirementNodes.get(reqId);
+      if (reqNode === undefined) continue;
+      if (reqNode.status === "unknown") hasUnknownReachableRequirement = true;
+      for (const alternative of reqNode.alternativeActionIds) {
+        if (!consume("total-operation-budget")) break;
+        work.alternativesExplored += 1;
+        const cycle = pathContains(state.path, alternative);
+        if (work.truncated) break;
+        if (cycle || alternative === state.actionId) {
+          work.cycles += 1;
+          continue;
         }
+        if (offerById.has(alternative)) {
+          const connected =
+            candidateRequirements.get(alternative) ?? new Set<string>();
+          if (!connected.has(reqId)) {
+            connected.add(reqId);
+            work.retainedCandidateRequirementReferences += 1;
+          }
+          candidateRequirements.set(alternative, connected);
+          const evidence = candidateEvidence.get(alternative);
+          evidence?.connectedRequirementIds.add(reqId);
+        }
+        queue.push({
+          actionId: alternative,
+          excluded: localExcluded,
+          conditional: localConditional || reqNode.status === "unknown",
+          path: { actionId: state.actionId, previous: state.path },
+        });
+        work.peakPendingWalkStates = Math.max(
+          work.peakPendingWalkStates,
+          queue.length,
+        );
       }
+      if (work.truncationReasons.includes("witness-construction-budget")) break;
     }
   }
 
-  const output: AdvisoryResearchCandidate[] = [];
-  for (const [actionId, rawPaths] of candidates) {
-    if (output.length >= input.maxCandidates) {
+  for (const offer of offers) {
+    if (
+      offer.actionId === input.targetActionId ||
+      candidateEvidence.has(offer.actionId)
+    )
+      continue;
+    if (!consume("candidate-budget")) break;
+    if (work.candidateEvaluations >= input.maxCandidates) {
       work.truncated = true;
-      work.truncationReasons.push("candidate-evaluation-budget");
+      work.truncationReasons.push("candidate-count-budget");
       break;
     }
+    const unknownRelationship =
+      !targetExists ||
+      work.truncated ||
+      actionNodes.get(input.targetActionId)?.prerequisiteStatus === "unknown" ||
+      unknownPrerequisiteActionIds.size > 0 ||
+      hasUnknownReachableRequirement;
+    const evidence: CandidateEvidence = {
+      actionIds: [],
+      connectedRequirementIds: new Set(),
+      reasons: new Set(),
+      excludedReasons: new Set(),
+      conditionalReasons: new Set(),
+      declaredRoute: false,
+      unknownRoute: unknownRelationship,
+      pathKinds: new Set([unknownRelationship ? "unknown" : "unrelated"]),
+    };
+    if (work.truncated)
+      retainCandidateReason(
+        evidence.conditionalReasons,
+        "dependency search incomplete; relationship is unknown",
+      );
+    if (unknownRelationship && !work.truncated)
+      retainCandidateReason(
+        evidence.conditionalReasons,
+        targetExists
+          ? unknownPrerequisiteActionIds.size > 0
+            ? "reachable action has an unknown prerequisite declaration; relationship is unresolved"
+            : "terminal dependency evidence is insufficient to classify this offer"
+          : "terminal action definition is unavailable; relationship is unknown",
+      );
+    candidateEvidence.set(offer.actionId, evidence);
+    work.retainedCandidateWitnesses += 1;
     work.candidateEvaluations += 1;
-    phases.evaluateCandidates += 1;
-    const offer = offerById.get(actionId)!;
-    const completedPaths = rawPaths.map((path) => {
-      const actions =
-        path.actions.at(-1) === input.targetActionId
-          ? path.actions
-          : [...path.actions, input.targetActionId];
-      const inheritedConditions: string[] = [];
-      const inheritedExclusions: string[] = [];
-      const inheritedConditional: string[] = [];
-      for (const stepId of actions.slice(1)) {
-        const definition = byId.get(stepId);
-        if (definition === undefined) continue;
-        const applicability =
-          stepId === input.targetActionId
-            ? (input.terminalEligibility ??
-              input.applicabilityByActionId?.get(stepId))
-            : input.applicabilityByActionId?.get(stepId);
-        if (applicability?.status === "unknown")
-          inheritedConditions.push(...applicability.reasons);
-        if (applicability?.status === "excluded")
-          inheritedExclusions.push(...applicability.reasons);
-        if (definition.hasNativeCondition)
-          inheritedConditions.push(
-            stepId === input.targetActionId
-              ? "terminal native condition not evaluated"
-              : "native condition not evaluated",
-          );
-        if (
-          definition.routeRestrictions !== undefined &&
-          applicability?.status !== "eligible"
-        )
-          inheritedConditions.push("route restriction not validated");
-        if (
-          definition.restrictions.length > 0 &&
-          applicability?.status !== "eligible"
-        )
-          inheritedConditions.push(
-            "trait, gene, or technology restrictions not validated",
-          );
-        if (!offerById.has(stepId))
-          inheritedConditional.push(
-            stepId === input.targetActionId
-              ? "terminal future native offer membership is unvalidated"
-              : "future native offer membership is unvalidated",
-          );
-      }
-      return {
-        ...path,
-        actions,
-        conditions: [...path.conditions, ...inheritedConditions],
-        exclusions: [...path.exclusions, ...inheritedExclusions],
-        conditional: [...path.conditional, ...inheritedConditional],
-      };
+  }
+
+  const output: AdvisoryResearchCandidate[] = [];
+  const frozenRequirementWitnesses = new Map<
+    string,
+    Readonly<AdvisoryRequirementWitness>
+  >();
+  const getRequirementWitness = (id: string) => {
+    const cached = frozenRequirementWitnesses.get(id);
+    if (cached !== undefined) return cached;
+    const node = requirementNodes.get(id);
+    if (node === undefined) return undefined;
+    if (
+      !consumeMany(
+        1 + node.alternativeActionIds.length + node.reasons.length,
+        "witness-construction-budget",
+      )
+    )
+      return undefined;
+    const witness = Object.freeze({
+      ...node,
+      alternativeActionIds: Object.freeze([...node.alternativeActionIds]),
+      reasons: Object.freeze(sortedUnique(node.reasons)),
     });
-    const paths = completedPaths.filter((path) => path.exclusions.length === 0);
-    const evidencePaths = paths.length > 0 ? paths : completedPaths;
-    const unique = (
-      field: "missing" | "conditions" | "exclusions" | "conditional",
-    ) => [...new Set(evidencePaths.flatMap((path) => path[field]))];
-    const chains = [
-      ...new Map(
-        evidencePaths.map((path) => [
-          path.actions.join("\u0000"),
-          [...path.actions],
-        ]),
-      ).values(),
+    frozenRequirementWitnesses.set(id, witness);
+    work.retainedRequirementWitnesses += 1;
+    work.retainedAlternativeReferences += node.alternativeActionIds.length;
+    work.retainedReasonReferences += node.reasons.length;
+    return witness;
+  };
+  for (const [actionId, evidence] of candidateEvidence) {
+    if (!consume("witness-construction-budget")) break;
+    const offer = offerById.get(actionId)!;
+    if (
+      !consumeMany(
+        evidence.connectedRequirementIds.size,
+        "witness-construction-budget",
+      )
+    )
+      break;
+    const connected = sortedUnique(evidence.connectedRequirementIds);
+    const advances = connected[0];
+    work.retainedCandidateRequirementReferences += connected.length * 2;
+    const advancesRequirements: Readonly<AdvisoryRequirementWitness>[] = [];
+    for (const id of connected) {
+      const witness = getRequirementWitness(id);
+      if (work.truncationReasons.includes("witness-construction-budget")) break;
+      if (witness !== undefined) advancesRequirements.push(witness);
+    }
+    if (work.truncationReasons.includes("witness-construction-budget")) break;
+    const pathRequirementIds = new Set<string>();
+    for (let index = 0; index < evidence.actionIds.length - 1; index += 1) {
+      if (!consume("witness-construction-budget")) break;
+      const parent = actionNodes.get(evidence.actionIds[index]!);
+      const childId = evidence.actionIds[index + 1]!;
+      for (const requirementId of parent?.prerequisiteRequirementIds ?? []) {
+        if (!consume("witness-construction-budget")) break;
+        const alternatives =
+          requirementNodes.get(requirementId)?.alternativeActionIds ?? [];
+        for (const alternative of alternatives) {
+          if (!consume("witness-construction-budget")) break;
+          if (alternative === childId) pathRequirementIds.add(requirementId);
+        }
+        if (work.truncationReasons.includes("witness-construction-budget"))
+          break;
+      }
+      if (work.truncationReasons.includes("witness-construction-budget")) break;
+    }
+    if (work.truncationReasons.includes("witness-construction-budget")) break;
+    const requiredByWitnessActionsSet = new Set<string>();
+    for (const id of evidence.actionIds) {
+      if (!consume("witness-construction-budget")) break;
+      for (const reqId of actionNodes.get(id)?.prerequisiteRequirementIds ??
+        []) {
+        if (!consume("witness-construction-budget")) break;
+        requiredByWitnessActionsSet.add(reqId);
+      }
+      if (work.truncationReasons.includes("witness-construction-budget")) break;
+    }
+    if (work.truncationReasons.includes("witness-construction-budget")) break;
+    const requiredByWitnessActions = sortedUnique(requiredByWitnessActionsSet);
+    const remaining: Readonly<AdvisoryRequirementWitness>[] = [];
+    for (const id of requiredByWitnessActions) {
+      if (!consume("witness-construction-budget")) break;
+      if (
+        pathRequirementIds.has(id) ||
+        evidence.connectedRequirementIds.has(id)
+      )
+        continue;
+      const witness = getRequirementWitness(id);
+      if (work.truncationReasons.includes("witness-construction-budget")) break;
+      if (witness !== undefined) {
+        remaining.push(witness);
+        work.retainedCandidateRequirementReferences += 1;
+      }
+    }
+    if (work.truncationReasons.includes("witness-construction-budget")) break;
+    if (
+      !consumeMany(
+        evidence.reasons.size +
+          evidence.conditionalReasons.size +
+          evidence.excludedReasons.size,
+        "witness-construction-budget",
+      )
+    )
+      break;
+    const pathReasons = sortedUnique([
+      ...evidence.reasons,
+      ...evidence.conditionalReasons,
+      ...evidence.excludedReasons,
+    ]);
+    const routeEvidence = evidence.pathKinds.has("declared")
+      ? "declared-contribution"
+      : evidence.pathKinds.has("conditional")
+        ? "conditional-contribution"
+        : evidence.pathKinds.has("excluded") && !work.truncated
+          ? "excluded"
+          : evidence.pathKinds.has("unknown") ||
+              evidence.unknownRoute ||
+              work.truncated
+            ? "unknown"
+            : evidence.pathKinds.has("excluded")
+              ? "excluded"
+              : evidence.pathKinds.has("unrelated")
+                ? "unrelated"
+                : "unknown";
+    const remainingConditions: string[] = [];
+    for (const requirement of remaining) {
+      for (const alternative of requirement.alternativeActionIds) {
+        if (!consume("witness-construction-budget")) break;
+        const action = actionNodes.get(alternative);
+        if (action !== undefined) {
+          if (
+            !consumeMany(action.reasons.length, "witness-construction-budget")
+          )
+            break;
+          remainingConditions.push(...action.reasons);
+          if (action.prerequisiteStatus === "unknown")
+            if (!consume("witness-construction-budget")) break;
+          if (action.prerequisiteStatus === "unknown")
+            remainingConditions.push(
+              "native prerequisite declaration is unknown",
+            );
+        }
+      }
+      if (work.truncationReasons.includes("witness-construction-budget")) break;
+    }
+    if (work.truncationReasons.includes("witness-construction-budget")) break;
+    const conditional = sortedUnique([
+      ...evidence.conditionalReasons,
+      ...remainingConditions,
+    ]);
+    const dependencyReasons = sortedUnique([...pathReasons, ...conditional]);
+    const candidateReasons = [
+      "current native offer proves actionability for this observation only",
+      ...pathReasons,
+      ...(routeEvidence === "excluded"
+        ? ["all recorded connections require an explicitly excluded branch"]
+        : []),
+      ...(conditional.length > 0
+        ? ["future eligibility or offer authority remains unresolved"]
+        : []),
     ];
-    const missing = [
-      ...new Set([
-        ...unique("missing"),
-        ...otherRequiredBranchEvidence.missing,
-      ]),
-    ];
-    const conditions = [
-      ...new Set([
-        ...unique("conditions"),
-        ...otherRequiredBranchEvidence.conditions,
-      ]),
-    ];
-    const excluded = [
-      ...new Set([
-        ...unique("exclusions"),
-        ...otherRequiredBranchEvidence.exclusions,
-      ]),
-    ];
-    const conditional = [
-      ...new Set([
-        ...unique("conditional"),
-        ...otherRequiredBranchEvidence.conditional,
-      ]),
-    ];
+    if (
+      !consumeMany(
+        dependencyReasons.length + candidateReasons.length,
+        "witness-construction-budget",
+      )
+    )
+      break;
+    if (
+      input.resourceStocks !== undefined &&
+      !consumeMany(
+        Object.keys(offer.cost).length + input.resourceStocks.length + 1,
+        "witness-construction-budget",
+      )
+    )
+      break;
     const affordability =
       input.resourceStocks === undefined
         ? undefined
@@ -559,88 +920,42 @@ export function planAdvisoryResearchRoutes(
         cost: offer.cost,
         nativeAffordable: offer.nativeAffordable,
         terminalActionId: input.targetActionId,
-        terminalRelationship: "declared-dependency",
-        knownPrerequisiteChain: chains[0] ?? [],
-        alternativeBranches: Object.freeze(
-          chains.map((chain) => Object.freeze(chain)),
-        ),
-        missingRequirements: Object.freeze(missing),
-        nativeConditionsNotValidated: Object.freeze(conditions),
-        excludedRoutes: Object.freeze(excluded),
-        conditionalFutureSteps: Object.freeze(conditional),
+        routeEvidence,
+        dependencyWitness: Object.freeze({
+          advancesRequirementId: advances,
+          connectedRequirementIds: Object.freeze(connected),
+          advancesRequirements: Object.freeze(advancesRequirements),
+          remainingRequirements: Object.freeze(remaining),
+          pathActionIds: Object.freeze(evidence.actionIds),
+          reasons: Object.freeze(dependencyReasons),
+        }),
         currentAffordability: affordability,
-        strategicBenefit:
-          missing.length > 0
-            ? "unquantifiable"
-            : conditions.length + conditional.length + excluded.length > 0
-              ? "provisional"
-              : "proven",
-        reasons: Object.freeze([
-          "current native offer proves actionability for this observation only",
-          ...(conditions.length + conditional.length > 0
-            ? ["future eligibility remains uncertain"]
-            : []),
-          ...(excluded.length > 0
-            ? ["some declared routes are explicitly excluded"]
-            : []),
-        ]),
+        reasons: Object.freeze(candidateReasons),
       }),
     );
+    work.retainedCandidateWitnesses += 1;
+    work.retainedReasonReferences +=
+      dependencyReasons.length + candidateReasons.length;
   }
-
-  const comparable = output.filter(
-    (candidate) =>
-      candidate.currentAffordability?.estimatedTime !== undefined &&
-      candidate.currentAffordability.authority === "validated",
-  );
-  const sameBasis =
-    comparable.length === output.length &&
-    comparable.length > 0 &&
-    comparable.every(
-      (candidate) =>
-        candidate.currentAffordability!.validityEpoch ===
-        comparable[0]!.currentAffordability!.validityEpoch,
-    );
-  const ranked = sameBasis
-    ? [...comparable].sort(
-        (left, right) =>
-          left.currentAffordability!.estimatedTime! -
-          right.currentAffordability!.estimatedTime!,
-      )
-    : [];
-  const tied =
-    ranked.length > 1 &&
-    ranked[0]!.currentAffordability!.estimatedTime ===
-      ranked[1]!.currentAffordability!.estimatedTime;
-  const selected = ranked.length > 0 && !tied ? ranked[0] : undefined;
   if (work.truncated)
     reasons.push(
-      "dependency or candidate search budget exhausted; unexplored alternatives remain",
+      "bounded dependency exploration exhausted; route coverage and candidate comparison are incomplete",
     );
   const status = work.truncated
     ? "incomplete"
-    : output.length > 0
-      ? "complete"
-      : "unavailable";
+    : !targetExists
+      ? "unavailable"
+      : output.length > 0
+        ? "complete"
+        : targetExists
+          ? "complete"
+          : "unavailable";
   return Object.freeze({
     status,
     candidates: Object.freeze(output),
-    selectedActionId: selected?.actionId,
-    selection:
-      selected === undefined
-        ? output.length > 1
-          ? "ambiguous"
-          : output.length === 1
-            ? "provisional"
-            : "none"
-        : selected.strategicBenefit === "proven"
-          ? "ordered"
-          : "provisional",
-    work: Object.freeze({
-      ...work,
-      truncationReasons: Object.freeze([...new Set(work.truncationReasons)]),
-      phases: Object.freeze({ ...phases }),
-    }),
-    reasons: Object.freeze([...new Set(reasons)]),
+    selectedActionId: undefined,
+    selection: "none",
+    work: freezeWork(),
+    reasons: Object.freeze(sortedUnique(reasons)),
   });
 }
