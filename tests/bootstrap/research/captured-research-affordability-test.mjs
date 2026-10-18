@@ -123,6 +123,21 @@ assert.equal(
   unknownReservationEvidence.input.techs[0]?.costConflictEvidence,
   "unavailable",
 );
+const ownerEvidence = decide({
+  nativeAffordable: true,
+  knowledge: 10,
+  cost: { Knowledge: 5, Alloy: 2 },
+  observeOwner: true,
+});
+assert.equal(ownerEvidence.input.techs[0]?.offerGeneration, 1);
+assert.deepEqual(ownerEvidence.input.techs[0]?.offerCost, {
+  Knowledge: 5,
+  Alloy: 2,
+});
+assert.deepEqual(ownerEvidence.input.techs[0]?.observedResources, {
+  Knowledge: { amount: 10, max: 1000, rateOfChange: 0 },
+  Alloy: { amount: 0, max: 1000, rateOfChange: 0 },
+});
 
 console.log(
   "research freshness decisions and native action invocations passed",

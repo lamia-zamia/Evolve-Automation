@@ -1512,6 +1512,39 @@ export function startCapturedRuntime({
     ) {
       const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
       const root = pageCapture.rootState.readRoot();
+      const rootGeneration = progression.readRootGeneration();
+      const progressionEpoch = progression.readProgressionEpoch();
+      const observedOffers = progression.readOfferedTechs();
+      const currentOffer = observedOffers?.find(
+        (offer) => offer.elementId === selection.decision.techId,
+      );
+      const ownerQueueEvidence =
+        root === undefined
+          ? "unavailable"
+          : (["queue", "r_queue"] as const).reduce<
+              "empty" | "conflict" | "unavailable"
+            >((evidence, queueId) => {
+              if (evidence !== "empty") return evidence;
+              const entries = readProperty(
+                readProperty(root, queueId),
+                "queue",
+              );
+              return !Array.isArray(entries)
+                ? "unavailable"
+                : entries.length > 0
+                  ? "conflict"
+                  : evidence;
+            }, "empty");
+      const currentControl =
+        currentOffer === undefined
+          ? undefined
+          : pageCapture.controls.resolve(currentOffer.elementId);
+      const ownerCatalogCurrent =
+        root !== undefined &&
+        root === pageCapture.rootState.readRoot() &&
+        rootGeneration === progression.readRootGeneration() &&
+        progressionEpoch === progression.readProgressionEpoch() &&
+        currentOffer?.generation === currentControl?.generation;
       const definitions = progression.readResearchActionDefinitions();
       const definition = definitions?.find(
         (entry) => entry.actionId === selection.decision.techId,
@@ -1539,6 +1572,15 @@ export function startCapturedRuntime({
           "researchOwnerSelectionLast",
           Object.freeze({
             cycle: automationCycle,
+            rootGeneration,
+            progressionEpoch,
+            catalogCurrent: ownerCatalogCurrent,
+            researchPermission: settingsStore.readRaw()["autoResearch"],
+            queueEvidence: ownerQueueEvidence,
+            targetEligibility:
+              progression.readResearchActionEligibility?.(
+                selection.decision.techId,
+              ) ?? "unavailable",
             actionId: selection.decision.techId,
             grantTechnology: definition?.grantTechnology,
             grantLevel: definition?.grantLevel,
@@ -1546,9 +1588,14 @@ export function startCapturedRuntime({
             manaBefore,
             observed: selection.observed.map((candidate) => ({
               actionId: candidate.id,
+              offerGeneration: candidate.offerGeneration,
+              offerObservationId: candidate.offerObservationId,
+              offerSetIdentity: candidate.offerSetIdentity,
+              cost: candidate.offerCost,
               affordable: candidate.affordable,
               nativeAffordable: candidate.nativeAffordable,
               resourceAffordable: candidate.resourceAffordable,
+              observedResources: candidate.observedResources,
               reservation: candidate.costConflictEvidence,
               exclusion: candidate.exclusionEvidence,
             })),

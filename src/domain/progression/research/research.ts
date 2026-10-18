@@ -11,6 +11,10 @@ export interface ResearchTechView {
   readonly hasTechConflict: boolean;
   /** Component facts retained for observation; unknown remains distinct from a rejection. */
   readonly nativeAffordable?: boolean;
+  readonly offerGeneration?: number;
+  readonly offerObservationId?: string | undefined;
+  readonly offerSetIdentity?: string | undefined;
+  readonly offerCost?: Readonly<Record<string, number>>;
   readonly resourceAffordable?: boolean | undefined;
   readonly costConflictEvidence?:
     "none" | "conflict" | "unavailable" | "not-evaluated";

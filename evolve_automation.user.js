@@ -8528,6 +8528,10 @@
             hasTechConflict: affordable && techConflict,
             ...dependencies.observeOwner === !0 ? {
               nativeAffordable: tech.nativeAffordable,
+              offerGeneration: tech.generation,
+              offerObservationId: tech.offerObservationId,
+              offerSetIdentity: tech.offerSetIdentity,
+              offerCost: tech.cost,
               resourceAffordable,
               ...resourceSample === void 0 ? {} : {
                 observedResources: Object.freeze(

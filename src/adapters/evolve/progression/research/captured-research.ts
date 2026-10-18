@@ -241,6 +241,10 @@ export function createCapturedResearchAdapter(
           ...(dependencies.observeOwner === true
             ? {
                 nativeAffordable: tech.nativeAffordable,
+                offerGeneration: tech.generation,
+                offerObservationId: tech.offerObservationId,
+                offerSetIdentity: tech.offerSetIdentity,
+                offerCost: tech.cost,
                 resourceAffordable,
                 ...(resourceSample === undefined
                   ? {}

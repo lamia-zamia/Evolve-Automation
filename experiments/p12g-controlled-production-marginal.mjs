@@ -158,6 +158,7 @@ try {
     });
     await discovery.evaluate(() => {
       const hooks = window.__EA_TEST_HOOKS__;
+      hooks.readPeriodForTest = () => window.__EA_RUNNER__.periods();
       hooks.observeSmelterPlanForTest = (input, decision, demand) => {
         if (
           demand.requestedSteel >= 250 &&
@@ -326,6 +327,10 @@ try {
     });
     const samples = [];
     try {
+      await session.evaluate(() => {
+        window.__EA_TEST_HOOKS__.readPeriodForTest = () =>
+          window.__EA_RUNNER__.periods();
+      });
       const restoredCatalog = await session.evaluate(() => ({
         catalog: window.__EA_TEST_HOOKS__.readCurrentResearchCatalog?.(
           "tech-steel_containers",
@@ -361,6 +366,8 @@ try {
       const initialState = decodeExport(capture.exportSave);
       const startAuthority = restoredEvidence;
       let observationReadMs = [];
+      let observedResearchEventCount = 0;
+      let observedNativeInvocationOrder = 0;
       for (let elapsed = 10; elapsed < horizon; elapsed += 10) {
         await session.advance(10);
         const samplePeriod = elapsed + 10;
@@ -374,6 +381,8 @@ try {
               "tech-steel_containers",
             ),
             plans: window.__EA_TEST_HOOKS__.p12gPlans,
+            ownerEvents:
+              window.__EA_TEST_HOOKS__.researchOwnerSelectionEvents ?? [],
           })),
         ]);
         if (samplePeriod === 20) {
@@ -386,6 +395,20 @@ try {
             }),
           );
         }
+        const ownerEvents = evidence.ownerEvents.slice(
+          observedResearchEventCount,
+        );
+        observedResearchEventCount = evidence.ownerEvents.length;
+        const newNativeInvocations = (
+          diagnostics.nativeInvocations ?? []
+        ).filter(({ order }) => order > observedNativeInvocationOrder);
+        observedNativeInvocationOrder = Math.max(
+          observedNativeInvocationOrder,
+          ...newNativeInvocations.map(({ order }) => order),
+        );
+        const targetOffer = evidence.catalog?.offers?.find(
+          ({ elementId }) => elementId === steelGoalAction,
+        );
         samples.push({
           elapsed: samplePeriod,
           resources: resourceSnapshot(state),
@@ -399,6 +422,28 @@ try {
           researchInvocations: (diagnostics.nativeInvocations ?? []).filter(
             ({ elementId }) => elementId.startsWith("tech-"),
           ),
+          newResearchInvocations: newNativeInvocations.filter(({ elementId }) =>
+            elementId.startsWith("tech-"),
+          ),
+          researchDecisionEvidence: {
+            period: samplePeriod,
+            offerSource: evidence.catalog?.source,
+            catalogCurrent: evidence.catalog?.current,
+            rootGeneration: evidence.catalog?.rootGeneration,
+            progressionEpoch: evidence.catalog?.progressionEpoch,
+            permission: evidence.catalog?.researchPermission,
+            queueEvidence: evidence.catalog?.queueEvidence,
+            eligibility: evidence.catalog?.targetEligibility,
+            targetControlGeneration:
+              evidence.catalog?.targetControl?.generation,
+            offer: targetOffer,
+            resources: (evidence.catalog?.resourceSamples ?? []).filter(
+              ({ resourceId }) =>
+                targetOffer !== undefined &&
+                Object.hasOwn(targetOffer.cost, resourceId),
+            ),
+            ownerEvents,
+          },
           workTicks: diagnostics.workTicks,
         });
       }
