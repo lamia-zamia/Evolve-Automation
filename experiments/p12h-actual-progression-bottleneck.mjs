@@ -218,10 +218,10 @@ const conclusion =
     ? "A — Cached affordability explains the discrepancy"
     : hasCoherentNativeUnknown
       ? "B — Genuine native affordability discrepancy remains"
-      : baselineResult.provenCriticalPath &&
-          steelResult.provenCriticalPath &&
-          baselineResult.provenCriticalPath.resourceId ===
-            steelResult.provenCriticalPath.resourceId
+      : baselineResult.lastObservedResourceThreshold &&
+          steelResult.lastObservedResourceThreshold &&
+          baselineResult.lastObservedResourceThreshold.resourceId ===
+            steelResult.lastObservedResourceThreshold.resourceId
         ? "A — Binding resource threshold established"
         : baselineResult.lastObservedConstraint &&
             steelResult.lastObservedConstraint
@@ -232,8 +232,8 @@ const decisionText =
     ? `The period-70 replay sample paired a cached generation ${diagnostic.before.offer.generation} false verdict with later resource holdings of ${diagnosticStock}. In an isolated replay from the same verified capture and settings, a protected fresh draw at period ${diagnostic.drawBoundaryPeriod} kept root generation ${diagnostic.before.rootGeneration}, progression epoch, action identity and native price unchanged. The fresh generation ${diagnostic.after.offer.generation} verdict was true against the current stock. The apparent contradiction is therefore explained by cached affordability evidence being joined to newer holdings; generation-9 draw-time holdings were not recorded, so they are not inferred. Knowledge was the last resource threshold to clear: it was below 9,000 at period ${baselineResult.lastObservedConstraint?.priorInsufficientPeriod ?? 60} and at or above 9,000 by period ${baselineResult.lastObservedConstraint?.period ?? 70}. Steel had already cleared its 250 threshold by period 40. The ordinary paired replay selected and invoked Research at period 72, consistent with the observed stock accumulation and subsequent owner selection. This establishes the final resource threshold, not the entire terminal MAD critical path.`
     : hasCoherentNativeUnknown
       ? `A fresh same-boundary draw still reports unaffordability despite complete current native cost and resource evidence. The remaining discrepancy is in that coherent native verdict; the cached period-70 sample alone does not establish it.`
-      : baselineResult.provenCriticalPath
-        ? `The last observed requirement to clear was **${baselineResult.provenCriticalPath.resourceId}**. It was below price after period ${baselineResult.provenCriticalPath.clearInterval.afterPeriod} and sufficient by period ${baselineResult.provenCriticalPath.clearInterval.byPeriod}; the owner selected and invoked the action at period ${baselineResult.provenCriticalPath.decisionPeriod}. This establishes the final resource threshold, not the entire terminal MAD critical path.`
+      : baselineResult.lastObservedResourceThreshold
+        ? `The last observed requirement to clear was **${baselineResult.lastObservedResourceThreshold.resourceId}**. It was below price after period ${baselineResult.lastObservedResourceThreshold.clearInterval.afterPeriod} and sufficient by period ${baselineResult.lastObservedResourceThreshold.clearInterval.byPeriod}; the owner selected and invoked the action at period ${baselineResult.lastObservedResourceThreshold.decisionPeriod}. This establishes the final resource threshold, not the entire terminal MAD critical path.`
         : `Both arms retain multiple blockers or an observation gap, so the replay does not establish one critical path. The latest observed threshold and decision evidence are reported below.`;
 
 const md = `# P12H — Actual progression bottleneck
@@ -284,8 +284,8 @@ The isolated period-70 diagnostic read cached generation 9 as false, then made e
 
 ## Attribution and competing commitments
 
-- Baseline attribution: \`${baselineResult.status}\`; last observed constraint ${JSON.stringify(baselineResult.lastObservedConstraint ?? null)}; proven critical path ${JSON.stringify(baselineResult.provenCriticalPath ?? null)}.
-- Steel-oriented attribution: \`${steelResult.status}\`; last observed constraint ${JSON.stringify(steelResult.lastObservedConstraint ?? null)}; proven critical path ${JSON.stringify(steelResult.provenCriticalPath ?? null)}.
+- Baseline attribution: \`${baselineResult.status}\`; last observed constraint ${JSON.stringify(baselineResult.lastObservedConstraint ?? null)}; last observed resource threshold ${JSON.stringify(baselineResult.lastObservedResourceThreshold ?? null)}.
+- Steel-oriented attribution: \`${steelResult.status}\`; last observed constraint ${JSON.stringify(steelResult.lastObservedConstraint ?? null)}; last observed resource threshold ${JSON.stringify(steelResult.lastObservedResourceThreshold ?? null)}.
 - Last observed non-resource constraint: baseline ${JSON.stringify(baselineResult.lastObservedNonResourceConstraint ?? null)}; Steel-oriented ${JSON.stringify(steelResult.lastObservedNonResourceConstraint ?? null)}.
 - Both observations preserve commitments as **unknown**. The owner’s event reports no reservation conflict for the Research selection, while the capture/replay separately records Construction Steel demand. This does not quantify all external commitments or establish that the Construction demand was unnecessary.
 - The periodic replay has its final pre-purchase sample at period 70 and owner selection/invocation at period 72. The action is selected two periods after the stock threshold is observed clear. The exact draw-time stock for generation 9 and exact first evaluation time are unavailable; a current protected draw at period 70 shows that no additional native gate is needed to explain the verdict change.

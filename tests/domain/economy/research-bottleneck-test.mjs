@@ -104,7 +104,10 @@ const twoResources = attributeResearchBottleneck([
 ]);
 assert.equal(twoResources.lastObservedConstraint?.resourceId, "Knowledge");
 assert.equal(twoResources.lastObservedConstraint?.period, 2);
-assert.equal(twoResources.provenCriticalPath?.resourceId, "Knowledge");
+assert.equal(
+  twoResources.lastObservedResourceThreshold?.resourceId,
+  "Knowledge",
+);
 
 const priceChanged = attributeResearchBottleneck([
   observation(1, { Knowledge: 8 }, { cost: { Knowledge: 10 } }),
@@ -266,7 +269,7 @@ const permissionClearsAfterResources = attributeResearchBottleneck([
   ),
 ]);
 assert.equal(
-  permissionClearsAfterResources.provenCriticalPath,
+  permissionClearsAfterResources.lastObservedResourceThreshold,
   undefined,
   "a later permission blocker must prevent resource-only critical-path proof",
 );
@@ -289,7 +292,7 @@ const simultaneous = attributeResearchBottleneck([
   ),
 ]);
 assert.equal(simultaneous.lastObservedConstraint?.intervalAmbiguous, true);
-assert.equal(simultaneous.provenCriticalPath, undefined);
+assert.equal(simultaneous.lastObservedResourceThreshold, undefined);
 
 const surplus = attributeResearchBottleneck([
   observation(1, { Knowledge: 100 }, { nativeAffordable: true }),
@@ -334,7 +337,10 @@ const criticalShortage = attributeResearchBottleneck([
   ),
 ]);
 assert.equal(criticalShortage.lastObservedConstraint?.resourceId, "Crystal");
-assert.equal(criticalShortage.provenCriticalPath?.resourceId, "Crystal");
+assert.equal(
+  criticalShortage.lastObservedResourceThreshold?.resourceId,
+  "Crystal",
+);
 
 const unexplainedNativeGate = attributeResearchBottleneck([
   observation(
@@ -368,7 +374,7 @@ assert.equal(
   unexplainedNativeGate.lastObservedNonResourceConstraint?.clearedByPeriod,
   2,
 );
-assert.equal(unexplainedNativeGate.provenCriticalPath, undefined);
+assert.equal(unexplainedNativeGate.lastObservedResourceThreshold, undefined);
 
 const cachedUnaffordableThenStockGrowth = attributeResearchBottleneck([
   observation(1, { Knowledge: 9 }, { nativeAffordable: false }),
@@ -400,7 +406,10 @@ const freshRedrawAffordable = attributeResearchBottleneck([
   ),
 ]);
 assert.equal(freshRedrawAffordable.status, "attributed");
-assert.equal(freshRedrawAffordable.provenCriticalPath?.resourceId, "Knowledge");
+assert.equal(
+  freshRedrawAffordable.lastObservedResourceThreshold?.resourceId,
+  "Knowledge",
+);
 
 const staleStockWithoutRedraw = attributeResearchBottleneck([
   observation(1, { Knowledge: 9 }, { nativeAffordable: false }),

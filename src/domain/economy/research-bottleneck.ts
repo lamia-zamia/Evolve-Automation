@@ -94,7 +94,8 @@ export interface ResearchBottleneckAttribution {
     priorInsufficientPeriod?: number | undefined;
     intervalAmbiguous: boolean;
   }>;
-  readonly provenCriticalPath?: Readonly<{
+  /** Final observed resource threshold for this Research purchase; not a terminal progression path. */
+  readonly lastObservedResourceThreshold?: Readonly<{
     kind: "resource-shortage" | "capacity";
     resourceId: string;
     clearInterval: Readonly<{
@@ -430,7 +431,7 @@ export function attributeResearchBottleneck(
           entry.decision?.boundary !== true),
     ),
   );
-  const provenCriticalPath =
+  const lastObservedResourceThreshold =
     lastObservedConstraint !== undefined &&
     last.length === 1 &&
     decision !== undefined &&
@@ -475,8 +476,12 @@ export function attributeResearchBottleneck(
     ...(lastObservedConstraint === undefined
       ? {}
       : { lastObservedConstraint: Object.freeze(lastObservedConstraint) }),
-    ...(provenCriticalPath === undefined
+    ...(lastObservedResourceThreshold === undefined
       ? {}
-      : { provenCriticalPath: Object.freeze(provenCriticalPath) }),
+      : {
+          lastObservedResourceThreshold: Object.freeze(
+            lastObservedResourceThreshold,
+          ),
+        }),
   });
 }
