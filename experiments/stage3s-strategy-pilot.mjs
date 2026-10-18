@@ -45,6 +45,7 @@ const periods =
     : Number(periodsArgument.slice("--periods=".length));
 if (!Number.isSafeInteger(periods) || periods < 1000)
   throw new Error("--periods must be an integer of at least 1000");
+const noGather = process.argv.includes("--no-gather");
 const saveText = await readFile(savePath, "utf8");
 const settings = {
   ...JSON.parse(await readFile(settingsPath, "utf8")),
@@ -118,11 +119,12 @@ try {
     });
     try {
       await session.evaluate(
-        ({ scenarioId, scenarioSettings }) => {
+        ({ scenarioId, scenarioSettings, skipGather }) => {
           const hooks = window.__EA_TEST_HOOKS__;
-          hooks.gatherIntervention = {
-            resourceClaimMode: "goal-derived-conjunctive",
-          };
+          if (!skipGather)
+            hooks.gatherIntervention = {
+              resourceClaimMode: "goal-derived-conjunctive",
+            };
           hooks.researchOwnerSelectionEvents = [];
           hooks.smelterObservations = [];
           hooks.strategyApplications = [];
@@ -160,7 +162,11 @@ try {
           };
           return hooks.strategySetup;
         },
-        { scenarioId: scenario.scenario, scenarioSettings: scenario.settings },
+        {
+          scenarioId: scenario.scenario,
+          scenarioSettings: scenario.settings,
+          skipGather: noGather,
+        },
       );
       let elapsed = 0;
       let firstSteelAllocation = null;
@@ -339,7 +345,7 @@ const result = {
     game: gamePath,
     gameSha256: hash(await readFile(gamePath)),
     testBundleSha256: hash(built.outputFiles[0].contents),
-    gatherIntervention: "goal-derived-conjunctive",
+    gatherIntervention: noGather ? "disabled" : "goal-derived-conjunctive",
     periods,
   },
   liveBridge,
