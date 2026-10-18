@@ -53,6 +53,12 @@ export interface ResearchBottleneckAttribution {
   readonly offerPrice?: Readonly<Record<string, number>>;
   readonly observedPeriod?: number;
   readonly blockers: readonly Readonly<Record<string, unknown>>[];
+  readonly lastObservedNonResourceConstraint?: Readonly<{
+    kind: string;
+    firstObservedPeriod: number;
+    clearedByPeriod?: number | undefined;
+    intervalAmbiguous: boolean;
+  }>;
   readonly unknownCommitments: boolean;
   readonly lastObservedConstraint?: Readonly<{
     kind: "resource-shortage" | "capacity";
@@ -203,8 +209,7 @@ export function attributeResearchBottleneck(
       (entry) =>
         entry.current !== true ||
         entry.rootGeneration !== firstOffered!.rootGeneration ||
-        typeof entry.progressionEpoch !== "string" ||
-        entry.progressionEpoch.length === 0 ||
+        entry.progressionEpoch !== firstOffered!.progressionEpoch ||
         (entry.offer !== undefined &&
           (entry.offer.actionId !== actionId ||
             entry.offer.controlGeneration !== entry.offer.generation)),
@@ -232,6 +237,41 @@ export function attributeResearchBottleneck(
     );
   });
   const currentBlockers = blockersAt(current);
+  const nonResourceBlockers = new Map<
+    string,
+    { kind: string; firstObservedPeriod: number; lastObservedPeriod: number }
+  >();
+  const nonResourceKind = (kind: unknown): kind is string =>
+    typeof kind === "string" &&
+    kind !== "resource-shortage" &&
+    kind !== "capacity" &&
+    kind !== "resource-evidence-unknown" &&
+    kind !== "other-commitments-unknown";
+  for (const observation of ordered) {
+    for (const blocker of blockersAt(observation)) {
+      if (!nonResourceKind(blocker.kind)) continue;
+      const identity = `${blocker.kind}:${String(blocker.resourceId ?? "")}`;
+      const prior = nonResourceBlockers.get(identity);
+      nonResourceBlockers.set(identity, {
+        kind: blocker.kind,
+        firstObservedPeriod: prior?.firstObservedPeriod ?? observation.period,
+        lastObservedPeriod: observation.period,
+      });
+    }
+  }
+  const lastNonResource = [...nonResourceBlockers.values()].sort(
+    (a, b) => b.lastObservedPeriod - a.lastObservedPeriod,
+  )[0];
+  const lastObservedNonResourceConstraint = lastNonResource
+    ? {
+        kind: lastNonResource.kind,
+        firstObservedPeriod: lastNonResource.firstObservedPeriod,
+        ...(lastNonResource.lastObservedPeriod < current.period
+          ? { clearedByPeriod: current.period }
+          : {}),
+        intervalAmbiguous: lastNonResource.lastObservedPeriod < current.period,
+      }
+    : undefined;
   const unknownCommitments = current.commitments?.coverage !== "complete";
   const insufficientEvidence = currentBlockers.some(
     ({ kind, evidence }) =>
@@ -242,6 +282,11 @@ export function attributeResearchBottleneck(
       (kind === "eligibility" &&
         (evidence === "unknown" || evidence === "unavailable")) ||
       (kind === "research-queue" && evidence === "unavailable"),
+  );
+  const sawNativeUnknown = ordered.some((entry) =>
+    blockersAt(entry).some(
+      ({ kind }) => kind === "native-unaffordable-unknown",
+    ),
   );
 
   const thresholdEvents: {
@@ -301,10 +346,22 @@ export function attributeResearchBottleneck(
         entry.decision.selectedActionId === actionId &&
         entry.decision.invocationPeriod !== undefined,
     );
+  const availabilityStayedClear = ordered.every((entry) =>
+    blockersAt(entry).every(
+      ({ kind }) =>
+        kind === "resource-shortage" ||
+        kind === "capacity" ||
+        kind === "resource-evidence-unknown" ||
+        kind === "other-commitments-unknown" ||
+        (kind === "decision-evidence-unavailable" &&
+          entry.decision?.boundary !== true),
+    ),
+  );
   const provenCriticalPath =
     lastObservedConstraint !== undefined &&
     last.length === 1 &&
     decision !== undefined &&
+    availabilityStayedClear &&
     currentBlockers.every(
       ({ kind }) =>
         kind !== "resource-shortage" &&
@@ -326,13 +383,21 @@ export function attributeResearchBottleneck(
       : undefined;
 
   return Object.freeze({
-    status: insufficientEvidence ? "insufficient" : "attributed",
+    status:
+      insufficientEvidence || sawNativeUnknown ? "insufficient" : "attributed",
     actionId,
     offerGeneration: offer.generation,
     offerPrice: offer.cost,
     observedPeriod: current.period,
     blockers: currentBlockers,
     unknownCommitments,
+    ...(lastObservedNonResourceConstraint === undefined
+      ? {}
+      : {
+          lastObservedNonResourceConstraint: Object.freeze(
+            lastObservedNonResourceConstraint,
+          ),
+        }),
     ...(lastObservedConstraint === undefined
       ? {}
       : { lastObservedConstraint: Object.freeze(lastObservedConstraint) }),

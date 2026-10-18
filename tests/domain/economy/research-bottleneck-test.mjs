@@ -223,6 +223,31 @@ const disabled = attributeResearchBottleneck([
 ]);
 assert.ok(disabled.blockers.some(({ kind }) => kind === "permission-disabled"));
 
+const permissionClearsAfterResources = attributeResearchBottleneck([
+  observation(1, { Knowledge: 9 }, { cost: { Knowledge: 10 } }),
+  observation(
+    2,
+    { Knowledge: 10 },
+    {
+      cost: { Knowledge: 10 },
+      permission: false,
+    },
+  ),
+  observation(
+    3,
+    { Knowledge: 11 },
+    {
+      cost: { Knowledge: 10 },
+      decision: invoked,
+    },
+  ),
+]);
+assert.equal(
+  permissionClearsAfterResources.provenCriticalPath,
+  undefined,
+  "a later permission blocker must prevent resource-only critical-path proof",
+);
+
 const simultaneous = attributeResearchBottleneck([
   observation(
     1,
@@ -288,6 +313,39 @@ const criticalShortage = attributeResearchBottleneck([
 assert.equal(criticalShortage.lastObservedConstraint?.resourceId, "Crystal");
 assert.equal(criticalShortage.provenCriticalPath?.resourceId, "Crystal");
 
+const unexplainedNativeGate = attributeResearchBottleneck([
+  observation(
+    1,
+    { Crystal: 10 },
+    {
+      cost: { Crystal: 10 },
+      nativeAffordable: false,
+    },
+  ),
+  observation(
+    2,
+    { Crystal: 11 },
+    {
+      cost: { Crystal: 10 },
+      nativeAffordable: true,
+      decision: {
+        ...invoked,
+        invocationPeriod: 2,
+      },
+    },
+  ),
+]);
+assert.equal(unexplainedNativeGate.status, "insufficient");
+assert.equal(
+  unexplainedNativeGate.lastObservedNonResourceConstraint?.kind,
+  "native-unaffordable-unknown",
+);
+assert.equal(
+  unexplainedNativeGate.lastObservedNonResourceConstraint?.clearedByPeriod,
+  2,
+);
+assert.equal(unexplainedNativeGate.provenCriticalPath, undefined);
+
 const rootInvalidated = attributeResearchBottleneck([
   observation(1, { Knowledge: 2 }),
   observation(2, { Knowledge: 10 }, { rootGeneration: 2 }),
@@ -297,7 +355,7 @@ assert.match(rootInvalidated.reason, /stale or mismatched/);
 
 const progressionInvalidated = attributeResearchBottleneck([
   observation(1, { Knowledge: 2 }),
-  observation(2, { Knowledge: 10 }, { current: false }),
+  observation(2, { Knowledge: 10 }, { progressionEpoch: "progression-2" }),
 ]);
 assert.equal(progressionInvalidated.status, "invalid");
 

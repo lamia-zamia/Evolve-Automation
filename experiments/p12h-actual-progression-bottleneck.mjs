@@ -171,24 +171,33 @@ const periodRows = (arm) =>
         const resource = entry.resources[id];
         return `${id} ${resource?.amount?.toFixed(2) ?? "unknown"}/${price} (cap ${resource?.capacity ?? "unknown"}; net ${resource?.netRate ?? "unknown"}/period)`;
       });
-      return `| ${entry.period} | ${entry.offer.generation} / ${entry.source.offer.offerObservationId} | ${pairs.join("; ")} | ${entry.permission}; ${entry.eligibility}; ${entry.queueEvidence} |`;
+      return `| ${entry.period} | ${entry.offer.generation} / ${entry.source.offer.offerObservationId} | ${pairs.join("; ")} | ${entry.offer.nativeAffordable ?? "unknown"}; ${entry.permission}; ${entry.eligibility}; ${entry.queueEvidence} |`;
     })
     .join("\n");
 
 const sourceInputs = capture.inputs;
-const conclusion =
-  baselineResult.provenCriticalPath &&
-  steelResult.provenCriticalPath &&
-  baselineResult.provenCriticalPath.resourceId ===
-    steelResult.provenCriticalPath.resourceId
+const hasUnknownNativeGate = [baselineResult, steelResult].some(
+  (result) =>
+    result.status === "insufficient" ||
+    result.lastObservedNonResourceConstraint?.kind ===
+      "native-unaffordable-unknown",
+);
+const conclusion = hasUnknownNativeGate
+  ? "C — Observation insufficient"
+  : baselineResult.provenCriticalPath &&
+      steelResult.provenCriticalPath &&
+      baselineResult.provenCriticalPath.resourceId ===
+        steelResult.provenCriticalPath.resourceId
     ? "A — Binding constraint established"
     : baselineResult.lastObservedConstraint &&
         steelResult.lastObservedConstraint
       ? "B — Multiple constraints remain inseparable"
       : "C — Observation insufficient";
-const decisionText = baselineResult.provenCriticalPath
-  ? `The last observed requirement to clear was **${baselineResult.provenCriticalPath.resourceId}**. It was below price after period ${baselineResult.provenCriticalPath.clearInterval.afterPeriod} and sufficient by period ${baselineResult.provenCriticalPath.clearInterval.byPeriod}; the owner selected and invoked the action at period ${baselineResult.provenCriticalPath.decisionPeriod}. Steel had already exceeded its 250 price at sampled period 40 in both arms. This establishes the Knowledge threshold as the final resource threshold observed before the purchase; it does not establish an unobserved owner decision during periods 70–72.`
-  : `Both arms retain multiple blockers or an observation gap, so the replay does not establish one critical path. The latest observed threshold and decision evidence are reported below.`;
+const decisionText = hasUnknownNativeGate
+  ? `At sampled period 70, both priced resources exceeded the current 9,000 Knowledge / 250 Steel price, capacity exceeded both prices, permission was enabled, eligibility was available and the queue was empty. The native offer nevertheless reported \`nativeAffordable=false\` in both arms. At the period 72 owner selection, the refreshed generation 10 offer reported \`nativeAffordable=true\` and the action was purchased. The replay therefore establishes that a native affordability gate remained after the known resource thresholds cleared, but the pinned game exposes no reason breakdown for the false result. The exact missing authority is the native affordability predicate’s component-level rejection reason between periods 70 and 72; Knowledge cannot be named as the binding purchase constraint from these observations alone.`
+  : baselineResult.provenCriticalPath
+    ? `The last observed requirement to clear was **${baselineResult.provenCriticalPath.resourceId}**. It was below price after period ${baselineResult.provenCriticalPath.clearInterval.afterPeriod} and sufficient by period ${baselineResult.provenCriticalPath.clearInterval.byPeriod}; the owner selected and invoked the action at period ${baselineResult.provenCriticalPath.decisionPeriod}. Steel had already exceeded its 250 price at sampled period 40 in both arms. This establishes the Knowledge threshold as the final resource threshold observed before the purchase; it does not establish an unobserved owner decision during periods 70–72.`
+    : `Both arms retain multiple blockers or an observation gap, so the replay does not establish one critical path. The latest observed threshold and decision evidence are reported below.`;
 
 const md = `# P12H — Actual progression bottleneck
 
@@ -214,13 +223,13 @@ Each resource row is a periodic sample. The invocation is a separate native even
 
 ### Baseline
 
-| Period | Offer generation / observation | Priced resource stock / price (capacity; net rate) | Permission; eligibility; queue |
+| Period | Offer generation / observation | Priced resource stock / price (capacity; net rate) | Native affordable; permission; eligibility; queue |
 |---:|---|---|---|
 ${periodRows(baseline)}
 
 ### Steel-oriented
 
-| Period | Offer generation / observation | Priced resource stock / price (capacity; net rate) | Permission; eligibility; queue |
+| Period | Offer generation / observation | Priced resource stock / price (capacity; net rate) | Native affordable; permission; eligibility; queue |
 |---:|---|---|---|
 ${periodRows(steel)}
 
@@ -230,12 +239,13 @@ At the Research owner selection, baseline used offer generation ${baselineCandid
 
 - Baseline attribution: \`${baselineResult.status}\`; last observed constraint ${JSON.stringify(baselineResult.lastObservedConstraint ?? null)}; proven critical path ${JSON.stringify(baselineResult.provenCriticalPath ?? null)}.
 - Steel-oriented attribution: \`${steelResult.status}\`; last observed constraint ${JSON.stringify(steelResult.lastObservedConstraint ?? null)}; proven critical path ${JSON.stringify(steelResult.provenCriticalPath ?? null)}.
+- Last observed non-resource constraint: baseline ${JSON.stringify(baselineResult.lastObservedNonResourceConstraint ?? null)}; Steel-oriented ${JSON.stringify(steelResult.lastObservedNonResourceConstraint ?? null)}.
 - Both observations preserve commitments as **unknown**. The owner’s event reports no reservation conflict for the Research selection, while the capture/replay separately records Construction Steel demand. This does not quantify all external commitments or establish that the Construction demand was unnecessary.
 - The periodic cadence has the final pre-purchase resource sample at period 70 and owner selection/invocation at period 72. There is no periodic affordability/selection observation inside that two-period interval. The exact time at which the Research owner first evaluated the now-affordable action is therefore unavailable.
 
 ## Why Steel acceleration did not change timing
 
-Steel stock exceeded the action price by period 40 in both arms, while Knowledge remained below price at period 60 and exceeded it by period 70. Over the matched horizon, the Steel-oriented arm changed Steel net rate by +0.5494 per period and Iron net rate by -0.2348 per period. Neither arm crossed the Steel threshold later than the other, and both invoked the Research action at period 72. The observed price, permission, eligibility and queue evidence match through period 70; the selection event then records the same action as natively affordable in both arms. This supports Knowledge as the final observed resource threshold, with an unresolved two-period owner scheduling interval; it does not attribute that interval to a specific scheduling policy.
+Steel stock exceeded the action price by period 40 in both arms. The arms had identical sampled Steel stocks and net rates through the period 72 purchase boundary; the Steel-oriented arm’s higher later Steel stock appears only after the Research action was already purchased. At period 70 Knowledge and Steel were both above price, yet native affordability was still false in both arms. At period 72 the owner event recorded equal resources and native affordability true in both arms. The extra Steel therefore arrived too late to change the purchase boundary, and the evidence points to an unresolved native affordability gate between periods 70 and 72 rather than a proven resource bottleneck.
 
 ## Observation cost and scope
 
