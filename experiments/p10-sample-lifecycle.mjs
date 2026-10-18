@@ -223,7 +223,10 @@ const plugin = {
       source = source.replace(
         candidateSetup,
         candidateSetup +
-          record("build-candidate-set", "candidates: setup.candidates.length"),
+          record(
+            "build-candidate-set",
+            "candidates: setup.candidates.length, candidateRows: setup.candidates.map(({ key, weighting, cost, ignored, pool }) => ({ key, weighting, cost, ignored, pool }))",
+          ),
       );
       return { contents: source, loader: "ts" };
     });
