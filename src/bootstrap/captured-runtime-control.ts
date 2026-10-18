@@ -1201,8 +1201,10 @@ export function startCapturedRuntime({
             const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
             const intervention = readProperty(hooks, "gatherIntervention");
             return (
+              readProperty(hooks, "computedResearchRequirementsCapture") ===
+                true ||
               readProperty(intervention, "resourceClaimMode") ===
-              "goal-derived-conjunctive"
+                "goal-derived-conjunctive"
             );
           },
           readResearchTestIntervention: () => {
@@ -1461,6 +1463,7 @@ export function startCapturedRuntime({
             typeof actionId === "string"
               ? progression.readResearchActionEligibility?.(actionId)
               : "not-requested",
+          madTargetCondition: readCapturedMadTargetCondition(root).status,
           highTechLevel: readProperty(readProperty(root, "tech"), "high_tech"),
         });
       };
