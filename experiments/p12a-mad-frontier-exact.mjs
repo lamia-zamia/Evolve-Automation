@@ -45,14 +45,25 @@ const periods = 200;
 const seed = 42;
 const epoch = "2026-09-21T00:00:00.000Z";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const baselineCommit = "a69d615f09cd012caddd0235d70ce036ea1dda53";
 
 const baselineBundle = execFileSync(
   "git",
-  ["show", "HEAD:evolve_automation.user.js"],
+  ["show", `${baselineCommit}:evolve_automation.user.js`],
   { cwd: root, maxBuffer: 8 * 1024 * 1024 },
 );
 const candidateBundle = await readFile(
   path.join(root, "evolve_automation.user.js"),
+);
+assert.equal(
+  hash(baselineBundle),
+  "517642d0c647c29b28795e7ff7acd4a4ddedd4a0b3435a85602935e7336cf1e7",
+  "the pre-P12A production bundle must remain the pinned immutable baseline",
+);
+assert.notEqual(
+  hash(candidateBundle),
+  hash(baselineBundle),
+  "candidate and baseline bundle identities must be distinct",
 );
 await writeFile(baselineBundlePath, baselineBundle);
 await writeFile(candidateBundlePath, candidateBundle);
@@ -109,9 +120,52 @@ async function run(label, bundle) {
     const diagnostics = await session.diagnostics();
     const frontierEvaluation = (diagnostics.perfSummaries ?? []).flatMap(
       ([, phases]) => {
-        const phase = phases["goal.mad.research-candidates"];
-        return phase?.count ? [phase] : [];
+        const phaseNames = [
+          "research.offer-acquisition",
+          "research.computed-requirements.capture-and-draw",
+          "research.computed-requirements.read",
+          "research.catalog.registry-read",
+          "research.binding.restate",
+          "goal.mad.prerequisite-preparation",
+          "goal.mad.research-prerequisites",
+          "goal.mad.research-graph-cache-reuse",
+          "goal.mad.obligation-classification",
+          "goal.mad.frontier-resource-acquisition",
+          "goal.mad.candidate-feasibility-ranking",
+          "research.computed-requirements.capture-and-draw",
+        ];
+        return phaseNames.flatMap((name) => {
+          const phase = phases[name];
+          return phase?.count ? [{ name, ...phase }] : [];
+        });
       },
+    );
+    const operationCounts = Object.create(null);
+    for (const [, , counters] of diagnostics.perfSummaries ?? []) {
+      for (const [name, counter] of Object.entries(counters ?? {})) {
+        const previous = operationCounts[name] ?? {
+          total: 0,
+          max: 0,
+          windows: 0,
+        };
+        operationCounts[name] = {
+          total: previous.total + counter.total,
+          max: Math.max(previous.max, counter.max),
+          windows: previous.windows + 1,
+        };
+      }
+    }
+    const frontierOperationCounts = Object.fromEntries(
+      Object.entries(operationCounts).filter(([name]) =>
+        name.startsWith("goal.mad."),
+      ),
+    );
+    const nativeResearchDrawCounts = Object.fromEntries(
+      Object.entries(operationCounts).filter(
+        ([name]) =>
+          name.startsWith("research.observation.") ||
+          name === "discovery.actual-draw research-catalog",
+      ),
     );
     return {
       label,
@@ -134,11 +188,15 @@ async function run(label, bundle) {
           }
         : undefined,
       frontierEvaluation: frontierEvaluation.map((phase) => ({
+        name: phase.name,
         count: phase.count,
         totalMs: phase.totalMs,
         perTickMs: phase.perTickMs,
         maxMs: phase.maxMs,
       })),
+      operationCounts,
+      frontierOperationCounts,
+      nativeResearchDrawCounts,
       researchEvaluation:
         label === "candidate-test"
           ? await session.evaluate(() => {
@@ -206,6 +264,29 @@ try {
     "the exact-runner same-bundle control must match",
   );
   assert.deepEqual(
+    baselineRepeat.controlUsage,
+    baseline.controlUsage,
+    "baseline A/A native control usage must match exactly",
+  );
+  assert.deepEqual(
+    baselineRepeat.nativeInvocations,
+    baseline.nativeInvocations,
+    "baseline A/A native invocation sequence must match exactly",
+  );
+  const nativeResearchCounts = (result) =>
+    Object.fromEntries(
+      Object.entries(result.operationCounts).filter(
+        ([name]) =>
+          name.startsWith("research.observation.") ||
+          name === "discovery.actual-draw research-catalog",
+      ),
+    );
+  assert.deepEqual(
+    nativeResearchCounts(candidate),
+    nativeResearchCounts(baseline),
+    "production candidate must not add a native Research catalog draw",
+  );
+  assert.deepEqual(
     candidate.state,
     baseline.state,
     "shadow frontier selection must preserve ordinary production game state",
@@ -255,6 +336,9 @@ try {
       epoch,
     },
     bundles: {
+      baselineCommit,
+      baselineIdentity: "pre-P12A committed production userscript",
+      candidateIdentity: "working-tree P12A.1 production userscript",
       baselineSha256: hash(baselineBundle),
       candidateSha256: hash(candidateBundle),
       candidateTestSha256: hash(testBundle.outputFiles[0].contents),
@@ -281,8 +365,18 @@ try {
         candidateTest.researchEvaluation?.latest.frontierSelection,
       candidateFrontierCandidates:
         candidateTest.researchEvaluation?.first?.candidates,
-      frontierEvaluationIncludingInputAcquisitionMsByWindow:
-        candidate.frontierEvaluation,
+      frontierPhasesMsByWindow: candidate.frontierEvaluation,
+      candidateCounts: candidate.counts,
+      baselineCounts: baseline.counts,
+      testOnlyObservationCounts: candidateTest.counts,
+      baselineOperationCounts: baseline.operationCounts,
+      candidateOperationCounts: candidate.operationCounts,
+      testOnlyObservationOperationCounts: candidateTest.operationCounts,
+      candidateFrontierOperationCounts: candidate.frontierOperationCounts,
+      baselineNativeResearchDrawCounts: baseline.nativeResearchDrawCounts,
+      candidateNativeResearchDrawCounts: candidate.nativeResearchDrawCounts,
+      testOnlyNativeResearchDrawCounts: candidateTest.nativeResearchDrawCounts,
+      productionNativeResearchDrawCounts: nativeResearchCounts(candidate),
       baselineConsoleErrors: baseline.counts?.error,
       candidateConsoleErrors: candidate.counts?.error,
     },
