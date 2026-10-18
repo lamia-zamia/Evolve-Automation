@@ -15,6 +15,7 @@ import {
   createEffectiveCapturedTechPrerequisiteSnapshot,
 } from "../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
 import { planNativeResearchPrerequisites } from "../src/domain/progression/research-prerequisite-planning.ts";
+import { planAdvisoryResearchRoutes } from "../src/domain/progression/research-advisory-routes.ts";
 import {
   bindNativeResearchEligibilityEvidence,
   classifyMandatoryNativeResearchObligations,
@@ -308,6 +309,25 @@ function evaluatePlanner(catalog) {
     })),
     baselineSelectedActionId: undefined,
   });
+  const advisoryRoutes = planAdvisoryResearchRoutes({
+    targetActionId: "tech-mad",
+    definitions: snapshot.definitions,
+    grantLevels,
+    offers: offers.map((offer) => ({
+      actionId: offer.elementId,
+      generation: offer.generation,
+      cost: offer.cost,
+      nativeAffordable: offer.nativeAffordable,
+    })),
+    applicabilityByActionId: applicability,
+    validityEpoch: context.progressionEpoch,
+    rootGeneration: context.rootGeneration,
+    progressionEpoch: context.progressionEpoch,
+    maxDependencyExpansions: 4096,
+    maxDependencyDepth: 512,
+    maxCandidates: 128,
+    terminalEligibility: targetEligibility,
+  });
   const requirementStatuses = Object.groupBy(
     graph.requirements,
     (gate) => gate.status,
@@ -410,6 +430,7 @@ function evaluatePlanner(catalog) {
       reasons: obligations.reasons,
     },
     frontierSelection: evaluation.frontierSelection,
+    advisoryRoutes,
     candidateCount: evaluation.candidates.length,
   };
 }
@@ -679,6 +700,14 @@ try {
       researchDrawCountsEqual:
         JSON.stringify(baseline.researchDrawCounts) ===
         JSON.stringify(candidate.researchDrawCounts),
+      baselineResearchActionInvocations: baseline.nativeInvocations.filter(
+        (entry) =>
+          entry.elementId.startsWith("tech-") && entry.method === "action",
+      ),
+      candidateResearchActionInvocations: candidate.nativeInvocations.filter(
+        (entry) =>
+          entry.elementId.startsWith("tech-") && entry.method === "action",
+      ),
       baselineResearchDrawCounts: baseline.researchDrawCounts,
       candidateResearchDrawCounts: candidate.researchDrawCounts,
     },
