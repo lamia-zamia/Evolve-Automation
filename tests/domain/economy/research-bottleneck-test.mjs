@@ -39,6 +39,10 @@ function observation(period, resources, overrides = {}) {
               : {
                   affordabilityDraw: {
                     observationId: draw.observationId ?? `draw-${period}`,
+                    resourceObservationId:
+                      draw.resourceObservationId ??
+                      draw.observationId ??
+                      `draw-${period}`,
                     period: draw.period ?? period,
                     rootGeneration: draw.rootGeneration ?? 1,
                     progressionEpoch: draw.progressionEpoch ?? "progression-1",
@@ -449,6 +453,31 @@ assert.ok(
   mismatchedDrawEpoch.blockers.some(
     ({ kind }) => kind === "stale-affordability-evidence",
   ),
+);
+
+const mismatchedDrawResourceEpoch = attributeResearchBottleneck([
+  observation(
+    1,
+    { Knowledge: 20 },
+    {
+      nativeAffordable: false,
+      draw: {
+        nativeAffordable: false,
+        resourceObservationId: "later-resource-sample",
+      },
+    },
+  ),
+]);
+assert.ok(
+  mismatchedDrawResourceEpoch.blockers.some(
+    ({ kind }) => kind === "stale-affordability-evidence",
+  ),
+);
+assert.ok(
+  !mismatchedDrawResourceEpoch.blockers.some(
+    ({ kind }) => kind === "native-unaffordable-unknown",
+  ),
+  "a draw verdict cannot be paired with resources from another observation epoch",
 );
 
 const delayedSelectionAfterFreshAffordability = attributeResearchBottleneck([

@@ -18,6 +18,7 @@ export interface ResearchBottleneckObservation {
         /** Draw-bound price, verdict, and stock evidence; cached rows omit this when unproven. */
         affordabilityDraw?: Readonly<{
           observationId: string;
+          resourceObservationId: string;
           period: number;
           rootGeneration: number;
           progressionEpoch: string;
@@ -191,6 +192,7 @@ function blockersAt(
   const drawEvidenceCurrent =
     draw !== undefined &&
     draw.observationId.length > 0 &&
+    draw.resourceObservationId === draw.observationId &&
     Number.isSafeInteger(draw.period) &&
     draw.period <= observation.period &&
     draw.rootGeneration === observation.rootGeneration &&
