@@ -7,13 +7,18 @@ import { attributeResearchBottleneck } from "../src/domain/economy/research-bott
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const inputPath = path.resolve(
   root,
-  process.argv[2] ?? "test-artifacts/benchmark/tmp/p12g-verified-replay.json",
+  process.argv[2] ?? "test-artifacts/benchmark/tmp/p12h-reviewed-replay.json",
 );
 const outputPath = path.resolve(
   root,
   process.argv[3] ?? "experiments/p12h-actual-progression-bottleneck.md",
 );
 const run = JSON.parse(fs.readFileSync(inputPath, "utf8"));
+const diagnosticPath = path.join(
+  root,
+  "test-artifacts/benchmark/tmp/p12h-mixed-time-diagnostic.json",
+);
+const diagnostic = JSON.parse(fs.readFileSync(diagnosticPath, "utf8"));
 const capture = run.reachableCapture;
 if (capture?.contractVersion !== 1 || !capture.exportSaveSha256)
   throw new Error("Input is missing a verified P12G capture contract.");
@@ -21,6 +26,29 @@ if (run.inputs?.testBundleSha256 !== capture.inputs?.testBundleSha256)
   throw new Error("Replay bundle does not match the verified capture.");
 if (run.inputs?.testHarnessSha256 !== capture.inputs?.testHarnessSha256)
   throw new Error("Replay harness does not match the verified capture.");
+if (diagnostic.before.savedStateSha256 !== diagnostic.after.savedStateSha256)
+  throw new Error("Protected fresh draw changed saved economic state.");
+if (
+  diagnostic.captureExportSha256 !== capture.exportSaveSha256 ||
+  diagnostic.testBundleSha256 !== run.inputs?.testBundleSha256 ||
+  diagnostic.gameSnapshotSha256 !== capture.inputs?.gameSnapshotSha256 ||
+  diagnostic.startingSaveSha256 !== capture.inputs?.startingSaveSha256 ||
+  diagnostic.effectiveSettingsSha256 !==
+    capture.inputs?.effectiveSettingsSha256 ||
+  diagnostic.seed !== capture.inputs?.seed ||
+  diagnostic.epoch !== capture.inputs?.epoch
+)
+  throw new Error("Fresh-draw diagnostic does not match the replay inputs.");
+if (
+  diagnostic.before.rootGeneration !== diagnostic.after.rootGeneration ||
+  diagnostic.before.progressionEpoch !== diagnostic.after.progressionEpoch ||
+  JSON.stringify(diagnostic.before.offer.cost) !==
+    JSON.stringify(diagnostic.after.offer.cost) ||
+  diagnostic.after.offer.nativeAffordable !== true
+)
+  throw new Error(
+    "Fresh draw did not resolve with matching root, progression, price, and affordability.",
+  );
 
 const actionId =
   capture.currentOfferEvidence?.offer?.actionId ?? capture.offer?.elementId;
@@ -160,6 +188,12 @@ const selectedCandidate = (purchase) =>
   purchase?.observed?.find((entry) => entry.actionId === actionId);
 const baselineCandidate = selectedCandidate(baselinePurchase);
 const steelCandidate = selectedCandidate(steelPurchase);
+const diagnosticStock = diagnostic.before.resourceSamples
+  .filter(({ resourceId }) =>
+    Object.hasOwn(diagnostic.before.offer.cost, resourceId),
+  )
+  .map(({ resourceId, holding }) => `${resourceId} ${holding.toFixed(2)}`)
+  .join(", ");
 const uniqueInvocationPeriods = (events) => [
   ...new Set(events.map((entry) => entry.period)),
 ];
@@ -176,28 +210,31 @@ const periodRows = (arm) =>
     .join("\n");
 
 const sourceInputs = capture.inputs;
-const hasUnknownNativeGate = [baselineResult, steelResult].some(
-  (result) =>
-    result.status === "insufficient" ||
-    result.lastObservedNonResourceConstraint?.kind ===
-      "native-unaffordable-unknown",
+const hasCoherentNativeUnknown = [baselineResult, steelResult].some((result) =>
+  result.blockers.some(({ kind }) => kind === "native-unaffordable-unknown"),
 );
-const conclusion = hasUnknownNativeGate
-  ? "C — Observation insufficient"
-  : baselineResult.provenCriticalPath &&
-      steelResult.provenCriticalPath &&
-      baselineResult.provenCriticalPath.resourceId ===
-        steelResult.provenCriticalPath.resourceId
-    ? "A — Binding constraint established"
-    : baselineResult.lastObservedConstraint &&
-        steelResult.lastObservedConstraint
-      ? "B — Multiple constraints remain inseparable"
-      : "C — Observation insufficient";
-const decisionText = hasUnknownNativeGate
-  ? `At sampled period 70, both priced resources exceeded the current 9,000 Knowledge / 250 Steel price, capacity exceeded both prices, permission was enabled, eligibility was available and the queue was empty. The native offer nevertheless reported \`nativeAffordable=false\` in both arms. At the period 72 owner selection, the refreshed generation 10 offer reported \`nativeAffordable=true\` and the action was purchased. The replay therefore establishes that a native affordability gate remained after the known resource thresholds cleared, but the pinned game exposes no reason breakdown for the false result. The exact missing authority is the native affordability predicate’s component-level rejection reason between periods 70 and 72; Knowledge cannot be named as the binding purchase constraint from these observations alone.`
-  : baselineResult.provenCriticalPath
-    ? `The last observed requirement to clear was **${baselineResult.provenCriticalPath.resourceId}**. It was below price after period ${baselineResult.provenCriticalPath.clearInterval.afterPeriod} and sufficient by period ${baselineResult.provenCriticalPath.clearInterval.byPeriod}; the owner selected and invoked the action at period ${baselineResult.provenCriticalPath.decisionPeriod}. Steel had already exceeded its 250 price at sampled period 40 in both arms. This establishes the Knowledge threshold as the final resource threshold observed before the purchase; it does not establish an unobserved owner decision during periods 70–72.`
-    : `Both arms retain multiple blockers or an observation gap, so the replay does not establish one critical path. The latest observed threshold and decision evidence are reported below.`;
+const conclusion =
+  diagnostic.after.offer.nativeAffordable === true
+    ? "A — Cached affordability explains the discrepancy"
+    : hasCoherentNativeUnknown
+      ? "B — Genuine native affordability discrepancy remains"
+      : baselineResult.provenCriticalPath &&
+          steelResult.provenCriticalPath &&
+          baselineResult.provenCriticalPath.resourceId ===
+            steelResult.provenCriticalPath.resourceId
+        ? "A — Binding resource threshold established"
+        : baselineResult.lastObservedConstraint &&
+            steelResult.lastObservedConstraint
+          ? "B — Multiple constraints remain inseparable"
+          : "C — Observation insufficient";
+const decisionText =
+  diagnostic.after.offer.nativeAffordable === true
+    ? `The period-70 replay sample paired a cached generation ${diagnostic.before.offer.generation} false verdict with later resource holdings of ${diagnosticStock}. In an isolated replay from the same verified capture and settings, a protected fresh draw at period ${diagnostic.drawBoundaryPeriod} kept root generation ${diagnostic.before.rootGeneration}, progression epoch, action identity and native price unchanged. The fresh generation ${diagnostic.after.offer.generation} verdict was true against the current stock. The apparent contradiction is therefore explained by cached affordability evidence being joined to newer holdings; generation-9 draw-time holdings were not recorded, so they are not inferred. Knowledge was the last resource threshold to clear: it was below 9,000 at period ${baselineResult.lastObservedConstraint?.priorInsufficientPeriod ?? 60} and at or above 9,000 by period ${baselineResult.lastObservedConstraint?.period ?? 70}. Steel had already cleared its 250 threshold by period 40. The ordinary paired replay selected and invoked Research at period 72, consistent with the observed stock accumulation and subsequent owner selection. This establishes the final resource threshold, not the entire terminal MAD critical path.`
+    : hasCoherentNativeUnknown
+      ? `A fresh same-boundary draw still reports unaffordability despite complete current native cost and resource evidence. The remaining discrepancy is in that coherent native verdict; the cached period-70 sample alone does not establish it.`
+      : baselineResult.provenCriticalPath
+        ? `The last observed requirement to clear was **${baselineResult.provenCriticalPath.resourceId}**. It was below price after period ${baselineResult.provenCriticalPath.clearInterval.afterPeriod} and sufficient by period ${baselineResult.provenCriticalPath.clearInterval.byPeriod}; the owner selected and invoked the action at period ${baselineResult.provenCriticalPath.decisionPeriod}. This establishes the final resource threshold, not the entire terminal MAD critical path.`
+        : `Both arms retain multiple blockers or an observation gap, so the replay does not establish one critical path. The latest observed threshold and decision evidence are reported below.`;
 
 const md = `# P12H — Actual progression bottleneck
 
@@ -235,25 +272,35 @@ ${periodRows(steel)}
 
 At the Research owner selection, baseline used offer generation ${baselineCandidate?.offerGeneration ?? "unknown"} (observation \`${baselineCandidate?.offerObservationId ?? "unknown"}\`) with price ${JSON.stringify(baselineCandidate?.cost ?? {})}; Steel-oriented used generation ${steelCandidate?.offerGeneration ?? "unknown"} (observation \`${steelCandidate?.offerObservationId ?? "unknown"}\`) with price ${JSON.stringify(steelCandidate?.cost ?? {})}. Native affordability was **${baselineCandidate?.nativeAffordable ?? "unavailable"}** / **${steelCandidate?.nativeAffordable ?? "unavailable"}** and recorded observed resources were ${JSON.stringify(baselineCandidate?.observedResources ?? {})} / ${JSON.stringify(steelCandidate?.observedResources ?? {})}. At the owner boundary, current-catalog validity, Research permission, eligibility and queue were ${baselinePurchase?.catalogCurrent ?? "unknown"}, ${baselinePurchase?.researchPermission ?? "unknown"}, ${baselinePurchase?.targetEligibility ?? "unknown"}, ${baselinePurchase?.queueEvidence ?? "unknown"} / ${steelPurchase?.catalogCurrent ?? "unknown"}, ${steelPurchase?.researchPermission ?? "unknown"}, ${steelPurchase?.targetEligibility ?? "unknown"}, ${steelPurchase?.queueEvidence ?? "unknown"}. Reservation evidence was \`${baselineCandidate?.reservation ?? "unavailable"}\` / \`${steelCandidate?.reservation ?? "unavailable"}\`; both selections were recorded as \`${baselinePurchase?.disposition ?? "unavailable"}\` / \`${steelPurchase?.disposition ?? "unavailable"}\`. There was one native action invocation per arm at periods ${uniqueInvocationPeriods(baselineInvocations).join(", ") || "none"} / ${uniqueInvocationPeriods(steelInvocations).join(", ") || "none"}; two bridge trace rows represent each invocation.
 
+### What each freshness signal means
+
+- **Timeline periods:** periods in the tables are when the cached offer and current resources were read. The offer observation ID, generation, native price and verdict originated at a native Research draw. For generations 3–9, the exact render period and draw-time holdings are not present in the replay. Generation 10 was directly redrawn and observed at period 70 in the isolated diagnostic; its draw-boundary stock was Knowledge ${diagnostic.after.resourceSamples.find(({ resourceId }) => resourceId === "Knowledge")?.holding} and Steel ${diagnostic.after.resourceSamples.find(({ resourceId }) => resourceId === "Steel")?.holding}.
+- **Offer binding freshness:** generation ${diagnostic.before.offer.generation} matched the current target control at the cached read, and generation ${diagnostic.after.offer.generation} matched after redraw. This establishes which control is callable. It does not establish when the row's affordability class was computed.
+- **Root/progression freshness:** both diagnostic reads used root generation ${diagnostic.before.rootGeneration} and progression epoch \`${diagnostic.before.progressionEpoch}\`. Those stayed current across the draw.
+- **Affordability calculation time:** pinned \`drawTech()\` calls \`setAction()\`; \`setAction()\` assigns \`cna\` from \`checkAffordable(c_action, false, ...)\`, which evaluates \`adjustCosts()\` and \`checkCosts()\` against the then-current supply pool. The captured \`nativeAffordable\` field is read from that rendered row's same-draw \`cna\` verdict. The row keeps that verdict until the next native draw. The cached generation-9 draw timestamp and its draw-time holdings were not recorded.
+- **Current resource sample time:** \`readCurrentOfferedTechs()\` returns the held offer after checking progression epoch and binding generations. \`readCurrentResearchCatalog()\` joins those offers to a separate read of the current root's resources. A current binding and current root therefore do not make the cached \`cna\` verdict contemporaneous with those newer holdings.
+
+The isolated period-70 diagnostic read cached generation 9 as false, then made exactly one protected fresh native draw. It produced offer observation \`${diagnostic.after.offer.offerObservationId}\`, generation ${diagnostic.after.offer.generation}, at the same price and same root/progression, with \`nativeAffordable=true\`. The diagnostic stock sample was unchanged before and after the draw; the saved-state SHA-256 was unchanged. The draw rebound the Research offer controls from generation ${diagnostic.before.offer.generation} to ${diagnostic.after.offer.generation}. This resolves the apparent contradiction without claiming generation 9's draw-time holdings.
+
 ## Attribution and competing commitments
 
 - Baseline attribution: \`${baselineResult.status}\`; last observed constraint ${JSON.stringify(baselineResult.lastObservedConstraint ?? null)}; proven critical path ${JSON.stringify(baselineResult.provenCriticalPath ?? null)}.
 - Steel-oriented attribution: \`${steelResult.status}\`; last observed constraint ${JSON.stringify(steelResult.lastObservedConstraint ?? null)}; proven critical path ${JSON.stringify(steelResult.provenCriticalPath ?? null)}.
 - Last observed non-resource constraint: baseline ${JSON.stringify(baselineResult.lastObservedNonResourceConstraint ?? null)}; Steel-oriented ${JSON.stringify(steelResult.lastObservedNonResourceConstraint ?? null)}.
 - Both observations preserve commitments as **unknown**. The owner’s event reports no reservation conflict for the Research selection, while the capture/replay separately records Construction Steel demand. This does not quantify all external commitments or establish that the Construction demand was unnecessary.
-- The periodic cadence has the final pre-purchase resource sample at period 70 and owner selection/invocation at period 72. There is no periodic affordability/selection observation inside that two-period interval. The exact time at which the Research owner first evaluated the now-affordable action is therefore unavailable.
+- The periodic replay has its final pre-purchase sample at period 70 and owner selection/invocation at period 72. The action is selected two periods after the stock threshold is observed clear. The exact draw-time stock for generation 9 and exact first evaluation time are unavailable; a current protected draw at period 70 shows that no additional native gate is needed to explain the verdict change.
 
 ## Why Steel acceleration did not change timing
 
-Steel stock exceeded the action price by period 40 in both arms. The arms had identical sampled Steel stocks and net rates through the period 72 purchase boundary; the Steel-oriented arm’s higher later Steel stock appears only after the Research action was already purchased. At period 70 Knowledge and Steel were both above price, yet native affordability was still false in both arms. At period 72 the owner event recorded equal resources and native affordability true in both arms. The extra Steel therefore arrived too late to change the purchase boundary, and the evidence points to an unresolved native affordability gate between periods 70 and 72 rather than a proven resource bottleneck.
+Steel stock exceeded the action price by period 40 in both arms. The arms had identical sampled Steel stocks and net rates through the period 72 purchase boundary; the Steel-oriented arm’s higher later Steel stock appears only after the Research action was already purchased. At period 70 the cached generation-9 verdict was false even though the later stock sample exceeded both prices. A current generation-10 draw at the same state returned true, while both paired replay arms selected and purchased at period 72. Steel had cleared by period 40; Knowledge was below 9,000 at period 60 and above it by period 70. The interval **(60, 70]** is the final observed resource-threshold interval. This establishes the Knowledge threshold as the last priced resource to clear, not the full terminal MAD critical path.
 
 ## Observation cost and scope
 
 - Capture used one same-boundary Research catalog read and one same-boundary Smelter plan read.
-- Each replay uses bounded catalog reads at restore validation, the initial natural boundary, and the existing ten-period samples. It does not force a Research draw each period.
+- Each ordinary replay uses bounded catalog reads at restore validation, the initial natural boundary, and the existing ten-period samples. The separate isolated diagnostic used one additional protected Research draw only.
 - Periodic observation adds one Research evidence read alongside the existing Smelter/sample read; the selection event comes from the existing Research owner observer. Renderer task time and observation read timings are recorded in the P12G replay artifact at \`${path.relative(root, inputPath).replaceAll("\\", "/")}\`.
 - Matched replay parity checks pass: identical start state, equal non-Smelter native invocation ordering, equal Research draw count and the same action period in both arms. The P12G replay also records renderer task/script times (baseline ${run.performance.rendererWork.baselineTaskSec.toFixed(3)}s / ${run.performance.rendererWork.baselineScriptSec.toFixed(4)}s; Steel-oriented ${run.performance.rendererWork.alternativeTaskSec.toFixed(3)}s / ${run.performance.rendererWork.alternativeScriptSec.toFixed(4)}s).
-- The diagnostic is a pure attribution over observed current offers, native resource evidence and decision events. It makes no production, claim or purchase changes.
+- The single diagnostic draw created one new Research offer observation across ${diagnostic.nativeOfferObservationCount} offers and rebound ${diagnostic.reboundOfferControlCount} offer controls (generation 9 to 10), left the saved economic state and sampled resources unchanged, and added ${((diagnostic.after.metrics.TaskDuration ?? 0) - (diagnostic.before.metrics.TaskDuration ?? 0)).toFixed(3)} s renderer TaskDuration and ${((diagnostic.after.metrics.ScriptDuration ?? 0) - (diagnostic.before.metrics.ScriptDuration ?? 0)).toFixed(6)} s ScriptDuration in this runner measurement. It made no Research purchase, production change, claim, reservation or job change. Ordinary Research behavior and draw frequency are unchanged.
 
 ## Reproduction
 
