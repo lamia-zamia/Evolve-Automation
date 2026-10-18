@@ -6,15 +6,23 @@ import {
 } from "../../../src/domain/progression/research-goal-candidates.ts";
 import { planNativeResearchPrerequisites } from "../../../src/domain/progression/research-prerequisite-planning.ts";
 import {
+  bindNativeResearchEligibilityEvidence,
   classifyMandatoryNativeResearchObligations,
   classifyMandatoryResearchPrerequisiteObligations,
 } from "../../../src/domain/progression/research-prerequisite-obligations.ts";
+
 import {
   decodeResearchGoalCandidateResponse,
   installResearchGoalCandidatesWorker,
   researchGoalOfferIdentity,
   RESEARCH_GOAL_CANDIDATES_TASK,
 } from "../../../src/adapters/browser/research-goal-candidates-worker.ts";
+
+const eligibilityFor = (graph, status = "eligible") =>
+  bindNativeResearchEligibilityEvidence(graph, {
+    actionId: graph.targetActionId,
+    status,
+  });
 
 const definition = (actionId, grantTechnology, requirements = []) => ({
   actionId,
@@ -229,7 +237,7 @@ const input = (overrides = {}) => ({
     true,
   );
   const nativeProof = classifyMandatoryNativeResearchObligations(chainGraph, {
-    targetCurrentlyEligible: true,
+    targetEligibility: eligibilityFor(chainGraph),
     definitions: chainDefinitions,
     grantLevels: new Map([
       ["terminal", 0],
@@ -248,13 +256,14 @@ const input = (overrides = {}) => ({
     "tech-tier-one",
     "tech-tier-two",
   ]);
-  assert.equal(nativeProof.status, "verified");
-  assert.deepEqual(nativeProof.mandatoryActionIds, ["tech-tier-one"]);
+  assert.equal(nativeProof.status, "unavailable");
+  assert.deepEqual(nativeProof.mandatoryActionIds, []);
+  assert.match(nativeProof.reasons.join(" "), /unresolved native alternatives/);
 
   const contradictoryNativeProof = classifyMandatoryNativeResearchObligations(
     chainGraph,
     {
-      targetCurrentlyEligible: true,
+      targetEligibility: eligibilityFor(chainGraph),
       definitions: [
         definition("tech-terminal", "terminal", [
           { technologyId: "tiered", requiredLevel: 1 },
@@ -273,6 +282,11 @@ const input = (overrides = {}) => ({
     contradictoryNativeProof.status,
     "unavailable",
     "a native definition for B1 cannot certify a graph whose terminal requires B2",
+  );
+  assert.equal(contradictoryNativeProof.inputConsistency, "inconsistent");
+  assert.match(
+    contradictoryNativeProof.reasons.join(" "),
+    /prerequisite identities contradict/,
   );
 
   const evaluation = evaluateResearchGoalCandidates(
@@ -297,10 +311,10 @@ const input = (overrides = {}) => ({
   );
   assert.equal(
     evaluation.frontierSelection.status,
-    "provisional-mandatory-prerequisite-choice",
-    "a current mandatory frontier remains selectable when the graph also contains its unoffered intermediate",
+    "blocked-by-missing-native-authority",
+    "an unoffered conditional intermediate cannot establish a mandatory frontier",
   );
-  assert.equal(evaluation.preferredActionId, "tech-tier-one");
+  assert.equal(evaluation.preferredActionId, undefined);
 
   for (const [mandatoryActionIds, reason] of [
     [["tech-unrelated"], "unrelated mandatory action"],
@@ -431,7 +445,7 @@ const input = (overrides = {}) => ({
       targetActionId: "tech-mad",
       graph: targetGraph,
       obligations: classifyMandatoryNativeResearchObligations(targetGraph, {
-        targetCurrentlyEligible: true,
+        targetEligibility: eligibilityFor(targetGraph),
         definitions: madDefinitions,
         grantLevels: new Map([
           ["mad", 0],
@@ -572,7 +586,7 @@ const input = (overrides = {}) => ({
   const unresolvedOrObligations = classifyMandatoryNativeResearchObligations(
     unresolvedOrGraph,
     {
-      targetCurrentlyEligible: true,
+      targetEligibility: eligibilityFor(unresolvedOrGraph),
       definitions: [
         definition("tech-mad", "mad", [
           { technologyId: "choice", requiredLevel: 1 },
@@ -680,7 +694,7 @@ const input = (overrides = {}) => ({
 
 {
   const staleNativeProof = classifyMandatoryNativeResearchObligations(graph, {
-    targetCurrentlyEligible: true,
+    targetEligibility: eligibilityFor(graph),
     definitions: [
       definition("tech-terminal", "terminal", [
         { technologyId: "ore", requiredLevel: 1 },
@@ -847,7 +861,7 @@ const input = (overrides = {}) => ({
   const nativeProof = classifyMandatoryNativeResearchObligations(
     missingComputedGraph,
     {
-      targetCurrentlyEligible: true,
+      targetEligibility: eligibilityFor(missingComputedGraph),
       definitions,
       grantLevels: new Map([
         ["terminal", 0],

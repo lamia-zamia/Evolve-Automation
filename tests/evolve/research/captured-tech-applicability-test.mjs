@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   createEffectiveCapturedTechPrerequisiteSnapshot,
+  combineCapturedTechEligibility,
   readCapturedMadTargetCondition,
   readCapturedTechApplicability,
 } from "../../../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
@@ -35,6 +36,13 @@ const definitions = [
     routeRestrictions: undefined,
     restrictions: [],
   }),
+  definition("tech-mad", {
+    hasNativeCondition: true,
+    routeRestrictions: ["standard", "truepath"],
+    restrictions: [
+      { kind: "not_trait", values: ["cataclysm", "lone_survivor", "warlord"] },
+    ],
+  }),
 ];
 
 const root = {
@@ -47,6 +55,15 @@ assert.equal(applicability?.get("tech-standard")?.status, "eligible");
 assert.equal(applicability?.get("tech-flier-excluded")?.status, "excluded");
 assert.equal(applicability?.get("tech-needs-gene")?.status, "eligible");
 assert.equal(applicability?.get("tech-not-researched")?.status, "eligible");
+assert.equal(applicability?.get("tech-mad")?.status, "eligible");
+assert.equal(
+  combineCapturedTechEligibility([
+    applicability.get("tech-mad"),
+    readCapturedMadTargetCondition(root),
+  ]).status,
+  "eligible",
+  "standard route restrictions and native MAD condition facts jointly establish eligibility",
+);
 
 {
   const iceage = readCapturedTechApplicability(
@@ -54,6 +71,7 @@ assert.equal(applicability?.get("tech-not-researched")?.status, "eligible");
     definitions,
   );
   assert.equal(iceage?.get("tech-standard")?.status, "excluded");
+  assert.equal(iceage?.get("tech-mad")?.status, "excluded");
   assert.equal(iceage?.get("tech-condition")?.status, "eligible");
   assert.equal(
     iceage?.get("tech-condition")?.status,
@@ -104,9 +122,27 @@ assert.equal(
 assert.equal(
   readCapturedMadTargetCondition({
     ...root,
+    race: { ...root.race, ultra_sludge: true },
+  }).status,
+  "excluded",
+);
+assert.equal(
+  readCapturedMadTargetCondition({
+    ...root,
     race: { ...root.race, truepath: true },
   }).status,
   "excluded",
+);
+assert.deepEqual(
+  readCapturedMadTargetCondition({
+    ...root,
+    race: { ...root.race, truepath: true },
+    tech: { ...root.tech, world_control: false },
+  }),
+  {
+    status: "excluded",
+    reasons: ["native MAD condition requires world control on Truepath"],
+  },
 );
 assert.equal(
   readCapturedMadTargetCondition({
@@ -117,6 +153,25 @@ assert.equal(
   "eligible",
 );
 assert.equal(readCapturedMadTargetCondition(null).status, "unknown");
+assert.equal(
+  readCapturedMadTargetCondition({
+    race: { truepath: true },
+    tech: { world_control: {} },
+  }).status,
+  "unknown",
+  "invalid native condition facts stay unknown",
+);
+
+for (const restriction of ["cataclysm", "lone_survivor", "warlord"]) {
+  const excluded = readCapturedTechApplicability(
+    {
+      ...root,
+      race: { ...root.race, [restriction]: true },
+    },
+    definitions,
+  );
+  assert.equal(excluded?.get("tech-mad")?.status, "excluded", restriction);
+}
 
 {
   const definitions = [

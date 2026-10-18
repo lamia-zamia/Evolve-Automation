@@ -11,6 +11,8 @@ import {
 
 export interface ResearchPrerequisiteObligationPlan {
   readonly status: "verified" | "unavailable";
+  readonly inputConsistency?: "consistent" | "incomplete" | "inconsistent";
+  readonly inputConsistencyReasons?: readonly string[];
   readonly mandatoryActionIds: readonly string[];
   readonly alternativeGroups: readonly Readonly<{
     readonly requirementId: string;
@@ -22,6 +24,31 @@ export interface ResearchPrerequisiteObligationPlan {
     readonly freshness: NativeResearchPrerequisiteGraph["freshness"];
     readonly snapshotIdentity: string;
   }>;
+}
+
+export interface NativeResearchEligibilityEvidence {
+  readonly actionId: string;
+  readonly status: NativeResearchApplicability["status"];
+  readonly reasons: readonly string[];
+  readonly freshness: NativeResearchPrerequisiteGraph["freshness"];
+  readonly snapshotIdentity: string;
+}
+
+export function bindNativeResearchEligibilityEvidence(
+  graph: Readonly<NativeResearchPrerequisiteGraph>,
+  observation: Readonly<{
+    actionId: string;
+    status: NativeResearchApplicability["status"];
+    reasons?: readonly string[];
+  }>,
+): Readonly<NativeResearchEligibilityEvidence> {
+  return Object.freeze({
+    actionId: observation.actionId,
+    status: observation.status,
+    reasons: Object.freeze([...(observation.reasons ?? [])]),
+    freshness: graph.freshness,
+    snapshotIdentity: researchPrerequisiteSnapshotIdentity(graph),
+  });
 }
 
 export function researchPrerequisiteSnapshotIdentity(
@@ -80,32 +107,69 @@ function intersectResearchActions(
   );
 }
 
-function nativePrerequisiteInputsMatchGraph(
+function validateNativePrerequisiteInputs(
   graph: Readonly<NativeResearchPrerequisiteGraph>,
   definitions: readonly NativeResearchActionDefinition[],
   grantLevels: ReadonlyMap<string, number>,
   applicability: ReadonlyMap<string, NativeResearchApplicability>,
-): boolean {
-  if (
-    graph.dependencyEvidence === "unavailable" ||
-    graph.provenance !== "effective-native-research-definition-snapshot" ||
-    graph.limits.length > 0 ||
-    graph.unavailableFacts.length > 0
-  )
-    return false;
+  targetEligibility: NativeResearchEligibilityEvidence,
+): Readonly<{
+  consistency: "consistent" | "incomplete" | "inconsistent";
+  reasons: readonly string[];
+}> {
+  const reconciledTargetFacts =
+    targetEligibility.actionId === graph.targetActionId &&
+    targetEligibility.status === "eligible"
+      ? new Set([
+          "target has a native condition function whose context was not evaluated",
+          "target route restrictions were retained but not evaluated",
+          "target trait, gene, or exclusion restrictions were retained but not evaluated",
+        ])
+      : new Set<string>();
+  const incompleteReasons = graph.unavailableFacts.filter(
+    (reason) => !reconciledTargetFacts.has(reason),
+  );
+  const inconsistentReasons: string[] = [];
+  if (graph.dependencyEvidence === "unavailable")
+    incompleteReasons.push(
+      "native prerequisite dependency declarations are unavailable",
+    );
+  else if (graph.dependencyEvidence === "partial")
+    incompleteReasons.push(
+      "native prerequisite dependency declarations are partial",
+    );
+  incompleteReasons.push(
+    ...graph.limits.map((limit) => `graph limit ${limit}`),
+  );
+  if (graph.provenance !== "effective-native-research-definition-snapshot")
+    inconsistentReasons.push(
+      "graph provenance does not identify an effective native snapshot",
+    );
   const definitionsById = new Map(
     definitions.map((definition) => [definition.actionId, definition]),
   );
   for (const gate of graph.actions) {
     const definition = definitionsById.get(gate.actionId);
+    if (definition === undefined) {
+      incompleteReasons.push(
+        `native action definition is missing for ${gate.actionId}`,
+      );
+      continue;
+    }
     if (
-      definition === undefined ||
       definition.grantTechnology !== gate.grantTechnology ||
       definition.grantLevel !== gate.grantLevel
-    )
-      return false;
+    ) {
+      inconsistentReasons.push(
+        `graph action ${gate.actionId} grant identity contradicts its native definition`,
+      );
+      continue;
+    }
     if (gate.status === "excluded") {
-      if (applicability.get(gate.actionId)?.status !== "excluded") return false;
+      if (applicability.get(gate.actionId)?.status !== "excluded")
+        inconsistentReasons.push(
+          `graph action ${gate.actionId} is excluded without matching applicability evidence`,
+        );
       continue;
     }
     if (gate.status === "frontier" && gate.actionId !== graph.targetActionId)
@@ -121,15 +185,35 @@ function nativePrerequisiteInputsMatchGraph(
       JSON.stringify([...gate.prerequisiteIds].sort()) !==
       JSON.stringify([...expectedRequirementIds].sort())
     )
-      return false;
+      inconsistentReasons.push(
+        `graph action ${gate.actionId} prerequisite identities contradict its native definition`,
+      );
   }
   for (const requirement of graph.requirements) {
     if (
       requirement.id !==
-        `research:${requirement.technologyId}:${requirement.requiredLevel}` ||
+      `research:${requirement.technologyId}:${requirement.requiredLevel}`
+    ) {
+      inconsistentReasons.push(
+        `graph requirement ${requirement.id} has an invalid technology or level identity`,
+      );
+      continue;
+    }
+    if (
       requirement.observedLevel !== grantLevels.get(requirement.technologyId)
-    )
-      return false;
+    ) {
+      if (
+        requirement.observedLevel === undefined ||
+        grantLevels.get(requirement.technologyId) === undefined
+      )
+        incompleteReasons.push(
+          `current grant level for ${requirement.technologyId} is unavailable`,
+        );
+      else
+        inconsistentReasons.push(
+          `graph requirement ${requirement.id} observed level contradicts current grant levels`,
+        );
+    }
     const expectedCandidates =
       requirement.observedLevel !== undefined &&
       requirement.observedLevel >= requirement.requiredLevel
@@ -146,9 +230,26 @@ function nativePrerequisiteInputsMatchGraph(
       JSON.stringify([...requirement.candidateActionIds].sort()) !==
       JSON.stringify(expectedCandidates)
     )
-      return false;
+      inconsistentReasons.push(
+        `graph requirement ${requirement.id} candidate actions contradict native grant definitions`,
+      );
   }
-  return true;
+  const consistency =
+    inconsistentReasons.length > 0
+      ? "inconsistent"
+      : incompleteReasons.length > 0
+        ? "incomplete"
+        : "consistent";
+  return Object.freeze({
+    consistency,
+    reasons: Object.freeze([
+      ...new Set(
+        consistency === "inconsistent"
+          ? inconsistentReasons
+          : incompleteReasons,
+      ),
+    ]),
+  });
 }
 
 /**
@@ -460,7 +561,7 @@ type CandidatePathResult = "mandatory" | "bypass" | "impossible" | "unknown";
 export function classifyMandatoryNativeResearchObligations(
   graph: Readonly<NativeResearchPrerequisiteGraph>,
   input: Readonly<{
-    targetCurrentlyEligible: boolean;
+    targetEligibility: NativeResearchEligibilityEvidence | undefined;
     definitions: readonly NativeResearchActionDefinition[] | undefined;
     grantLevels: ReadonlyMap<string, number> | undefined;
     applicabilityByActionId:
@@ -468,17 +569,38 @@ export function classifyMandatoryNativeResearchObligations(
     offeredActionIds: ReadonlySet<string> | undefined;
   }>,
 ): Readonly<ResearchPrerequisiteObligationPlan> {
-  const unavailable = (reasons: readonly string[]) =>
+  const unavailable = (
+    reasons: readonly string[],
+    inputConsistency?: "consistent" | "incomplete" | "inconsistent",
+    inputConsistencyReasons?: readonly string[],
+  ) =>
     Object.freeze({
       status: "unavailable" as const,
+      ...(inputConsistency === undefined ? {} : { inputConsistency }),
+      ...(inputConsistencyReasons === undefined
+        ? {}
+        : { inputConsistencyReasons }),
       mandatoryActionIds: Object.freeze([]),
       alternativeGroups: Object.freeze([]),
       reasons: Object.freeze([...new Set(reasons)]),
     });
-  if (!input.targetCurrentlyEligible)
+  const graphIdentity = researchPrerequisiteSnapshotIdentity(graph);
+  const eligibility = input.targetEligibility;
+  if (
+    eligibility === undefined ||
+    eligibility.actionId !== graph.targetActionId ||
+    eligibility.snapshotIdentity !== graphIdentity ||
+    JSON.stringify(eligibility.freshness) !== JSON.stringify(graph.freshness)
+  )
     return unavailable([
-      "terminal Research condition or route is not eligible",
+      "terminal Research eligibility evidence is missing or stale for the current graph snapshot",
     ]);
+  if (eligibility.status !== "eligible")
+    return unavailable(
+      eligibility.reasons.length > 0
+        ? eligibility.reasons
+        : ["terminal Research condition or route is not eligible"],
+    );
   if (
     graph.targetStatus === "satisfied" ||
     graph.targetStatus === "unavailable" ||
@@ -495,17 +617,19 @@ export function classifyMandatoryNativeResearchObligations(
   );
   if (definitions.size !== input.definitions.length)
     return unavailable(["native action identities are duplicated"]);
-  if (
-    !nativePrerequisiteInputsMatchGraph(
-      graph,
-      input.definitions,
-      input.grantLevels,
-      input.applicabilityByActionId,
-    )
-  )
-    return unavailable([
-      "native Research prerequisite inputs contradict the effective graph snapshot",
-    ]);
+  const inputValidation = validateNativePrerequisiteInputs(
+    graph,
+    input.definitions,
+    input.grantLevels,
+    input.applicabilityByActionId,
+    eligibility,
+  );
+  if (inputValidation.consistency === "inconsistent")
+    return Object.freeze({
+      ...unavailable(inputValidation.reasons),
+      inputConsistency: "inconsistent" as const,
+      inputConsistencyReasons: inputValidation.reasons,
+    });
   const target = definitions.get(graph.targetActionId);
   if (target?.prerequisites.kind !== "declared")
     return unavailable([
@@ -521,6 +645,9 @@ export function classifyMandatoryNativeResearchObligations(
     grants.set(definition.grantTechnology, entries);
   }
   const memo = new Map<string, CandidatePathResult>();
+  const graphActions = new Map(
+    graph.actions.map((action) => [action.actionId, action]),
+  );
   const activeActions = new Set<string>();
   const activeRequirements = new Set<string>();
   const alternativeGroups: {
@@ -598,8 +725,22 @@ export function classifyMandatoryNativeResearchObligations(
       return "unknown";
     }
     if (definition.actionId === candidateActionId)
-      return offered.has(definition.actionId) ? "mandatory" : "unknown";
-    if (offered.has(definition.actionId)) return "bypass";
+      return offered.has(definition.actionId) &&
+        graphActions.get(definition.actionId)?.status === "frontier"
+        ? "mandatory"
+        : "unknown";
+    if (offered.has(definition.actionId))
+      return graphActions.get(definition.actionId)?.status === "frontier"
+        ? "bypass"
+        : "unknown";
+    const graphAction = graphActions.get(definition.actionId);
+    if (graphAction === undefined) return "unknown";
+    if (graphAction.status === "excluded") return "impossible";
+    if (
+      graphAction.status === "conditional" ||
+      graphAction.status === "unavailable"
+    )
+      return "unknown";
     const applicabilityState = applicability.get(definition.actionId);
     if (applicabilityState?.status === "excluded") return "impossible";
     if (definition.prerequisites.kind !== "declared") return "unknown";
@@ -667,9 +808,16 @@ export function classifyMandatoryNativeResearchObligations(
       );
     if (outcome === "mandatory") mandatoryActionIds.push(offeredActionId);
   }
-  if (uncertaintyReasons.length > 0) return unavailable(uncertaintyReasons);
+  if (uncertaintyReasons.length > 0)
+    return unavailable(
+      uncertaintyReasons,
+      inputValidation.consistency,
+      inputValidation.reasons,
+    );
   return Object.freeze({
     status: "verified",
+    inputConsistency: inputValidation.consistency,
+    inputConsistencyReasons: inputValidation.reasons,
     mandatoryActionIds: Object.freeze([...new Set(mandatoryActionIds)].sort()),
     alternativeGroups: Object.freeze(
       alternativeGroups.map((group) => Object.freeze(group)),

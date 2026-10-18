@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  bindNativeResearchEligibilityEvidence,
   classifyMandatoryNativeResearchObligations,
   classifyMandatoryResearchPrerequisiteObligations,
   planIndependentResearchResourceClaims,
@@ -128,6 +129,12 @@ const nativeGraph = (
     maxActions: 40,
   });
 
+const eligibilityFor = (currentGraph) =>
+  bindNativeResearchEligibilityEvidence(currentGraph, {
+    actionId: currentGraph.targetActionId,
+    status: "eligible",
+  });
+
 {
   const definitions = [
     nativeDefinition("tech-mad", "prestige", 1, [
@@ -190,17 +197,63 @@ const nativeGraph = (
     applicabilityByActionId,
   );
   const result = classifyMandatoryNativeResearchObligations(currentGraph, {
-    targetCurrentlyEligible: true,
+    targetEligibility: eligibilityFor(currentGraph),
     definitions,
     grantLevels,
     applicabilityByActionId,
     offeredActionIds: new Set(frontier),
   });
-  assert.equal(result.status, "verified");
-  assert.deepEqual(result.mandatoryActionIds, [
-    "tech-black_powder",
-    "tech-mad_science",
-  ]);
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.inputConsistency, "incomplete");
+  assert.deepEqual(result.mandatoryActionIds, []);
+  assert.match(result.reasons.join(" "), /unresolved native alternatives/);
+
+  const freshEligibility = eligibilityFor(currentGraph);
+  for (const staleFreshness of [
+    { ...freshEligibility.freshness, rootGeneration: 2 },
+    { ...freshEligibility.freshness, progressionEpoch: "epoch-2" },
+    {
+      ...freshEligibility.freshness,
+      offerGenerations: [["tech-black_powder", 99]],
+    },
+  ]) {
+    const stale = classifyMandatoryNativeResearchObligations(currentGraph, {
+      targetEligibility: { ...freshEligibility, freshness: staleFreshness },
+      definitions,
+      grantLevels,
+      applicabilityByActionId,
+      offeredActionIds: new Set(frontier),
+    });
+    assert.equal(stale.status, "unavailable");
+    assert.match(stale.reasons.join(" "), /stale/);
+  }
+  const staleSnapshot = classifyMandatoryNativeResearchObligations(
+    currentGraph,
+    {
+      targetEligibility: {
+        ...freshEligibility,
+        snapshotIdentity: "previous prerequisite snapshot",
+      },
+      definitions,
+      grantLevels,
+      applicabilityByActionId,
+      offeredActionIds: new Set(frontier),
+    },
+  );
+  assert.equal(staleSnapshot.status, "unavailable");
+  assert.match(staleSnapshot.reasons.join(" "), /current graph snapshot/);
+  const missingEligibility = classifyMandatoryNativeResearchObligations(
+    currentGraph,
+    {
+      targetEligibility: undefined,
+      definitions,
+      grantLevels,
+      applicabilityByActionId,
+      offeredActionIds: new Set(frontier),
+    },
+  );
+  assert.equal(missingEligibility.status, "unavailable");
+  assert.match(missingEligibility.reasons.join(" "), /missing or stale/);
 }
 
 {
@@ -225,7 +278,7 @@ const nativeGraph = (
     applicabilityByActionId,
   );
   const result = classifyMandatoryNativeResearchObligations(currentGraph, {
-    targetCurrentlyEligible: true,
+    targetEligibility: eligibilityFor(currentGraph),
     definitions,
     grantLevels,
     applicabilityByActionId,
@@ -272,23 +325,22 @@ const nativeGraph = (
   const applicabilityByActionId = new Map([
     ["tech-mad_science", { status: "eligible" }],
   ]);
-  const result = classifyMandatoryNativeResearchObligations(
-    nativeGraph(
-      "tech-mad",
-      definitions,
-      frontier,
-      grantLevels,
-      applicabilityByActionId,
-    ),
-    {
-      targetCurrentlyEligible: true,
-      definitions,
-      grantLevels,
-      applicabilityByActionId,
-      offeredActionIds: new Set(frontier),
-    },
+  const currentGraph = nativeGraph(
+    "tech-mad",
+    definitions,
+    frontier,
+    grantLevels,
+    applicabilityByActionId,
   );
+  const result = classifyMandatoryNativeResearchObligations(currentGraph, {
+    targetEligibility: eligibilityFor(currentGraph),
+    definitions,
+    grantLevels,
+    applicabilityByActionId,
+    offeredActionIds: new Set(frontier),
+  });
   assert.equal(result.status, "unavailable");
+  assert.equal(result.inputConsistency, "incomplete");
   assert.deepEqual(result.mandatoryActionIds, []);
   assert.match(result.reasons.join(" "), /unresolved native alternatives/);
 }
@@ -324,7 +376,6 @@ const nativeGraph = (
     definitions.map(({ actionId }) => [actionId, { status: "eligible" }]),
   );
   const input = {
-    targetCurrentlyEligible: true,
     definitions,
     grantLevels,
     applicabilityByActionId,
@@ -339,10 +390,14 @@ const nativeGraph = (
   );
   const dominatedAlternatives = classifyMandatoryNativeResearchObligations(
     currentGraph,
-    input,
+    { ...input, targetEligibility: eligibilityFor(currentGraph) },
   );
-  assert.equal(dominatedAlternatives.status, "verified");
-  assert.deepEqual(dominatedAlternatives.mandatoryActionIds, frontier);
+  assert.equal(dominatedAlternatives.status, "unavailable");
+  assert.deepEqual(dominatedAlternatives.mandatoryActionIds, []);
+  assert.match(
+    dominatedAlternatives.reasons.join(" "),
+    /unresolved native alternatives/,
+  );
 
   const genuineBypass = nativeDefinition(
     "tech-alternate_container_route",
@@ -365,11 +420,12 @@ const nativeGraph = (
     withBypassGraph,
     {
       ...input,
+      targetEligibility: eligibilityFor(withBypassGraph),
       definitions: bypassDefinitions,
       applicabilityByActionId: bypassApplicability,
     },
   );
-  assert.equal(withBypass.status, "verified");
+  assert.equal(withBypass.status, "unavailable");
   assert.deepEqual(
     withBypass.mandatoryActionIds,
     [],

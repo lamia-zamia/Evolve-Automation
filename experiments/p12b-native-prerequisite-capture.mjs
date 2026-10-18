@@ -10,9 +10,15 @@ import {
   createChromiumRunner,
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
-import { createEffectiveCapturedTechPrerequisiteSnapshot } from "../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
+import {
+  combineCapturedTechEligibility,
+  createEffectiveCapturedTechPrerequisiteSnapshot,
+} from "../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
 import { planNativeResearchPrerequisites } from "../src/domain/progression/research-prerequisite-planning.ts";
-import { classifyMandatoryNativeResearchObligations } from "../src/domain/progression/research-prerequisite-obligations.ts";
+import {
+  bindNativeResearchEligibilityEvidence,
+  classifyMandatoryNativeResearchObligations,
+} from "../src/domain/progression/research-prerequisite-obligations.ts";
 import { evaluateResearchGoalCandidates } from "../src/domain/progression/research-goal-candidates.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -25,6 +31,7 @@ const settingsPath = path.join(
   "test-artifacts/benchmark/slice0/settings/stage2e-integrated-mad-no-triggers.json",
 );
 const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
+const pinnedGameSource = await readFile(gamePath, "utf8");
 const tmp = path.join(root, "test-artifacts/benchmark/tmp");
 const outputPath = process.argv
   .find((value) => value.startsWith("--out="))
@@ -42,6 +49,30 @@ const baselineBundle = execFileSync(
 );
 const candidateBundle = await readFile(
   path.join(root, "evolve_automation.user.js"),
+);
+assert.equal(
+  candidateBundle
+    .toString("utf8")
+    .includes("computedResearchRequirementsCapture"),
+  false,
+  "ordinary production bundles must not enable computed prerequisite capture",
+);
+assert.match(
+  pinnedGameSource,
+  /reqs:\s*\{\s*uranium:\s*1,\s*explosives:\s*3,\s*high_tech:\s*7\s*\}/,
+);
+assert.match(
+  pinnedGameSource,
+  /not_trait:\s*\["cataclysm",\s*"lone_survivor",\s*"warlord"\]/,
+);
+assert.match(pinnedGameSource, /path:\s*\["standard",\s*"truepath"\]/);
+assert.match(
+  pinnedGameSource,
+  /global\.race\["sludge"\]\s*\|\|\s*global\.race\["ultra_sludge"\]/,
+);
+assert.match(
+  pinnedGameSource,
+  /global\.race\["truepath"\]\s*\?\s*global\.tech\["world_control"\]/,
 );
 assert.equal(
   hash(baselineBundle),
@@ -225,8 +256,30 @@ function evaluatePlanner(catalog) {
     maxActions: 256,
     applicabilityByActionId: applicability,
   });
+  const targetApplicability = applicability.get("tech-mad");
+  const targetCondition = catalog.madTargetCondition;
+  const targetEligibility = combineCapturedTechEligibility([
+    targetApplicability ?? {
+      status: "unknown",
+      reasons: ["current Research applicability is unavailable"],
+    },
+    targetCondition === "eligible"
+      ? { status: "eligible" }
+      : targetCondition === "excluded"
+        ? {
+            status: "excluded",
+            reasons: ["native MAD condition excludes the current run"],
+          }
+        : {
+            status: "unknown",
+            reasons: ["native MAD condition facts are unavailable"],
+          },
+  ]);
   const obligations = classifyMandatoryNativeResearchObligations(graph, {
-    targetCurrentlyEligible: catalog.madTargetCondition === "eligible",
+    targetEligibility: bindNativeResearchEligibilityEvidence(graph, {
+      actionId: "tech-mad",
+      ...targetEligibility,
+    }),
     definitions: snapshot.definitions,
     grantLevels,
     applicabilityByActionId: applicability,
@@ -270,6 +323,44 @@ function evaluatePlanner(catalog) {
         )
       : [],
   );
+  const graphActions = new Map(
+    graph.actions.map((action) => [action.actionId, action]),
+  );
+  const offeredIds = new Set(offers.map((offer) => offer.elementId));
+  const directRequirementEvidence = graph.requirements
+    .filter((gate) => targetRequirementIds.has(gate.id))
+    .map((gate) => ({
+      requirementId: gate.id,
+      currentLevel: gate.observedLevel,
+      requiredLevel: gate.requiredLevel,
+      status: gate.status,
+      candidateActionIds: gate.candidateActionIds,
+      alternatives: gate.candidateActionIds.map((actionId) => {
+        const action = graphActions.get(actionId);
+        const definition = snapshot.definitions?.find(
+          (item) => item.actionId === actionId,
+        );
+        return {
+          actionId,
+          offered: offeredIds.has(actionId),
+          nativeActionStatus: action?.status ?? "unavailable",
+          applicability: applicability.get(actionId)?.status ?? "unknown",
+          disposition:
+            action?.status === "excluded" ||
+            applicability.get(actionId)?.status === "excluded"
+              ? "excluded"
+              : action?.status === "frontier" ||
+                  action?.status === "unsatisfied"
+                ? "verified-viable"
+                : "unresolved",
+          prerequisites: definition?.prerequisites,
+          reasons: action?.reasons ?? [
+            "action was not expanded in the current graph",
+          ],
+        };
+      }),
+      unresolvedReasons: gate.reasons,
+    }));
   return {
     snapshotDefinitions: snapshot.definitions?.length,
     computedEffectiveDefinitions: snapshot.definitions?.filter((definition) =>
@@ -299,6 +390,7 @@ function evaluatePlanner(catalog) {
       directRequirementGates: graph.requirements.filter((gate) =>
         targetRequirementIds.has(gate.id),
       ),
+      directRequirementEvidence,
       terminalAction: graph.actions.find(
         (action) => action.actionId === "tech-mad",
       ),
@@ -310,6 +402,9 @@ function evaluatePlanner(catalog) {
     },
     obligations: {
       status: obligations.status,
+      inputConsistency: obligations.inputConsistency,
+      inputConsistencyReasons: obligations.inputConsistencyReasons,
+      terminalEligibility: targetEligibility,
       mandatoryActionIds: obligations.mandatoryActionIds,
       alternativeGroups: obligations.alternativeGroups,
       reasons: obligations.reasons,
@@ -338,16 +433,20 @@ async function run(label, bundle, captureEnabled = false, diagnostic = false) {
           const originalObjectKeys = Object.keys;
           if (enable) hooks.computedResearchRequirementsCapture = true;
           const captureStarted = performance.now();
-          const result = hooks.readCurrentResearchCatalog("tech-mad", true);
-          const captureElapsedMs = performance.now() - captureStarted;
-          hooks.computedResearchRequirementsCapture = false;
-          return {
-            ...result,
-            captureEnabled: enable,
-            captureElapsedMs,
-            objectKeysRestored: Object.keys === originalObjectKeys,
-            gatherMode: hooks.gatherIntervention?.resourceClaimMode ?? "unset",
-          };
+          try {
+            const result = hooks.readCurrentResearchCatalog("tech-mad", true);
+            const captureElapsedMs = performance.now() - captureStarted;
+            return {
+              ...result,
+              captureEnabled: enable,
+              captureElapsedMs,
+              objectKeysRestored: Object.keys === originalObjectKeys,
+              gatherMode:
+                hooks.gatherIntervention?.resourceClaimMode ?? "unset",
+            };
+          } finally {
+            hooks.computedResearchRequirementsCapture = false;
+          }
         }, captureEnabled)
       : undefined;
     const diagnosticWallMs = diagnostic

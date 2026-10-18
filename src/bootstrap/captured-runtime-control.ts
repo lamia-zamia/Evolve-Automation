@@ -54,6 +54,7 @@ import {
   hasVerifiedNonManaAffordabilityForManaOffer,
 } from "../domain/progression/research-goal-candidates.ts";
 import {
+  bindNativeResearchEligibilityEvidence,
   classifyMandatoryNativeResearchObligations,
   classifyMandatoryResearchPrerequisiteObligations,
   planIndependentResearchResourceClaims,
@@ -72,6 +73,7 @@ import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/pr
 import { readEvolveRouteIdentity } from "../adapters/evolve/progression-epoch.ts";
 import {
   createEffectiveCapturedTechPrerequisiteSnapshot,
+  combineCapturedTechEligibility,
   readCapturedMadTargetCondition,
   readCapturedTechApplicability,
   readFreshCapturedComputedTechRequirements,
@@ -2620,10 +2622,16 @@ export function startCapturedRuntime({
           resourceClaimMode === "goal-derived-conjunctive";
         const mandatoryPlan = conjunctiveMode
           ? classifyMandatoryNativeResearchObligations(graph, {
-              targetCurrentlyEligible:
-                applicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status ===
-                  "eligible" &&
-                readCapturedMadTargetCondition(root).status === "eligible",
+              targetEligibility: bindNativeResearchEligibilityEvidence(graph, {
+                actionId: CAPTURED_MAD_RESEARCH_TECH,
+                ...combineCapturedTechEligibility([
+                  applicability?.get(CAPTURED_MAD_RESEARCH_TECH) ?? {
+                    status: "unknown",
+                    reasons: ["current Research applicability is unavailable"],
+                  },
+                  readCapturedMadTargetCondition(root),
+                ]),
+              }),
               definitions: prerequisiteDefinitions,
               grantLevels,
               applicabilityByActionId: applicability,
@@ -6851,18 +6859,37 @@ export function startCapturedRuntime({
                   "goal.mad.candidate-offers",
                   researchOffers.length,
                 );
-                const obligationTargetIsEligible =
-                  plan.selectedGoal.id === "prestige:mad" &&
-                  researchApplicability?.get(CAPTURED_MAD_RESEARCH_TECH)
-                    ?.status === "eligible" &&
-                  readCapturedMadTargetCondition(root).status === "eligible";
+                const obligationTargetEligibility =
+                  plan.selectedGoal.id === "prestige:mad"
+                    ? combineCapturedTechEligibility([
+                        researchApplicability?.get(
+                          CAPTURED_MAD_RESEARCH_TECH,
+                        ) ?? {
+                          status: "unknown",
+                          reasons: [
+                            "current Research applicability is unavailable",
+                          ],
+                        },
+                        readCapturedMadTargetCondition(root),
+                      ])
+                    : {
+                        status: "excluded" as const,
+                        reasons: ["MAD is not the selected goal"],
+                      };
                 const obligations = activeRuntimeMeasure.measure(
                   "goal.mad.obligation-classification",
                   () =>
                     classifyMandatoryNativeResearchObligations(
                       researchPrerequisiteGraph,
                       {
-                        targetCurrentlyEligible: obligationTargetIsEligible,
+                        targetEligibility:
+                          bindNativeResearchEligibilityEvidence(
+                            researchPrerequisiteGraph,
+                            {
+                              actionId: CAPTURED_MAD_RESEARCH_TECH,
+                              ...obligationTargetEligibility,
+                            },
+                          ),
                         definitions: prerequisiteSnapshot.definitions,
                         grantLevels: researchGrantLevels,
                         applicabilityByActionId: researchApplicability,

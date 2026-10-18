@@ -37,6 +37,36 @@ export interface EffectiveCapturedTechPrerequisiteSnapshot {
   readonly identity: string;
 }
 
+export function combineCapturedTechEligibility(
+  observations: readonly NativeResearchApplicability[],
+): NativeResearchApplicability {
+  const excluded = observations.filter(
+    (observation) => observation.status === "excluded",
+  );
+  if (excluded.length > 0)
+    return Object.freeze({
+      status: "excluded",
+      reasons: Object.freeze(
+        observations.flatMap((observation) =>
+          observation.status === "excluded" ? observation.reasons : [],
+        ),
+      ),
+    });
+  const unknown = observations.filter(
+    (observation) => observation.status === "unknown",
+  );
+  if (unknown.length > 0)
+    return Object.freeze({
+      status: "unknown",
+      reasons: Object.freeze(
+        observations.flatMap((observation) =>
+          observation.status === "unknown" ? observation.reasons : [],
+        ),
+      ),
+    });
+  return Object.freeze({ status: "eligible" });
+}
+
 /** Uses only complete current computed requirements and keeps all other declarations uncertain. */
 export function createEffectiveCapturedTechPrerequisiteSnapshot(
   definitions: readonly CapturedTechDefinition[] | undefined,

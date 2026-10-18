@@ -12,7 +12,10 @@ import { planGoalResourceIntents } from "../src/domain/economy/production/goal-r
 import { readFreshGoalResourceStock } from "./stage3s-smelter-intent.mjs";
 import { selectGoalResourceCandidate } from "./stage3v-candidate-selector.mjs";
 import { planNativeResearchPrerequisites } from "../src/domain/progression/research-prerequisite-planning.ts";
-import { classifyMandatoryNativeResearchObligations } from "../src/domain/progression/research-prerequisite-obligations.ts";
+import {
+  bindNativeResearchEligibilityEvidence,
+  classifyMandatoryNativeResearchObligations,
+} from "../src/domain/progression/research-prerequisite-obligations.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const savePath = path.join(
@@ -515,7 +518,11 @@ function deriveLiveIntent({
     applicabilityByActionId.get("tech-industrialization")?.status ===
     "eligible";
   const obligations = classifyMandatoryNativeResearchObligations(graph, {
-    targetCurrentlyEligible: targetRouteEligibility,
+    targetEligibility: bindNativeResearchEligibilityEvidence(graph, {
+      actionId: "tech-industrialization",
+      status: targetRouteEligibility ? "eligible" : "unknown",
+      reasons: targetRouteEligibility ? [] : ["route applicability is unknown"],
+    }),
     definitions: nativeDefinitions,
     grantLevels: new Map(catalog.grantLevels ?? []),
     applicabilityByActionId,
