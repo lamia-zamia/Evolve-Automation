@@ -1,12 +1,12 @@
 # P12G — Controlled production marginal in a reachable game state
 
-| Field | Value |
-| --- | --- |
-| Date | 2026-10-18 |
-| Branch | `deadspace` |
-| Code/test commit | `b74c97c3c93387fb43e307451319682ca386c312` |
-| Pinned game | `pmotschmann/Evolve @ db38e2af831907d49aeb5348d678d8d8745d6c3f` |
-| Game snapshot | `test-artifacts/game/evolve-deadspace.js`, SHA-256 `05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7` |
+| Field            | Value                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Date             | 2026-10-18                                                                                                            |
+| Branch           | `deadspace`                                                                                                           |
+| Code/test commit | `b74c97c3c93387fb43e307451319682ca386c312`                                                                            |
+| Pinned game      | `pmotschmann/Evolve @ db38e2af831907d49aeb5348d678d8d8745d6c3f`                                                       |
+| Game snapshot    | `test-artifacts/game/evolve-deadspace.js`, SHA-256 `05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7` |
 
 ## Decision
 

@@ -10,6 +10,12 @@ import * as esbuild from "esbuild";
 import { compareGoalStrategies } from "../src/domain/economy/goal-feasibility.ts";
 import { planSmelter } from "../src/domain/economy/production/smelter.ts";
 import {
+  P12G_PINNED_COMMIT,
+  P12G_CAPTURE_CONTRACT_VERSION,
+  validateP12GCapture,
+  validateP12GReplayEvidence,
+} from "./p12g-capture-contract.mjs";
+import {
   createChromiumRunner,
   decodeExport,
   parseSave,
@@ -28,6 +34,8 @@ const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
 const upstream = "D:/work/Evolve-DeadSpace";
 const seed = 42;
 const epoch = "2026-09-21T00:00:00.000Z";
+const expectedGameSnapshotSha256 =
+  "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7";
 const horizon = 100;
 const steelGoalAction = "tech-steel_containers";
 const steelGoalPrice = 250;
@@ -43,6 +51,14 @@ const capturePath = process.argv
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 
 const startSaveText = await readFile(savePath, "utf8");
+const snapshotBytes = await readFile(gamePath);
+const snapshotSidecar = JSON.parse(await readFile(gamePath + ".json", "utf8"));
+assert.equal(snapshotSidecar.sourceRef, P12G_PINNED_COMMIT);
+assert.equal(
+  snapshotSidecar.commit.startsWith(P12G_PINNED_COMMIT.slice(0, 8)),
+  true,
+);
+assert.equal(hash(snapshotBytes), expectedGameSnapshotSha256);
 const baseSettings = {
   ...JSON.parse(await readFile(settingsPath, "utf8")),
   autoResearch: true,
@@ -74,6 +90,29 @@ const bundlePath = path.join(
 );
 await mkdir(path.dirname(bundlePath), { recursive: true });
 await writeFile(bundlePath, built.outputFiles[0].contents);
+const expectedInputs = {
+  pinnedUpstreamCommit: P12G_PINNED_COMMIT,
+  gameSnapshotSha256: hash(snapshotBytes),
+  startingSaveSha256: hash(startSaveText),
+  effectiveSettingsSha256: hash(JSON.stringify(baseSettings)),
+  seed,
+  epoch,
+  testBundleSha256: hash(built.outputFiles[0].contents),
+  testHarnessSha256: hash(
+    Buffer.concat(
+      await Promise.all(
+        [
+          fileURLToPath(import.meta.url),
+          path.join(root, "experiments/p12g-capture-contract.mjs"),
+          path.join(root, "tools/chromium-evolve-runner.mjs"),
+          path.join(root, "tools/chromium/bridge.js"),
+          path.join(root, "tools/chromium/page-server.mjs"),
+          path.join(root, "tools/chromium/chrome.mjs"),
+        ].map((file) => readFile(file)),
+      ),
+    ),
+  ),
+};
 
 function steelDelta(decision) {
   return (
@@ -117,6 +156,32 @@ try {
       nativeTrace: true,
       perf: true,
     });
+    await discovery.evaluate(() => {
+      const hooks = window.__EA_TEST_HOOKS__;
+      hooks.observeSmelterPlanForTest = (input, decision, demand) => {
+        if (
+          demand.requestedSteel >= 250 &&
+          input.initialised &&
+          input.steelCount < 1 &&
+          decision.smeltAdjustments?.some(
+            (item) => item.productionId === "Steel" && item.delta > 0,
+          )
+        ) {
+          hooks.p12gPlans.push({
+            period: window.__EA_RUNNER__.periods(),
+            input,
+            decision,
+            demand,
+            exportSave: window.exportGame(),
+            smelterAuthority: hooks.readSmelterPlanForTest?.(),
+            catalog: hooks.readCurrentResearchCatalog?.(
+              "tech-steel_containers",
+              false,
+            ),
+          });
+        }
+      };
+    });
     try {
       for (let periods = 0; periods < 4_000; periods += 25) {
         await discovery.advance(25);
@@ -143,10 +208,6 @@ try {
           (state.resource?.Steel?.amount ?? 0) >= steelGoalPrice
         )
           continue;
-        const offer = evidence.catalog?.offers?.find(
-          ({ elementId }) => elementId === steelGoalAction,
-        );
-        if (offer?.cost?.Steel !== steelGoalPrice) continue;
         const observation = evidence.plans.findLast(
           (entry) =>
             entry.demand.requestedSteel >= steelGoalPrice &&
@@ -154,20 +215,73 @@ try {
             steelDelta(entry.decision) > 0,
         );
         if (observation === undefined) continue;
+        const catalog = observation.catalog;
+        const offer = catalog?.offers?.find(
+          ({ elementId }) => elementId === steelGoalAction,
+        );
+        if (offer?.cost?.Steel !== steelGoalPrice) continue;
         const observedSave = decodeExport(observation.exportSave);
-        const smelter = evidence.plan.input;
+        const observationIdentity = `p12g-smelter-${observation.period}-${hash(observation.exportSave)}`;
         assert.equal(observation.input.initialised, true);
         assert.ok(observation.demand.requestedSteel >= steelGoalPrice);
+        assert.equal(catalog?.current, true);
+        assert.equal(catalog?.researchPermission, true);
         assert.ok(
           (observedSave.resource?.Steel?.amount ?? Infinity) < steelGoalPrice,
         );
         capture = {
+          contractVersion: P12G_CAPTURE_CONTRACT_VERSION,
+          inputs: expectedInputs,
           period: observation.period,
+          capturePeriod: observation.period,
           exportSave: observation.exportSave,
+          exportSaveSha256: hash(observation.exportSave),
           saveSha256: hash(observation.exportSave),
-          rootGeneration: evidence.catalog.rootGeneration,
-          progressionEpoch: evidence.catalog.progressionEpoch,
+          observationIdentity,
+          rootGeneration: catalog.rootGeneration,
+          progressionEpoch: catalog.progressionEpoch,
           offer,
+          currentOfferEvidence: {
+            period: observation.period,
+            observationIdentity,
+            offer,
+            queueEvidence: catalog.queueEvidence,
+            researchPermission: catalog.researchPermission,
+            source: catalog.source,
+          },
+          currentDemandEvidence: {
+            period: observation.period,
+            observationIdentity,
+            value: observation.demand,
+            source: "readSmelterDemandForTest in Smelter observation callback",
+          },
+          metadataEvidence: {
+            root: {
+              source: "readCurrentResearchCatalog.rootGeneration",
+              validity: "same-observation-boundary",
+              period: observation.period,
+              observationIdentity,
+            },
+            progression: {
+              source: "readCurrentResearchCatalog.progressionEpoch",
+              validity: "same-observation-boundary",
+              period: observation.period,
+              observationIdentity,
+            },
+            offer: {
+              source: "readCurrentResearchCatalog.offers",
+              validity: "same-observation-boundary",
+              period: observation.period,
+              observationIdentity,
+            },
+          },
+          smelterObservation: {
+            period: observation.period,
+            identity: observationIdentity,
+            decision: observation.decision,
+            input: observation.input,
+            nativeControl: observation.smelterAuthority,
+          },
           currentState: {
             resources: resourceSnapshot(observedSave),
             smelter: observedSave.city?.smelter,
@@ -175,14 +289,16 @@ try {
           },
           preAdjustment: observation,
           liveControl: {
-            available: evidence.plan.controlAvailable,
-            methods: evidence.plan.controlMethods,
+            available: observation.smelterAuthority.controlAvailable,
+            methods: observation.smelterAuthority.controlMethods,
           },
           permissions: { autoSmelter: baseSettings.autoSmelter },
-          currentPlan: evidence.plan,
+          currentPlan: observation.smelterAuthority,
           discoveryDiagnostics: {
             workTicks: diagnostics.workTicks,
             controlUsage: diagnostics.controlUsage,
+            sameBoundaryResearchCatalogReads: evidence.plans.length,
+            sameBoundarySmelterPlanReads: evidence.plans.length,
           },
         };
         break;
@@ -196,6 +312,7 @@ try {
     capture,
     "no observed enabled Smelter state satisfied the live Steel-goal conditions",
   );
+  validateP12GCapture(capture, expectedInputs);
 
   async function replay(id, settings) {
     const session = await runner.openSession({
@@ -209,12 +326,44 @@ try {
     });
     const samples = [];
     try {
+      const restoredCatalog = await session.evaluate(() => ({
+        catalog: window.__EA_TEST_HOOKS__.readCurrentResearchCatalog?.(
+          "tech-steel_containers",
+          false,
+        ),
+      }));
+      const restoredState = await session.readState();
+      assert.deepEqual(
+        resourceSnapshot(restoredState),
+        capture.currentState.resources,
+        "restored resources differ from the captured starting state",
+      );
+      assert.equal(
+        restoredCatalog.catalog?.rootGeneration,
+        capture.rootGeneration,
+      );
+      assert.equal(
+        restoredCatalog.catalog?.progressionEpoch,
+        capture.progressionEpoch,
+      );
+      assert.equal(restoredCatalog.catalog?.researchPermission, true);
+      await session.advance(10);
+      const restoredEvidence = await session.evaluate(() => ({
+        plan: window.__EA_TEST_HOOKS__.readSmelterPlanForTest?.(),
+        demand: window.__EA_TEST_HOOKS__.readSmelterDemandForTest?.(),
+        catalog: window.__EA_TEST_HOOKS__.readCurrentResearchCatalog?.(
+          "tech-steel_containers",
+          false,
+        ),
+      }));
+      validateP12GReplayEvidence(capture, restoredEvidence);
       const beforeMetrics = await session.metrics();
       const initialState = decodeExport(capture.exportSave);
-      let startAuthority;
+      const startAuthority = restoredEvidence;
       let observationReadMs = [];
-      for (let elapsed = 0; elapsed < horizon; elapsed += 10) {
+      for (let elapsed = 10; elapsed < horizon; elapsed += 10) {
         await session.advance(10);
+        const samplePeriod = elapsed + 10;
         const [state, diagnostics, evidence] = await Promise.all([
           session.readState(),
           session.diagnostics(),
@@ -222,13 +371,12 @@ try {
             plan: window.__EA_TEST_HOOKS__.readSmelterPlanForTest?.(),
             demand: window.__EA_TEST_HOOKS__.readSmelterDemandForTest?.(),
             catalog: window.__EA_TEST_HOOKS__.readCurrentResearchCatalog?.(
-              "tech-industrialization",
+              "tech-steel_containers",
             ),
             plans: window.__EA_TEST_HOOKS__.p12gPlans,
           })),
         ]);
-        if (startAuthority === undefined) {
-          startAuthority = evidence;
+        if (samplePeriod === 20) {
           observationReadMs = await session.evaluate(() =>
             Array.from({ length: 10 }, () => {
               const started = performance.now();
@@ -239,7 +387,7 @@ try {
           );
         }
         samples.push({
-          elapsed: elapsed + 10,
+          elapsed: samplePeriod,
           resources: resourceSnapshot(state),
           smelter: state.city?.smelter,
           demand: evidence.demand,
@@ -485,15 +633,15 @@ try {
         cwd: root,
         encoding: "utf8",
       }).trim(),
-      pinnedGame:
-        "pmotschmann/Evolve @ db38e2af831907d49aeb5348d678d8d8745d6c3f",
-      gameSnapshotSha256: hash(await readFile(gamePath)),
+      pinnedGame: `pmotschmann/Evolve @ ${P12G_PINNED_COMMIT}`,
+      gameSnapshotSha256: hash(snapshotBytes),
       startingSaveSha256: hash(startSaveText),
       settingsSha256: hash(JSON.stringify(baseSettings)),
       seed,
       epoch,
       noStage3FGatherIntervention: true,
-      testBundleSha256: hash(built.outputFiles[0].contents),
+      testBundleSha256: expectedInputs.testBundleSha256,
+      testHarnessSha256: expectedInputs.testHarnessSha256,
     },
     reachableCapture: capture,
     counterfactuals: {
@@ -551,6 +699,21 @@ try {
         alternativeMedianMs: alternative.observationReadMs
           .slice()
           .sort((a, b) => a - b)[5],
+      },
+      researchObservationCalls: {
+        addedAtCaptureBoundary: {
+          researchCatalog:
+            capture.discoveryDiagnostics.sameBoundaryResearchCatalogReads,
+          smelterPlan:
+            capture.discoveryDiagnostics.sameBoundarySmelterPlanReads,
+        },
+        replayByArm: {
+          restoreCatalogValidation: 1,
+          restoredNativePlanAndDemand: 1,
+          sampledCatalogReads: required.samples.length,
+        },
+        additionalCatalogReadsPerReplayArm: 1,
+        forcedFreshResearchDraws: 0,
       },
       pureNativePlanGeneration: {
         repeats: purePlanSamplesMs.length,
