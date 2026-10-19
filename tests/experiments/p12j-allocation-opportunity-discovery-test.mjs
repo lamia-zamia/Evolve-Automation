@@ -10,10 +10,10 @@ function evidence(overrides = {}) {
     rootId: "root-1",
     priceIdentity: "price-1",
     action: {
-      current: true,
+      captureCurrent: true,
       rootId: "root-1",
-      progressionCurrent: true,
-      priceCurrent: true,
+      progressionMatchesCapture: true,
+      priceMatchesCapture: true,
       priceIdentity: "price-1",
       permitted: true,
       affordable: false,
@@ -47,7 +47,7 @@ function evidence(overrides = {}) {
 }
 
 const executable = assessAllocationOpportunity(evidence());
-assert.equal(executable.actionable, true);
+assert.equal(executable.executable, true);
 assert.deepEqual(executable.reasons, []);
 
 const p12iObservedJobsBoundary = assessAllocationOpportunity({
@@ -79,7 +79,7 @@ const p12iObservedJobsBoundary = assessAllocationOpportunity({
     controlAvailable: undefined,
   },
 });
-assert.equal(p12iObservedJobsBoundary.actionable, false);
+assert.equal(p12iObservedJobsBoundary.executable, false);
 assert.ok(p12iObservedJobsBoundary.reasons.includes("native-job-cap-reached"));
 assert.ok(
   p12iObservedJobsBoundary.reasons.includes("unknown-effective-smart-maximum"),
@@ -122,12 +122,10 @@ const p12gObservedSmelterBoundary = assessAllocationOpportunity({
   },
   target: undefined,
 });
-assert.equal(p12gObservedSmelterBoundary.actionable, false);
-assert.ok(
-  p12gObservedSmelterBoundary.reasons.includes(
-    "production-owner-already-responding",
-  ),
-);
+assert.equal(p12gObservedSmelterBoundary.executable, true);
+assert.equal(p12gObservedSmelterBoundary.supportedIncrementalEffect, "unknown");
+assert.equal(p12gObservedSmelterBoundary.useful, "unknown");
+assert.equal(p12gObservedSmelterBoundary.authorizedToExecute, false);
 
 const unknownSmelterCapacity = assessAllocationOpportunity({
   ...evidence(),
@@ -188,7 +186,7 @@ const defaultPool = assessAllocationOpportunity(
     target: { ...evidence().target, idleWorkers: 0, defaultPoolWorkers: 1 },
   }),
 );
-assert.equal(defaultPool.actionable, true);
+assert.equal(defaultPool.executable, true);
 
 const unknownOwnerPlan = assessAllocationOpportunity(
   evidence({
@@ -287,10 +285,12 @@ assert.ok(
 for (const changed of [
   evidence({ action: { ...evidence().action, priceIdentity: "price-2" } }),
   evidence({ action: { ...evidence().action, rootId: "root-2" } }),
-  evidence({ action: { ...evidence().action, progressionCurrent: false } }),
+  evidence({
+    action: { ...evidence().action, progressionMatchesCapture: false },
+  }),
 ]) {
   const assessment = assessAllocationOpportunity(changed);
-  assert.equal(assessment.actionable, false);
+  assert.equal(assessment.executable, false);
   assert.ok(assessment.reasons.some((reason) => reason.startsWith("changed-")));
 }
 
@@ -305,18 +305,21 @@ for (const incomplete of [
     priceIdentity: undefined,
     action: { ...evidence().action, priceIdentity: undefined },
   }),
-  evidence({ action: { ...evidence().action, current: 1 } }),
-  evidence({ action: { ...evidence().action, progressionCurrent: "true" } }),
+  evidence({ action: { ...evidence().action, captureCurrent: 1 } }),
+  evidence({
+    action: { ...evidence().action, progressionMatchesCapture: "true" },
+  }),
 ]) {
-  assert.equal(assessAllocationOpportunity(incomplete).actionable, false);
+  assert.equal(assessAllocationOpportunity(incomplete).executable, false);
 }
 
 const tied = selectAllocationOpportunity([
   evidence({ id: "zeta" }),
   evidence({ id: "alpha" }),
 ]);
-assert.equal(tied.selectedId, "alpha");
-assert.deepEqual(tied.tiedIds, ["alpha", "zeta"]);
+assert.equal(tied.selectedId, undefined);
+assert.deepEqual(tied.tiedIds, []);
+assert.deepEqual(tied.potentialIds, ["zeta", "alpha"]);
 
 const exhausted = selectAllocationOpportunity(
   [evidence({ id: "one" }), evidence({ id: "two" })],

@@ -37,10 +37,10 @@ export function buildP12JCapturedCandidates(p12g, p12i) {
   );
   const priceIdentity = `${currentAction.generation}:${JSON.stringify(currentAction.cost)}`;
   const action = {
-    current: true,
+    captureCurrent: true,
     rootId,
-    progressionCurrent: true,
-    priceCurrent: true,
+    progressionMatchesCapture: true,
+    priceMatchesCapture: true,
     priceIdentity,
     permitted: jobs.normalResearchPermission === true,
     affordable: currentAction.nativeAffordable === true,
@@ -138,7 +138,7 @@ export function assessAllocationOpportunity(evidence) {
     reasons.push("missing-candidate-identity");
   if (!ownerKinds.has(evidence.ownerKind)) reasons.push("unknown-owner-kind");
   if (
-    action?.current !== true ||
+    action?.captureCurrent !== true ||
     typeof evidence.rootId !== "string" ||
     evidence.rootId.length === 0 ||
     typeof action.rootId !== "string" ||
@@ -146,9 +146,10 @@ export function assessAllocationOpportunity(evidence) {
     action.rootId !== evidence.rootId
   )
     reasons.push("changed-root-or-action");
-  if (action?.progressionCurrent !== true) reasons.push("changed-progression");
+  if (action?.progressionMatchesCapture !== true)
+    reasons.push("changed-progression");
   if (
-    action?.priceCurrent !== true ||
+    action?.priceMatchesCapture !== true ||
     typeof evidence.priceIdentity !== "string" ||
     evidence.priceIdentity.length === 0 ||
     typeof action.priceIdentity !== "string" ||
@@ -188,10 +189,6 @@ export function assessAllocationOpportunity(evidence) {
     reasons.push("production-owner-already-satisfies-demand");
   else if (owner?.demandSatisfied !== false)
     reasons.push("production-owner-demand-unknown");
-  if (owner?.alreadyResponding === true)
-    reasons.push("production-owner-already-responding");
-  else if (owner?.alreadyResponding !== false)
-    reasons.push("production-owner-response-unknown");
   if (owner?.controlAvailable === false)
     reasons.push("native-control-unavailable");
   else if (owner?.controlAvailable !== true)
@@ -297,12 +294,27 @@ export function assessAllocationOpportunity(evidence) {
 
   return Object.freeze({
     id: evidence.id,
-    actionable: reasons.length === 0,
+    executable: reasons.length === 0,
+    structuralValidity: reasons.some((reason) =>
+      [
+        "missing-candidate-identity",
+        "unknown-owner-kind",
+        "changed-root-or-action",
+        "changed-native-price",
+      ].includes(reason),
+    )
+      ? "invalid"
+      : "valid",
+    supportedIncrementalEffect: "unknown",
+    useful: "unknown",
+    preferred: false,
+    mayRequestOwner: false,
+    authorizedToExecute: false,
     reasons: Object.freeze([...new Set(reasons)].sort()),
   });
 }
 
-/** Selects complete actionable evidence; stable identity only breaks exact ties. */
+/** P12J lacks an incumbent comparison, so it reports possibilities without a winner. */
 export function selectAllocationOpportunity(
   evidenceRows,
   { maxCandidates = 32 } = {},
@@ -311,16 +323,12 @@ export function selectAllocationOpportunity(
     throw new RangeError("maxCandidates must be a non-negative safe integer");
   const considered = evidenceRows.slice(0, maxCandidates);
   const assessments = considered.map(assessAllocationOpportunity);
-  const actionable = assessments
-    .filter(({ actionable: canAct }) => canAct)
-    .sort((left, right) => left.id.localeCompare(right.id));
+  const actionable = assessments.filter(({ executable }) => executable);
   const budgetExhausted = evidenceRows.length > maxCandidates;
   return Object.freeze({
     assessments: Object.freeze(assessments),
-    selectedId: budgetExhausted ? undefined : actionable[0]?.id,
-    tiedIds: Object.freeze(
-      budgetExhausted ? [] : actionable.map(({ id }) => id),
-    ),
+    selectedId: undefined,
+    tiedIds: Object.freeze([]),
     potentialIds: Object.freeze(actionable.map(({ id }) => id)),
     budgetExhausted,
   });
