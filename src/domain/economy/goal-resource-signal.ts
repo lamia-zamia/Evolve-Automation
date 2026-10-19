@@ -85,6 +85,7 @@ export type GoalResourceSignalStatus =
   | "additional-target-supported"
   | "competing-spending-unresolved"
   | "goal-evidence-unavailable"
+  | "resource-threshold-met"
   | "goal-already-satisfied"
   | "goal-invalidated";
 
@@ -199,7 +200,11 @@ export function evaluateGoalResourceSignal(
     unavailableReasons.push("permission-generation-changed");
   if (current.permissionEnabled !== true)
     unavailableReasons.push("permission-disabled-or-unknown");
-  if (observation.smelterControlGeneration !== current.smelterControlGeneration)
+  if (
+    observation.smelterControlGeneration === undefined ||
+    current.smelterControlGeneration === undefined ||
+    observation.smelterControlGeneration !== current.smelterControlGeneration
+  )
     unavailableReasons.push("smelter-control-replaced");
   if (
     observation.demandGeneration === undefined ||
@@ -228,13 +233,21 @@ export function evaluateGoalResourceSignal(
     current.constructionTargetIdentity
   )
     unavailableReasons.push("construction-target-changed");
-  if (offer.generation !== current.offerGeneration)
+  if (
+    offer.generation === undefined ||
+    current.offerGeneration === undefined ||
+    offer.generation !== current.offerGeneration
+  )
     unavailableReasons.push("native-control-generation-changed");
   if (offer.rootGeneration !== current.rootGeneration)
     unavailableReasons.push("native-offer-root-changed");
   if (offer.progressionGeneration !== current.progressionGeneration)
     unavailableReasons.push("native-offer-progression-changed");
-  if (offer.controlGeneration !== current.controlGeneration)
+  if (
+    offer.controlGeneration === undefined ||
+    current.controlGeneration === undefined ||
+    offer.controlGeneration !== current.controlGeneration
+  )
     unavailableReasons.push("native-control-replaced");
   if (!offer.priceIdentity || offer.priceIdentity !== current.priceIdentity)
     unavailableReasons.push("native-price-changed-or-unidentified");
@@ -265,7 +278,7 @@ export function evaluateGoalResourceSignal(
       "required-quantity-exceeds-storage-capacity",
     ]);
   if (input.stock.amount! >= input.required!)
-    return makeSignal(input, "goal-already-satisfied", undefined, []);
+    return makeSignal(input, "resource-threshold-met", undefined, []);
 
   const incumbentTarget = Math.min(
     input.demand.aggregateTarget!,

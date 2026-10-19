@@ -83,6 +83,7 @@ import type { TickDiagnostics } from "../ports/tick.ts";
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
+import type { ResearchInput } from "../domain/progression/research/research.ts";
 import type { DiscoveryAttemptTracker } from "./discovery-attempts.ts";
 import { createDiscoveryAttempts } from "./discovery-attempts.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
@@ -160,6 +161,18 @@ export interface CapturedProgressionControlDependencies {
     ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
   readonly readResearchTestIntervention?: () =>
     Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
+  readonly readResearchOwnerEvidenceEnabled?: () => boolean;
+  readonly onResearchOwnerOffersForTest?: (
+    observation: Readonly<{
+      rootGeneration: number;
+      progressionGeneration: string;
+      offerMembership: "complete" | "unknown";
+      offers: readonly Readonly<OfferedTech>[] | undefined;
+    }>,
+  ) => void;
+  readonly onResearchOwnerReadForTest?: (
+    input: Readonly<ResearchInput>,
+  ) => void;
   readonly readResearchShadowObserver?: () =>
     ((observation: Readonly<ResearchShadowObservation>) => void) | undefined;
   readonly readComputedResearchRequirementsEnabled?: () => boolean;
@@ -1049,6 +1062,29 @@ export function createCapturedProgressionControl(
     mountSuppression,
     panels,
     readOfferedTechs: () => sampleOfferedTechs("auto-research"),
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    dependencies.onResearchOwnerOffersForTest !== undefined
+      ? {
+          readOwnerEvidenceEnabled:
+            dependencies.readResearchOwnerEvidenceEnabled,
+          readOwnerObservationIdentity: () =>
+            Object.freeze({
+              rootGeneration: epoch.readRootGeneration(),
+              progressionGeneration: epoch.read(),
+            }),
+          onOwnerOffersForTest: dependencies.onResearchOwnerOffersForTest,
+        }
+      : {}),
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    dependencies.onResearchOwnerReadForTest !== undefined
+      ? {
+          readOwnerEvidenceEnabled:
+            dependencies.readResearchOwnerEvidenceEnabled,
+          onOwnerReadForTest: dependencies.onResearchOwnerReadForTest,
+        }
+      : {}),
     ...(dependencies.readResearchTestIntervention === undefined
       ? {}
       : {
@@ -1062,10 +1098,16 @@ export function createCapturedProgressionControl(
         }
       : {}),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
-    ...(dependencies.onResearchOwnerSelection === undefined
+    ...(dependencies.onResearchOwnerSelection === undefined ||
+    (diagnostics?.readPerformanceEnabled() !== true &&
+      (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+        __EA_TEST_SURFACE_ENABLED__ !== true))
       ? {}
       : { onOwnerSelection: dependencies.onResearchOwnerSelection }),
-    ...(dependencies.onResearchOwnerSelectionResult === undefined
+    ...(dependencies.onResearchOwnerSelectionResult === undefined ||
+    (diagnostics?.readPerformanceEnabled() !== true &&
+      (typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+        __EA_TEST_SURFACE_ENABLED__ !== true))
       ? {}
       : {
           onOwnerSelectionResult: dependencies.onResearchOwnerSelectionResult,

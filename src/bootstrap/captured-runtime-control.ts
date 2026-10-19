@@ -1195,7 +1195,69 @@ export function startCapturedRuntime({
     onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
     nowMs: () => Date.now(),
     diagnostics: phaseDiagnostics,
-    ...(phaseDiagnostics?.readPerformanceEnabled() === true
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          readResearchOwnerEvidenceEnabled: () => {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            return (
+              readProperty(hooks, "captureResearchOwnerEvidenceForTest") ===
+              true
+            );
+          },
+          onResearchOwnerOffersForTest: (observation) => {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const observer = readProperty(
+              hooks,
+              "observeResearchOwnerEvidenceForTest",
+            );
+            if (
+              readProperty(hooks, "captureResearchOwnerEvidenceForTest") ===
+                true &&
+              typeof observer === "function"
+            ) {
+              try {
+                Reflect.apply(observer, hooks, [
+                  Object.freeze({
+                    kind: "draw",
+                    cycle: automationCycle,
+                    ...observation,
+                  }),
+                ]);
+              } catch {
+                // Test-only offer publication cannot affect the Research owner.
+              }
+            }
+          },
+          onResearchOwnerReadForTest: (input) => {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const observer = readProperty(
+              hooks,
+              "observeResearchOwnerEvidenceForTest",
+            );
+            if (
+              readProperty(hooks, "captureResearchOwnerEvidenceForTest") ===
+                true &&
+              typeof observer === "function"
+            ) {
+              try {
+                Reflect.apply(observer, hooks, [
+                  Object.freeze({
+                    kind: "read",
+                    cycle: automationCycle,
+                    input,
+                  }),
+                ]);
+              } catch {
+                // Test-only reader publication cannot change the Research owner.
+              }
+            }
+          },
+        }
+      : {}),
+    ...(phaseDiagnostics?.readPerformanceEnabled() === true ||
+    (typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true)
       ? {
           onResearchOwnerSelection: (
             selection: Readonly<ResearchOwnerSelectionObservation>,
@@ -1515,11 +1577,17 @@ export function startCapturedRuntime({
     }
   }
   researchOwnerSelectionObserver = (selection) => {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    const captureEnabled =
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true &&
+      readProperty(hooks, "captureResearchOwnerEvidenceForTest") === true;
+    if (!captureEnabled && phaseDiagnostics?.readPerformanceEnabled() !== true)
+      return;
     if (
       typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
       __EA_TEST_SURFACE_ENABLED__ === true
     ) {
-      const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
       const root = pageCapture.rootState.readRoot();
       const rootGeneration = progression.readRootGeneration();
       const progressionEpoch = progression.readProgressionEpoch();
@@ -1576,40 +1644,61 @@ export function startCapturedRuntime({
               definition.grantTechnology,
             );
       if (isRecord(hooks)) {
-        Reflect.set(
+        const publication = Object.freeze({
+          cycle: automationCycle,
+          rootGeneration,
+          progressionEpoch,
+          catalogCurrent: ownerCatalogCurrent,
+          researchPermission: settingsStore.readRaw()["autoResearch"],
+          queueEvidence: ownerQueueEvidence,
+          targetEligibility:
+            progression.readResearchActionEligibility?.(
+              selection.decision.techId,
+            ) ?? "unavailable",
+          actionId: selection.decision.techId,
+          grantTechnology: definition?.grantTechnology,
+          grantLevel: definition?.grantLevel,
+          grantBefore,
+          manaBefore,
+          observed: Object.freeze(
+            selection.observed.map((candidate) =>
+              Object.freeze({
+                actionId: candidate.id,
+                offerGeneration: candidate.offerGeneration,
+                offerObservationId: candidate.offerObservationId,
+                offerSetIdentity: candidate.offerSetIdentity,
+                cost: candidate.offerCost,
+                affordable: candidate.affordable,
+                nativeAffordable: candidate.nativeAffordable,
+                resourceAffordable: candidate.resourceAffordable,
+                observedResources: candidate.observedResources,
+                reservation: candidate.costConflictEvidence,
+                exclusion: candidate.exclusionEvidence,
+              }),
+            ),
+          ),
+        });
+        Reflect.set(hooks, "researchOwnerSelectionLast", publication);
+        const observeEvidence = readProperty(
           hooks,
-          "researchOwnerSelectionLast",
-          Object.freeze({
-            cycle: automationCycle,
-            rootGeneration,
-            progressionEpoch,
-            catalogCurrent: ownerCatalogCurrent,
-            researchPermission: settingsStore.readRaw()["autoResearch"],
-            queueEvidence: ownerQueueEvidence,
-            targetEligibility:
-              progression.readResearchActionEligibility?.(
-                selection.decision.techId,
-              ) ?? "unavailable",
-            actionId: selection.decision.techId,
-            grantTechnology: definition?.grantTechnology,
-            grantLevel: definition?.grantLevel,
-            grantBefore,
-            manaBefore,
-            observed: selection.observed.map((candidate) => ({
-              actionId: candidate.id,
-              offerGeneration: candidate.offerGeneration,
-              offerObservationId: candidate.offerObservationId,
-              offerSetIdentity: candidate.offerSetIdentity,
-              cost: candidate.offerCost,
-              affordable: candidate.affordable,
-              nativeAffordable: candidate.nativeAffordable,
-              resourceAffordable: candidate.resourceAffordable,
-              observedResources: candidate.observedResources,
-              reservation: candidate.costConflictEvidence,
-              exclusion: candidate.exclusionEvidence,
-            })),
-          }),
+          "observeResearchOwnerEvidenceForTest",
         );
+        if (
+          readProperty(hooks, "captureResearchOwnerEvidenceForTest") === true &&
+          typeof observeEvidence === "function"
+        ) {
+          try {
+            Reflect.apply(observeEvidence, hooks, [
+              Object.freeze({
+                kind: "selection",
+                publication,
+                offers: observedOffers,
+              }),
+            ]);
+          } catch {
+            // Test-only evidence observers cannot affect the native Research owner.
+          }
+        }
       }
     }
     const diagnosticClock = phaseDiagnostics;
@@ -1936,11 +2025,17 @@ export function startCapturedRuntime({
     );
   };
   researchOwnerSelectionResultObserver = (result) => {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    const captureEnabled =
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true &&
+      readProperty(hooks, "captureResearchOwnerEvidenceForTest") === true;
+    if (!captureEnabled && phaseDiagnostics?.readPerformanceEnabled() !== true)
+      return;
     if (
       typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
       __EA_TEST_SURFACE_ENABLED__ === true
     ) {
-      const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
       const prior = readProperty(hooks, "researchOwnerSelectionLast");
       const root = pageCapture.rootState.readRoot();
       const definitions = progression.readResearchActionDefinitions();
@@ -1992,6 +2087,28 @@ export function startCapturedRuntime({
           }),
         );
         Reflect.set(hooks, "researchOwnerSelectionEvents", history);
+        const observeEvidence = readProperty(
+          hooks,
+          "observeResearchOwnerEvidenceForTest",
+        );
+        if (
+          readProperty(hooks, "captureResearchOwnerEvidenceForTest") === true &&
+          typeof observeEvidence === "function"
+        ) {
+          try {
+            Reflect.apply(observeEvidence, hooks, [
+              Object.freeze({
+                kind: "result",
+                cycle: automationCycle,
+                actionId: result.decision.techId,
+                disposition: result.disposition,
+                grantAfter,
+              }),
+            ]);
+          } catch {
+            // Test-only evidence observers cannot affect the native Research owner.
+          }
+        }
       }
     }
     if (result.disposition === "candidate-rejected") {

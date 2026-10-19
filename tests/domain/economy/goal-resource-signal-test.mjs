@@ -138,7 +138,8 @@ const satisfied = base();
 satisfied.stock.amount = 250;
 assert.equal(
   evaluateGoalResourceSignal(satisfied).status,
-  "goal-already-satisfied",
+  "resource-threshold-met",
+  "having enough stock does not prove Research ran or the goal was granted",
 );
 const purchasedAction = base();
 purchasedAction.goalStatus = "satisfied";
@@ -147,6 +148,11 @@ assert.equal(
   evaluateGoalResourceSignal(purchasedAction).status,
   "goal-already-satisfied",
   "a purchased action satisfies the goal even after it leaves the offer",
+);
+assert.equal(
+  evaluateGoalResourceSignal(purchasedAction).status,
+  "goal-already-satisfied",
+  "only explicit goal state proves goal completion",
 );
 const invalidated = base();
 invalidated.goalStatus = "invalidated";
@@ -179,6 +185,40 @@ for (const [name, mutate, expectedReason] of [
     "changed native price",
     (input) => (input.current.priceIdentity = "native-price:changed"),
     "native-price-changed-or-unidentified",
+  ],
+  [
+    "unknown native price identity",
+    (input) => {
+      input.offer.priceIdentity = undefined;
+      input.current.priceIdentity = undefined;
+    },
+    "native-price-changed-or-unidentified",
+  ],
+  [
+    "unknown native control generation",
+    (input) => {
+      input.offer.controlGeneration = undefined;
+      input.current.controlGeneration = undefined;
+    },
+    "native-control-replaced",
+  ],
+  [
+    "unknown offer binding generation",
+    (input) => {
+      input.offer.generation = undefined;
+      input.current.offerGeneration = undefined;
+    },
+    "native-control-generation-changed",
+  ],
+  [
+    "unknown native offer root generation",
+    (input) => (input.offer.rootGeneration = undefined),
+    "native-offer-root-changed",
+  ],
+  [
+    "unknown native offer progression generation",
+    (input) => (input.offer.progressionGeneration = undefined),
+    "native-offer-progression-changed",
   ],
   [
     "withdrawn action",
@@ -251,6 +291,16 @@ for (const [name, mutate, expectedReason] of [
     "current-stock-unavailable",
   ],
   [
+    "unknown stock authority",
+    (input) => {
+      input.observation.stockObservationId = undefined;
+      input.current.stockObservationId = undefined;
+      input.observation.stockGeneration = undefined;
+      input.current.stockGeneration = undefined;
+    },
+    "stock-observation-identity-changed-or-unknown",
+  ],
+  [
     "capacity reduction",
     (input) => (input.stock.capacity = 100),
     "required-quantity-exceeds-storage-capacity",
@@ -259,6 +309,15 @@ for (const [name, mutate, expectedReason] of [
     "regional pool",
     (input) => (input.stock.poolId = "region:city"),
     "current-stock-supply-pool-mismatch",
+  ],
+  [
+    "missing supply pool",
+    (input) => {
+      input.poolId = undefined;
+      input.offer.poolId = undefined;
+      input.stock.poolId = undefined;
+    },
+    "supply-pool-unavailable",
   ],
 ]) {
   const input = base();

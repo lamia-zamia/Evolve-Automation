@@ -9584,14 +9584,14 @@
             techConflicts,
             controls: controls2,
             onRejected,
-            observeOwner: diagnostics?.readPerformanceEnabled() === !0 || testOnlyIntervention !== void 0,
+            observeOwner: diagnostics?.readPerformanceEnabled() === !0 || testOnlyIntervention !== void 0 || !1,
             ...onActivity === void 0 ? {} : { onActivity }
           });
           return runResearchAutomation({
             reader,
             executor,
             diagnostics,
-            ...diagnostics?.readPerformanceEnabled() === !0 ? { onSelection: dependencies.onOwnerSelection } : {},
+            ...dependencies.onOwnerSelection === void 0 ? {} : { onSelection: dependencies.onOwnerSelection },
             ...diagnostics?.readPerformanceEnabled() === !0 || testOnlyIntervention !== void 0 ? {
               onSelectionResult: (result) => {
                 result.decision.techId === testOnlyIntervention?.targetActionId && (result.disposition === "researched" ? testInterventionComplete = !0 : testInterventionDisabled = !0), dependencies.onOwnerSelectionResult?.(result);
@@ -12485,8 +12485,8 @@
         readTestOnlyIntervention: dependencies.readResearchTestIntervention
       },
       ...onUnavailable === void 0 ? {} : { onUnavailable },
-      ...dependencies.onResearchOwnerSelection === void 0 ? {} : { onOwnerSelection: dependencies.onResearchOwnerSelection },
-      ...dependencies.onResearchOwnerSelectionResult === void 0 ? {} : {
+      ...dependencies.onResearchOwnerSelection === void 0 || diagnostics?.readPerformanceEnabled() !== !0 ? {} : { onOwnerSelection: dependencies.onResearchOwnerSelection },
+      ...dependencies.onResearchOwnerSelectionResult === void 0 || diagnostics?.readPerformanceEnabled() !== !0 ? {} : {
         onOwnerSelectionResult: dependencies.onResearchOwnerSelectionResult
       },
       ...onActivity === void 0 ? {} : { onActivity },
@@ -60821,6 +60821,9 @@ Only continue if you trust the source. Injected code:
       onActivity
     });
     researchOwnerSelectionObserver = (selection) => {
+      let hooks = readProperty(settingsHostWindow2, "__EA_TEST_HOOKS__");
+      if (!!1 && phaseDiagnostics?.readPerformanceEnabled() !== !0)
+        return;
       let diagnosticClock = phaseDiagnostics;
       if (settingsStore.readRaw().prestigeType !== "mad" || diagnosticClock === void 0 || diagnosticClock.readPerformanceEnabled() !== !0)
         return;
@@ -61004,6 +61007,9 @@ Only continue if you trust the source. Injected code:
         diagnosticClock.nowMs() - diagnosticStartedAtMs
       );
     }, researchOwnerSelectionResultObserver = (result) => {
+      let hooks = readProperty(settingsHostWindow2, "__EA_TEST_HOOKS__");
+      if (!!1 && phaseDiagnostics?.readPerformanceEnabled() !== !0)
+        return;
       if (result.disposition === "candidate-rejected") {
         pendingResearchOwnerSelectionSummary = void 0, pendingResearchOwnerSelectionDetails = [], pendingResearchOwnerSelectionDiagnosticMs = 0;
         return;

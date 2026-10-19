@@ -26,6 +26,7 @@ const reads = [];
 const invocations = [];
 const selectedBeforeInvoke = [];
 const selectionResults = [];
+const ownerReads = [];
 const result = runResearchAutomation({
   reader: {
     read(startIndex) {
@@ -46,6 +47,9 @@ const result = runResearchAutomation({
         : { outcome: { status: "succeeded" }, disposition: "researched" };
     },
   },
+  onRead(value) {
+    ownerReads.push(value);
+  },
   onSelection(value) {
     selectedBeforeInvoke.push(value);
   },
@@ -56,6 +60,11 @@ const result = runResearchAutomation({
 
 assert.equal(result.status, "succeeded");
 assert.deepEqual(reads, [0, 1]);
+assert.deepEqual(
+  ownerReads.map((input) => input.techs.map((tech) => tech.id)),
+  [["tech-rejected"], ["tech-selected"]],
+  "an opt-in owner read observer receives the existing read values",
+);
 assert.deepEqual(invocations, ["tech-rejected", "tech-selected"]);
 assert.deepEqual(
   selectedBeforeInvoke.map((selection) => selection.decision.techId),

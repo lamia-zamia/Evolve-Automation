@@ -161,6 +161,28 @@ cases.push({
   status: "additional-target-supported",
   requiredTarget: 250,
 });
+const resourceThresholdMet = base();
+resourceThresholdMet.stock.amount = 250;
+cases.push({
+  input: resourceThresholdMet,
+  status: "resource-threshold-met",
+  requiredTarget: undefined,
+});
+const goalActuallySatisfied = base();
+goalActuallySatisfied.goalStatus = "satisfied";
+cases.push({
+  input: goalActuallySatisfied,
+  status: "goal-already-satisfied",
+  requiredTarget: undefined,
+});
+const unknownControlGeneration = base();
+unknownControlGeneration.offer.controlGeneration = undefined;
+unknownControlGeneration.current.controlGeneration = undefined;
+cases.push({
+  input: unknownControlGeneration,
+  status: "goal-evidence-unavailable",
+  unavailableReason: "native-control-replaced",
+});
 const staleResearch = base();
 staleResearch.offer.freshness = "previous-cycle";
 cases.push({

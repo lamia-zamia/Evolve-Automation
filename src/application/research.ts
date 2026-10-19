@@ -3,6 +3,7 @@ import {
   planResearch,
   type ResearchOwnerSelectionObservation,
   type ResearchOwnerSelectionResult,
+  type ResearchInput,
 } from "../domain/progression/research/research.ts";
 import type {
   ResearchCommandExecutor,
@@ -17,6 +18,7 @@ export interface ResearchAutomationDependencies {
   readonly reader: ResearchReader;
   readonly executor: ResearchCommandExecutor;
   readonly diagnostics?: TickDiagnostics | undefined;
+  readonly onRead?: ((input: Readonly<ResearchInput>) => void) | undefined;
   readonly onSelection?:
     | ((selection: Readonly<ResearchOwnerSelectionObservation>) => void)
     | undefined;
@@ -41,6 +43,11 @@ export function runResearchAutomation(
     const observation = measure("autoResearch.read", () =>
       dependencies.reader.read(startIndex),
     );
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    )
+      dependencies.onRead?.(observation);
     if (
       typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
       __EA_TEST_SURFACE_ENABLED__ === true &&

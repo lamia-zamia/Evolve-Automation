@@ -31,6 +31,7 @@ import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
+import type { ResearchInput } from "../domain/progression/research/research.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
@@ -67,6 +68,20 @@ export interface CapturedResearchControlDependencies {
     Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
   readonly readTestShadowObserver?: () =>
     ((observation: Readonly<ResearchShadowObservation>) => void) | undefined;
+  readonly readOwnerObservationIdentity?: () => Readonly<{
+    rootGeneration: number;
+    progressionGeneration: string;
+  }>;
+  readonly readOwnerEvidenceEnabled?: () => boolean;
+  readonly onOwnerOffersForTest?: (
+    observation: Readonly<{
+      rootGeneration: number;
+      progressionGeneration: string;
+      offerMembership: "complete" | "unknown";
+      offers: readonly Readonly<OfferedTech>[] | undefined;
+    }>,
+  ) => void;
+  readonly onOwnerReadForTest?: (input: Readonly<ResearchInput>) => void;
   readonly readComputedRequirementsContext?: () =>
     CapturedComputedTechRequirementsContext | undefined;
 }
@@ -237,6 +252,28 @@ export function createCapturedResearchControl(
           ? catalog.read()?.offered
           : sharedReadOfferedTechs();
       lastOwnerOffers = offeredThisCycle;
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        dependencies.readOwnerEvidenceEnabled?.() === true &&
+        dependencies.onOwnerOffersForTest !== undefined
+      ) {
+        const identity = dependencies.readOwnerObservationIdentity?.();
+        if (identity !== undefined) {
+          try {
+            dependencies.onOwnerOffersForTest(
+              Object.freeze({
+                ...identity,
+                offerMembership:
+                  offeredThisCycle === undefined ? "unknown" : "complete",
+                offers: offeredThisCycle,
+              }),
+            );
+          } catch {
+            // Test-only offer publication cannot change the Research owner.
+          }
+        }
+      }
       try {
         const { reader, executor } = createCapturedResearchAdapter({
           rootState,
@@ -248,7 +285,11 @@ export function createCapturedResearchControl(
           onRejected,
           observeOwner:
             diagnostics?.readPerformanceEnabled() === true ||
-            testOnlyIntervention !== undefined,
+            testOnlyIntervention !== undefined ||
+            (typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              dependencies.readOwnerEvidenceEnabled?.() === true &&
+              dependencies.onOwnerReadForTest !== undefined),
           ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
           __EA_TEST_SURFACE_ENABLED__ === true
             ? {
@@ -334,11 +375,14 @@ export function createCapturedResearchControl(
           reader: researchReader,
           executor,
           diagnostics,
-          ...(diagnostics?.readPerformanceEnabled() === true
-            ? { onSelection: dependencies.onOwnerSelection }
-            : {}),
+          ...(dependencies.onOwnerSelection === undefined
+            ? {}
+            : { onSelection: dependencies.onOwnerSelection }),
           ...(diagnostics?.readPerformanceEnabled() === true ||
-          testOnlyIntervention !== undefined
+          testOnlyIntervention !== undefined ||
+          (typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true &&
+            dependencies.onOwnerSelectionResult !== undefined)
             ? {
                 onSelectionResult: (
                   result: Readonly<ResearchOwnerSelectionResult>,
@@ -355,6 +399,16 @@ export function createCapturedResearchControl(
                 },
               }
             : {}),
+          ...(typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+          __EA_TEST_SURFACE_ENABLED__ !== true ||
+          dependencies.onOwnerReadForTest === undefined
+            ? {}
+            : {
+                onRead: (input: Readonly<ResearchInput>) => {
+                  if (dependencies.readOwnerEvidenceEnabled?.() === true)
+                    dependencies.onOwnerReadForTest?.(input);
+                },
+              }),
         });
       } finally {
         offeredThisCycle = undefined;
