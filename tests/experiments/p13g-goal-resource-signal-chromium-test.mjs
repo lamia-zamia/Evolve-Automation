@@ -118,6 +118,7 @@ const base = () => ({
     spendingOrderKnown: true,
   },
   unknownEvidence: [],
+  blockingEvidence: [],
 });
 
 const cases = [];

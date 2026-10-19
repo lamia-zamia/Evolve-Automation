@@ -78,7 +78,17 @@ export interface GoalResourceSignalInput {
     spendingOrderKnown: boolean;
   }>;
   readonly unknownEvidence: readonly string[];
+  /** Unresolved facts that are required before a positive incremental target can be supported. */
+  readonly blockingEvidence: readonly GoalResourceSignalBlockingEvidence[];
 }
+
+export type GoalResourceSignalBlockingEvidence =
+  | "goal-action-authority"
+  | "native-price"
+  | "resource-pool"
+  | "owner-permission"
+  | "observation-freshness"
+  | "commitment-compatibility";
 
 export type GoalResourceSignalStatus =
   | "already-represented"
@@ -123,6 +133,7 @@ export interface GoalResourceSignal {
   readonly allocation: number | undefined;
   readonly knownCommitments: GoalResourceSignalInput["demand"]["knownCommitments"];
   readonly unknownEvidence: readonly string[];
+  readonly blockingEvidence: readonly GoalResourceSignalBlockingEvidence[];
   readonly unavailableReasons: readonly string[];
   /** Absolute resource threshold; never a cross-owner reservation delta. */
   readonly requiredTarget: number | undefined;
@@ -275,6 +286,15 @@ export function evaluateGoalResourceSignal(
       undefined,
       unavailableReasons,
     );
+  if (input.blockingEvidence.length > 0)
+    return makeSignal(
+      input,
+      "goal-evidence-unavailable",
+      undefined,
+      input.blockingEvidence.map(
+        (evidence) => `required-${evidence}-unresolved`,
+      ),
+    );
   if (input.required! > input.stock.capacity!)
     return makeSignal(input, "goal-evidence-unavailable", undefined, [
       "required-quantity-exceeds-storage-capacity",
@@ -361,6 +381,7 @@ function makeSignal(
     allocation: input.demand.allocation,
     knownCommitments: input.demand.knownCommitments,
     unknownEvidence: unique(input.unknownEvidence),
+    blockingEvidence: Object.freeze([...input.blockingEvidence]),
     unavailableReasons: unique(unavailableReasons),
     requiredTarget,
     executableAuthorization: false,

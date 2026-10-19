@@ -73,6 +73,7 @@ const base = () => ({
     spendingOrderKnown: true,
   },
   unknownEvidence: [],
+  blockingEvidence: [],
 });
 const setAggregateTarget = (input, amount) => {
   input.demand.aggregateTarget = amount;
@@ -92,6 +93,24 @@ additional.demand.currentDemand = 90;
 const supported = evaluateGoalResourceSignal(additional);
 assert.equal(supported.status, "additional-target-supported");
 assert.equal(supported.requiredTarget, 250);
+
+const unresolvedAuthority = base();
+setAggregateTarget(unresolvedAuthority, 100);
+unresolvedAuthority.blockingEvidence = ["goal-action-authority"];
+assert.equal(
+  evaluateGoalResourceSignal(unresolvedAuthority).status,
+  "goal-evidence-unavailable",
+  "an unresolved fact required to establish the goal action blocks support",
+);
+
+const informationalContext = base();
+setAggregateTarget(informationalContext, 100);
+informationalContext.unknownEvidence = ["non-blocking diagnostic context"];
+assert.equal(
+  evaluateGoalResourceSignal(informationalContext).status,
+  "additional-target-supported",
+  "informational diagnostics do not override otherwise established facts",
+);
 
 const incompleteAuthority = base();
 setAggregateTarget(incompleteAuthority, 100);
