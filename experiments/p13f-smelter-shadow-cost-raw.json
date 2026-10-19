@@ -1,0 +1,1339 @@
+{
+  "schema": "p13f-smelter-shadow-cost-v1",
+  "repository": {
+    "branch": "deadspace",
+    "expectedHead": "d0a61b43f930a298c465afab51742f6de96904f1"
+  },
+  "game": {
+    "upstream": "pmotschmann/Evolve",
+    "sourceRef": "db38e2af831907d49aeb5348d678d8d8745d6c3f"
+  },
+  "environment": {
+    "chromium": "HeadlessChrome/151.0.7922.71",
+    "rendererId": 35388,
+    "bundleSha256": "9482a39f577c70b4c45471a71720d2a605d71942ca0deb29d3fa11910c436334",
+    "seed": 42,
+    "epoch": "2026-09-21T00:00:00.000Z",
+    "warmupPeriods": 1784,
+    "fixtureProbePeriods": 8,
+    "measuredPeriods": 80,
+    "worktickPeriods": 8
+  },
+  "capturedState": {
+    "demand": {
+      "requestedSteel": 1000,
+      "steelDemanded": true,
+      "savingTargetName": "city-coal_power",
+      "savingTargetPoolWasPresent": false,
+      "steelTarget": 1000,
+      "savingTargetSteelCostWasPresent": true,
+      "savingTargetCost": {
+        "Money": 10000,
+        "Crystal": 125,
+        "Copper": 800,
+        "Cement": 480,
+        "Steel": 1000
+      },
+      "steelSupplyScope": "civilization-wide"
+    },
+    "input": {
+      "initialised": true,
+      "hasForge": false,
+      "totalSmelters": 15,
+      "extraOperating": 0,
+      "consumptionBalanceMin": 60,
+      "fuels": [
+        {
+          "id": "Oil",
+          "unlocked": false,
+          "isInfernoBeforeOil": false,
+          "currentFuelCount": 0,
+          "cost": []
+        },
+        {
+          "id": "Coal",
+          "unlocked": true,
+          "isInfernoBeforeOil": false,
+          "currentFuelCount": 15,
+          "cost": [
+            {
+              "resourceName": "Coal",
+              "currentQuantity": 26065.863865798026,
+              "rateOfChange": 10.4,
+              "isDemanded": false,
+              "quantity": 0.25,
+              "minRateOfChange": 2
+            }
+          ]
+        },
+        {
+          "id": "Wood",
+          "unlocked": true,
+          "isInfernoBeforeOil": false,
+          "currentFuelCount": 0,
+          "cost": [
+            {
+              "resourceName": "Lumber",
+              "currentQuantity": 18126.732284285077,
+              "rateOfChange": 377.36,
+              "isDemanded": false,
+              "quantity": 3,
+              "minRateOfChange": 2
+            }
+          ]
+        },
+        {
+          "id": "Inferno",
+          "unlocked": false,
+          "isInfernoBeforeOil": false,
+          "currentFuelCount": 0,
+          "cost": []
+        },
+        {
+          "id": "Super",
+          "unlocked": false,
+          "isInfernoBeforeOil": false,
+          "currentFuelCount": 0,
+          "cost": []
+        }
+      ],
+      "ironCount": 14,
+      "steelCount": 1,
+      "iridiumCount": 0,
+      "iridiumUnlocked": false,
+      "iridiumCapped": true,
+      "productionSmeltingIridium": 0.5,
+      "productionSmelting": "required",
+      "steelCost": [
+        {
+          "resourceName": "Coal",
+          "currentQuantity": 26065.863865798026,
+          "rateOfChange": 10.4,
+          "isDemanded": false,
+          "quantity": 0.25,
+          "minRateOfChange": 1.25
+        },
+        {
+          "resourceName": "Iron",
+          "currentQuantity": 63821.149471498575,
+          "rateOfChange": 59.74,
+          "isDemanded": false,
+          "quantity": 2,
+          "minRateOfChange": 6
+        }
+      ],
+      "ironTimeToFull": 5135.652000811875,
+      "ironTimeToRequired": 0,
+      "ironDemanded": false,
+      "steelTimeToFull": 2436.573716998815,
+      "steelTimeToRequired": 70.05261073971762,
+      "steelDemanded": true,
+      "minerCount": 5,
+      "beltIronShipStateOnCount": 0,
+      "titaniumStorageRatio": 0,
+      "haveTitaniumTech": false
+    },
+    "decision": {
+      "fuelAdjustments": [],
+      "smeltAdjustments": [
+        {
+          "productionId": "Iridium",
+          "expectedCurrentCount": 0,
+          "delta": 0
+        },
+        {
+          "productionId": "Steel",
+          "expectedCurrentCount": 1,
+          "delta": 1
+        },
+        {
+          "productionId": "Iron",
+          "expectedCurrentCount": 14,
+          "delta": -1
+        }
+      ],
+      "tooltips": []
+    },
+    "commands": ["subMetal:Iron", "addMetal:Steel"],
+    "period": 1792,
+    "progressionGeneration": 0,
+    "steel": {
+      "amount": 37.47712843627988,
+      "maximum": 33516,
+      "rate": 13.74
+    },
+    "scope": "civilization-wide"
+  },
+  "calibration": {
+    "targetMs": 250,
+    "elapsedMs": 250,
+    "value": -1617826303,
+    "taskDurationSec": 0.250236000000001,
+    "scriptDurationSec": 0,
+    "rendererCpuSec": 0.2511979999999987,
+    "rendererId": 35388,
+    "processRows": [
+      {
+        "type": "browser",
+        "id": 42000,
+        "beforeCpuSec": 0.389616,
+        "afterCpuSec": 0.391366,
+        "cpuSec": 0.0017499999999999738,
+        "created": false,
+        "terminated": false
+      },
+      {
+        "type": "renderer",
+        "id": 35388,
+        "beforeCpuSec": 28.127686,
+        "afterCpuSec": 28.378884,
+        "cpuSec": 0.2511979999999987,
+        "created": false,
+        "terminated": false
+      },
+      {
+        "type": "renderer",
+        "id": 35552,
+        "beforeCpuSec": 0.046334,
+        "afterCpuSec": 0.046334,
+        "cpuSec": 0,
+        "created": false,
+        "terminated": false
+      },
+      {
+        "type": "GPU",
+        "id": 40036,
+        "beforeCpuSec": 0.817955,
+        "afterCpuSec": 0.818227,
+        "cpuSec": 0.00027200000000005,
+        "created": false,
+        "terminated": false
+      },
+      {
+        "type": "network.mojom.NetworkService",
+        "id": 42328,
+        "beforeCpuSec": 0.105586,
+        "afterCpuSec": 0.105586,
+        "cpuSec": 0,
+        "created": false,
+        "terminated": false
+      }
+    ]
+  },
+  "profileCohort": {
+    "cpuMicrobenchProfilerEnabled": false,
+    "phaseInstrumentationSeparate": true,
+    "structuralInvalidProposalMs": 0.004119999998807907,
+    "snapshotConstructionMs": 0.0019599999994039537,
+    "validProposalAdmissionIncludingComparisonMs": 0.0064,
+    "profiledComparisonCalls": 2500,
+    "cases": {
+      "p13d1-ten-cycle-state-P": {
+        "elapsedMs": 0.01032000000178814,
+        "phaseTotalsMs": {
+          "quantitative-demand-calculation": 0.699999988079071,
+          "hypothetical-input-construction": 0.5,
+          "reference-pure-planner-execution": 3.1000000163912773,
+          "proposed-command-normalization": 5.300000004470348,
+          "proposed-allocation-and-feasibility": 8.099999979138374,
+          "diagnostic-result-construction": 1.7000000178813934
+        },
+        "phaseMeanMs": {
+          "quantitative-demand-calculation": 0.0002799999952316284,
+          "hypothetical-input-construction": 0.0002,
+          "reference-pure-planner-execution": 0.001240000006556511,
+          "proposed-command-normalization": 0.0021200000017881394,
+          "proposed-allocation-and-feasibility": 0.0032399999916553498,
+          "diagnostic-result-construction": 0.0006800000071525573
+        },
+        "decision": {
+          "fuelAdjustments": [],
+          "smeltAdjustments": [
+            {
+              "productionId": "Iridium",
+              "expectedCurrentCount": 0,
+              "delta": 0
+            },
+            {
+              "productionId": "Steel",
+              "expectedCurrentCount": 1,
+              "delta": 1
+            },
+            {
+              "productionId": "Iron",
+              "expectedCurrentCount": 14,
+              "delta": -1
+            }
+          ],
+          "tooltips": []
+        },
+        "commands": ["subMetal:Iron", "addMetal:Steel"],
+        "method": "planned",
+        "plannerCalls": 1
+      },
+      "p13d1-ten-cycle-state-I": {
+        "elapsedMs": 0.005519999998807907,
+        "phaseTotalsMs": {
+          "quantitative-demand-calculation": 0.5,
+          "hypothetical-input-construction": 0.7000000029802322,
+          "invariance-predicate-evaluation": 0.5,
+          "proposed-command-normalization": 0,
+          "proposed-allocation-and-feasibility": 5.799999982118607,
+          "diagnostic-result-construction": 2.0999999940395355
+        },
+        "phaseMeanMs": {
+          "quantitative-demand-calculation": 0.0002,
+          "hypothetical-input-construction": 0.0002800000011920929,
+          "invariance-predicate-evaluation": 0.0002,
+          "proposed-command-normalization": 0,
+          "proposed-allocation-and-feasibility": 0.002319999992847443,
+          "diagnostic-result-construction": 0.0008399999976158142
+        },
+        "decision": {
+          "fuelAdjustments": [],
+          "smeltAdjustments": [
+            {
+              "productionId": "Iridium",
+              "expectedCurrentCount": 0,
+              "delta": 0
+            },
+            {
+              "productionId": "Steel",
+              "expectedCurrentCount": 1,
+              "delta": 1
+            },
+            {
+              "productionId": "Iron",
+              "expectedCurrentCount": 14,
+              "delta": -1
+            }
+          ],
+          "tooltips": []
+        },
+        "commands": ["subMetal:Iron", "addMetal:Steel"],
+        "method": "proven-invariant",
+        "invariantReason": "steel-demand-overrides-required-time",
+        "plannerCalls": 0
+      },
+      "sensitive-pure-fixture-P": {
+        "elapsedMs": 0.006440000000596046,
+        "phaseTotalsMs": {
+          "quantitative-demand-calculation": 0.5999999940395355,
+          "hypothetical-input-construction": 0.3999999910593033,
+          "reference-pure-planner-execution": 2.699999988079071,
+          "proposed-command-normalization": 2.8000000044703484,
+          "proposed-allocation-and-feasibility": 3.900000013411045,
+          "diagnostic-result-construction": 2.5000000074505806
+        },
+        "phaseMeanMs": {
+          "quantitative-demand-calculation": 0.00023999999761581422,
+          "hypothetical-input-construction": 0.0001599999964237213,
+          "reference-pure-planner-execution": 0.0010799999952316283,
+          "proposed-command-normalization": 0.0011200000017881394,
+          "proposed-allocation-and-feasibility": 0.001560000005364418,
+          "diagnostic-result-construction": 0.0010000000029802322
+        },
+        "decision": {
+          "fuelAdjustments": [],
+          "smeltAdjustments": [
+            {
+              "productionId": "Iridium",
+              "expectedCurrentCount": 0,
+              "delta": 0
+            },
+            {
+              "productionId": "Steel",
+              "expectedCurrentCount": 0,
+              "delta": 0
+            },
+            {
+              "productionId": "Iron",
+              "expectedCurrentCount": 2,
+              "delta": 0
+            }
+          ],
+          "tooltips": []
+        },
+        "commands": [],
+        "method": "planned",
+        "plannerCalls": 1
+      },
+      "sensitive-pure-fixture-I": {
+        "elapsedMs": 0.012159999999403953,
+        "phaseTotalsMs": {
+          "quantitative-demand-calculation": 0.5000000074505806,
+          "hypothetical-input-construction": 0.29999999701976776,
+          "recursive-frozen-data-validation-and-shape-check": 17.00000000745058,
+          "invariance-predicate-evaluation": 0.30000000447034836,
+          "reference-pure-planner-execution": 1.6999999806284904,
+          "proposed-command-normalization": 2.700000010430813,
+          "proposed-allocation-and-feasibility": 2.699999988079071,
+          "diagnostic-result-construction": 2
+        },
+        "phaseMeanMs": {
+          "quantitative-demand-calculation": 0.00020000000298023223,
+          "hypothetical-input-construction": 0.00011999999880790711,
+          "recursive-frozen-data-validation-and-shape-check": 0.006800000002980232,
+          "invariance-predicate-evaluation": 0.00012000000178813934,
+          "reference-pure-planner-execution": 0.0006799999922513962,
+          "proposed-command-normalization": 0.001080000004172325,
+          "proposed-allocation-and-feasibility": 0.0010799999952316283,
+          "diagnostic-result-construction": 0.0008
+        },
+        "decision": {
+          "fuelAdjustments": [],
+          "smeltAdjustments": [
+            {
+              "productionId": "Iridium",
+              "expectedCurrentCount": 0,
+              "delta": 0
+            },
+            {
+              "productionId": "Steel",
+              "expectedCurrentCount": 0,
+              "delta": 0
+            },
+            {
+              "productionId": "Iron",
+              "expectedCurrentCount": 2,
+              "delta": 0
+            }
+          ],
+          "tooltips": []
+        },
+        "commands": [],
+        "method": "planned",
+        "plannerCalls": 1
+      }
+    },
+    "pilotMsPer1200Calls": {
+      "live-P": 7.5,
+      "live-I": 3.7999999970197678,
+      "sensitive-P": 5.100000001490116,
+      "sensitive-I": 16.30000000447035
+    },
+    "batchSize": 2577,
+    "microbatches": [
+      {
+        "pair": 0,
+        "fixture": "live",
+        "mode": "P",
+        "calls": 2577,
+        "elapsedMs": 15.5,
+        "taskDurationSec": 0.015767999999997784,
+        "rendererCpuSec": 0.0211749999999995,
+        "rendererTotalSec": 0.0211749999999995,
+        "otherRendererCpuSec": 0,
+        "processRows": [
+          {
+            "type": "browser",
+            "id": 42000,
+            "beforeCpuSec": 0.393444,
+            "afterCpuSec": 0.394719,
+            "cpuSec": 0.0012749999999999706,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35388,
+            "beforeCpuSec": 28.58295,
+            "afterCpuSec": 28.604125,
+            "cpuSec": 0.0211749999999995,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35552,
+            "beforeCpuSec": 0.046334,
+            "afterCpuSec": 0.046334,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "GPU",
+            "id": 40036,
+            "beforeCpuSec": 0.818227,
+            "afterCpuSec": 0.818227,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "id": 42328,
+            "beforeCpuSec": 0.105586,
+            "afterCpuSec": 0.105586,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          }
+        ]
+      },
+      {
+        "pair": 0,
+        "fixture": "live",
+        "mode": "I",
+        "calls": 2577,
+        "elapsedMs": 10.899999998509884,
+        "taskDurationSec": 0.011469000000001728,
+        "rendererCpuSec": 0.019155000000001365,
+        "rendererTotalSec": 0.019155000000001365,
+        "otherRendererCpuSec": 0,
+        "processRows": [
+          {
+            "type": "browser",
+            "id": 42000,
+            "beforeCpuSec": 0.395365,
+            "afterCpuSec": 0.39654,
+            "cpuSec": 0.0011749999999999816,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35388,
+            "beforeCpuSec": 28.605625,
+            "afterCpuSec": 28.62478,
+            "cpuSec": 0.019155000000001365,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35552,
+            "beforeCpuSec": 0.046334,
+            "afterCpuSec": 0.046334,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "GPU",
+            "id": 40036,
+            "beforeCpuSec": 0.818227,
+            "afterCpuSec": 0.818227,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "id": 42328,
+            "beforeCpuSec": 0.105586,
+            "afterCpuSec": 0.105586,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          }
+        ]
+      },
+      {
+        "fixture": "live",
+        "mode": "empty",
+        "pair": 0,
+        "calls": 2577,
+        "elapsedMs": 0.09999999403953552,
+        "taskDurationSec": 0.00032300000000162754,
+        "rendererCpuSec": 0.0006730000000025882,
+        "rendererTotalSec": 0.0006730000000025882,
+        "processRows": [
+          {
+            "type": "browser",
+            "id": 42000,
+            "beforeCpuSec": 0.397263,
+            "afterCpuSec": 0.398258,
+            "cpuSec": 0.0009950000000000236,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35388,
+            "beforeCpuSec": 28.624888,
+            "afterCpuSec": 28.625561,
+            "cpuSec": 0.0006730000000025882,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35552,
+            "beforeCpuSec": 0.046334,
+            "afterCpuSec": 0.046334,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "GPU",
+            "id": 40036,
+            "beforeCpuSec": 0.818227,
+            "afterCpuSec": 0.818227,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "id": 42328,
+            "beforeCpuSec": 0.105586,
+            "afterCpuSec": 0.105586,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "live": {
+        "callsPerCell": 2577,
+        "alternatingOrder": true,
+        "pairs": [
+          {
+            "taskDeltaSec": 0.004298999999996056,
+            "rendererDeltaSec": 0.0020199999999981344,
+            "taskPMinusEmptySec": 0.015444999999996156,
+            "taskIMinusEmptySec": 0.0111460000000001,
+            "nativePMinusEmptyMs": 15.400000005960464,
+            "nativeIMinusEmptyMs": 10.800000004470348
+          },
+          {
+            "taskDeltaSec": 0.012940999999997871,
+            "rendererDeltaSec": 0.0283830000000016,
+            "taskPMinusEmptySec": 0.026126000000001426,
+            "taskIMinusEmptySec": 0.013185000000003555,
+            "nativePMinusEmptyMs": 26.100000001490116,
+            "nativeIMinusEmptyMs": 13.199999995529652
+          },
+          {
+            "taskDeltaSec": 0.005454000000000292,
+            "rendererDeltaSec": 0.006951999999998293,
+            "taskPMinusEmptySec": 0.01528199999999913,
+            "taskIMinusEmptySec": 0.009827999999998838,
+            "nativePMinusEmptyMs": 15.200000002980232,
+            "nativeIMinusEmptyMs": 9.800000004470348
+          },
+          {
+            "taskDeltaSec": 0.006181999999999022,
+            "rendererDeltaSec": 0.00777400000000128,
+            "taskPMinusEmptySec": 0.015553000000000594,
+            "taskIMinusEmptySec": 0.009371000000001573,
+            "nativePMinusEmptyMs": 15.100000001490116,
+            "nativeIMinusEmptyMs": 9.299999997019768
+          },
+          {
+            "taskDeltaSec": 0.0029770000000013397,
+            "rendererDeltaSec": -0.00480999999999554,
+            "taskPMinusEmptySec": 0.014461000000000723,
+            "taskIMinusEmptySec": 0.011483999999999384,
+            "nativePMinusEmptyMs": 14.400000005960464,
+            "nativeIMinusEmptyMs": 11.400000005960464
+          },
+          {
+            "taskDeltaSec": 0.010479000000000127,
+            "rendererDeltaSec": 0.012537999999999272,
+            "taskPMinusEmptySec": 0.019315000000002414,
+            "taskIMinusEmptySec": 0.008836000000002286,
+            "nativePMinusEmptyMs": 19.200000002980232,
+            "nativeIMinusEmptyMs": 8.5
+          },
+          {
+            "taskDeltaSec": 0.005358000000001084,
+            "rendererDeltaSec": 0.004929000000000627,
+            "taskPMinusEmptySec": 0.014737000000000222,
+            "taskIMinusEmptySec": 0.009378999999999138,
+            "nativePMinusEmptyMs": 14.699999995529652,
+            "nativeIMinusEmptyMs": 9.299999997019768
+          },
+          {
+            "taskDeltaSec": 0.0056720000000005655,
+            "rendererDeltaSec": 0.005736999999996328,
+            "taskPMinusEmptySec": 0.014589000000000851,
+            "taskIMinusEmptySec": 0.008917000000000286,
+            "nativePMinusEmptyMs": 14.600000001490116,
+            "nativeIMinusEmptyMs": 8.899999998509884
+          },
+          {
+            "taskDeltaSec": 0.0037170000000017467,
+            "rendererDeltaSec": -0.0043959999999998445,
+            "taskPMinusEmptySec": 0.015298999999998841,
+            "taskIMinusEmptySec": 0.011581999999997095,
+            "nativePMinusEmptyMs": 15.300000004470348,
+            "nativeIMinusEmptyMs": 11.50000000745058
+          },
+          {
+            "taskDeltaSec": 0.005403999999995079,
+            "rendererDeltaSec": -0.0015240000000034115,
+            "taskPMinusEmptySec": 0.019004999999996386,
+            "taskIMinusEmptySec": 0.013601000000001306,
+            "nativePMinusEmptyMs": 18.599999994039536,
+            "nativeIMinusEmptyMs": 13.5
+          },
+          {
+            "taskDeltaSec": 0.007593000000003514,
+            "rendererDeltaSec": 0.0074840000000016005,
+            "taskPMinusEmptySec": 0.01879300000000228,
+            "taskIMinusEmptySec": 0.011199999999998766,
+            "nativePMinusEmptyMs": 18.600000001490116,
+            "nativeIMinusEmptyMs": 11.00000000745058
+          },
+          {
+            "taskDeltaSec": 0.004757999999995377,
+            "rendererDeltaSec": 0.003848000000001406,
+            "taskPMinusEmptySec": 0.013818999999994475,
+            "taskIMinusEmptySec": 0.009060999999999098,
+            "nativePMinusEmptyMs": 13.799999997019768,
+            "nativeIMinusEmptyMs": 8.700000002980232
+          }
+        ],
+        "taskPMinusI": {
+          "mean": 0.0024199327383259625,
+          "sd": 0.001110584947723281,
+          "ci95": [0.0017142959696881187, 0.0031255695069638064],
+          "min": 0.001155219247187171,
+          "max": 0.005021730694605305
+        },
+        "rendererPMinusI": {
+          "mean": 0.0022291747510024495,
+          "sd": 0.0034160421305238567,
+          "ci95": [0.00005871049659748233, 0.004399639005407416],
+          "min": -0.0018665114474177495,
+          "max": 0.01101396973224742
+        },
+        "nativePMinusEmpty": {
+          "mean": 6.4998059764228815,
+          "sd": 1.346120763841286,
+          "ci95": [5.644515880928137, 7.355096071917626],
+          "min": 5.355064026782991,
+          "max": 10.128055879507224
+        },
+        "nativeIMinusEmpty": {
+          "mean": 4.071271505007814,
+          "sd": 0.6578028672495402,
+          "ci95": [3.653320684948321, 4.489222325067306],
+          "min": 3.298409002716337,
+          "max": 5.238649592549476
+        }
+      },
+      "sensitive": {
+        "callsPerCell": 2577,
+        "alternatingOrder": true,
+        "pairs": [
+          {
+            "taskDeltaSec": -0.013958999999999833,
+            "rendererDeltaSec": -0.01741500000000329,
+            "taskPMinusEmptySec": 0.008388999999997537,
+            "taskIMinusEmptySec": 0.02234799999999737,
+            "nativePMinusEmptyMs": 8.399999998509884,
+            "nativeIMinusEmptyMs": 22.399999998509884
+          },
+          {
+            "taskDeltaSec": -0.020996999999997712,
+            "rendererDeltaSec": -0.021263000000001142,
+            "taskPMinusEmptySec": 0.009763000000003075,
+            "taskIMinusEmptySec": 0.030760000000000787,
+            "nativePMinusEmptyMs": 9.599999994039536,
+            "nativeIMinusEmptyMs": 30.600000001490116
+          },
+          {
+            "taskDeltaSec": -0.021080999999998795,
+            "rendererDeltaSec": -0.020764999999997258,
+            "taskPMinusEmptySec": 0.008437000000000694,
+            "taskIMinusEmptySec": 0.02951799999999949,
+            "nativePMinusEmptyMs": 8.00000000745058,
+            "nativeIMinusEmptyMs": 29.200000010430813
+          },
+          {
+            "taskDeltaSec": -0.023854999999997517,
+            "rendererDeltaSec": -0.02414500000000075,
+            "taskPMinusEmptySec": 0.007291000000002157,
+            "taskIMinusEmptySec": 0.031145999999999674,
+            "nativePMinusEmptyMs": 7.100000001490116,
+            "nativeIMinusEmptyMs": 30.799999997019768
+          },
+          {
+            "taskDeltaSec": -0.019394999999999385,
+            "rendererDeltaSec": -0.02164199999999994,
+            "taskPMinusEmptySec": 0.010916999999999177,
+            "taskIMinusEmptySec": 0.030311999999998562,
+            "nativePMinusEmptyMs": 10.799999997019768,
+            "nativeIMinusEmptyMs": 30.299999997019768
+          },
+          {
+            "taskDeltaSec": -0.014067000000000718,
+            "rendererDeltaSec": -0.014418000000002706,
+            "taskPMinusEmptySec": 0.0073560000000014725,
+            "taskIMinusEmptySec": 0.02142300000000219,
+            "nativePMinusEmptyMs": 7.199999995529652,
+            "nativeIMinusEmptyMs": 21.19999999552965
+          },
+          {
+            "taskDeltaSec": -0.013918000000000319,
+            "rendererDeltaSec": -0.014005000000000933,
+            "taskPMinusEmptySec": 0.007187000000001831,
+            "taskIMinusEmptySec": 0.02110500000000215,
+            "nativePMinusEmptyMs": 6.9000000059604645,
+            "nativeIMinusEmptyMs": 20.700000002980232
+          },
+          {
+            "taskDeltaSec": -0.01409800000000061,
+            "rendererDeltaSec": -0.014222000000000179,
+            "taskPMinusEmptySec": 0.006537999999999045,
+            "taskIMinusEmptySec": 0.020635999999999655,
+            "nativePMinusEmptyMs": 6.5,
+            "nativeIMinusEmptyMs": 20.19999999552965
+          },
+          {
+            "taskDeltaSec": -0.0134369999999997,
+            "rendererDeltaSec": -0.013467000000005669,
+            "taskPMinusEmptySec": 0.00701400000000163,
+            "taskIMinusEmptySec": 0.02045100000000133,
+            "nativePMinusEmptyMs": 7.000000007450581,
+            "nativeIMinusEmptyMs": 20.400000005960464
+          },
+          {
+            "taskDeltaSec": -0.012080000000000979,
+            "rendererDeltaSec": -0.012395999999998963,
+            "taskPMinusEmptySec": 0.007929999999998216,
+            "taskIMinusEmptySec": 0.020009999999999195,
+            "nativePMinusEmptyMs": 7.899999998509884,
+            "nativeIMinusEmptyMs": 20
+          },
+          {
+            "taskDeltaSec": -0.012693999999996208,
+            "rendererDeltaSec": -0.012364000000001596,
+            "taskPMinusEmptySec": 0.007215000000002192,
+            "taskIMinusEmptySec": 0.0199089999999984,
+            "nativePMinusEmptyMs": 6.899999998509884,
+            "nativeIMinusEmptyMs": 19.69999999552965
+          },
+          {
+            "taskDeltaSec": -0.013556000000001234,
+            "rendererDeltaSec": -0.013531000000000404,
+            "taskPMinusEmptySec": 0.006814999999999571,
+            "taskIMinusEmptySec": 0.020371000000000805,
+            "nativePMinusEmptyMs": 6.800000004470348,
+            "nativeIMinusEmptyMs": 20
+          }
+        ],
+        "taskPMinusI": {
+          "mean": -0.006245537446643158,
+          "sd": 0.00156360905476688,
+          "ci95": [-0.007239013941242191, -0.005252060952044125],
+          "min": -0.009256887854092944,
+          "max": -0.004687621265037244
+        },
+        "rendererPMinusI": {
+          "mean": -0.0064556008278364,
+          "sd": 0.0016300119761508067,
+          "ci95": [-0.007491268010297286, -0.0054199336453755135],
+          "min": -0.00936942180830452,
+          "max": -0.004797826930540007
+        },
+        "nativePMinusEmpty": {
+          "mean": 3.010606648846873,
+          "sd": 0.5022756067452863,
+          "ci95": [2.691473801930541, 3.3297394957632047],
+          "min": 2.522312766783081,
+          "max": 4.1909196728831075
+        },
+        "nativeIMinusEmpty": {
+          "mean": 9.232311473289354,
+          "sd": 1.8690475736359062,
+          "ci95": [8.044767293985872, 10.419855652592835],
+          "min": 7.644547922207859,
+          "max": 11.951882032215664
+        }
+      }
+    }
+  },
+  "allocation": {
+    "instrumentedSeparateCohort": true,
+    "rows": [
+      {
+        "fixture": "live",
+        "mode": "P",
+        "calls": 10308,
+        "heapUsedDeltaBytes": 3916,
+        "sampledAllocationBytes": 16728,
+        "samples": [
+          {
+            "functionName": "(V8 API)",
+            "selfSize": 16728
+          }
+        ]
+      },
+      {
+        "fixture": "live",
+        "mode": "I",
+        "calls": 10308,
+        "heapUsedDeltaBytes": 305276,
+        "sampledAllocationBytes": 299840,
+        "samples": [
+          {
+            "functionName": "compareCapturedSmelterSteelDemand",
+            "selfSize": 16632
+          },
+          {
+            "functionName": "isFinite",
+            "selfSize": 16512
+          },
+          {
+            "functionName": "(IDLE_EXTERNAL)",
+            "selfSize": 266696
+          }
+        ]
+      },
+      {
+        "fixture": "sensitive",
+        "mode": "P",
+        "calls": 10308,
+        "heapUsedDeltaBytes": 38264,
+        "sampledAllocationBytes": 0,
+        "samples": []
+      },
+      {
+        "fixture": "sensitive",
+        "mode": "I",
+        "calls": 10308,
+        "heapUsedDeltaBytes": 4696,
+        "sampledAllocationBytes": 16584,
+        "samples": [
+          {
+            "functionName": "",
+            "selfSize": 16584
+          }
+        ]
+      }
+    ]
+  },
+  "ownerCells": [
+    {
+      "mode": "G",
+      "comparisonMode": "I",
+      "exportHash": "81b95d3a217ee6a9b35d70db07297e90e3c625b1ef668212a016dc24582e8e6d",
+      "nativeInvocationCount": 95388,
+      "randomCalls": 1746
+    },
+    {
+      "mode": "N",
+      "comparisonMode": "I",
+      "exportHash": "81b95d3a217ee6a9b35d70db07297e90e3c625b1ef668212a016dc24582e8e6d",
+      "nativeInvocationCount": 95388,
+      "randomCalls": 1746
+    },
+    {
+      "mode": "Q",
+      "comparisonMode": "I",
+      "exportHash": "81b95d3a217ee6a9b35d70db07297e90e3c625b1ef668212a016dc24582e8e6d",
+      "nativeInvocationCount": 95388,
+      "randomCalls": 1746
+    },
+    {
+      "mode": "Q",
+      "comparisonMode": "P",
+      "exportHash": "81b95d3a217ee6a9b35d70db07297e90e3c625b1ef668212a016dc24582e8e6d",
+      "nativeInvocationCount": 95388,
+      "randomCalls": 1746
+    },
+    {
+      "mode": "U",
+      "comparisonMode": "I",
+      "exportHash": "81b95d3a217ee6a9b35d70db07297e90e3c625b1ef668212a016dc24582e8e6d",
+      "nativeInvocationCount": 95388,
+      "randomCalls": 1746
+    }
+  ],
+  "ownerFrequencies": [
+    {
+      "mode": "G",
+      "comparisonMode": "I",
+      "cycles": 10,
+      "proposalChecks": 0,
+      "proposalProviderReads": 0,
+      "valid": 0,
+      "rejected": 0,
+      "represented": 0,
+      "invariant": 0,
+      "sensitive": 0,
+      "plannerCalls": 0,
+      "changedNativeCommands": 0,
+      "unknownCommitmentCoverage": 0,
+      "fullIncumbentSnapshots": 0,
+      "ownerObservations": 0,
+      "syntheticProposal": false
+    },
+    {
+      "mode": "N",
+      "comparisonMode": "I",
+      "cycles": 10,
+      "proposalChecks": 0,
+      "proposalProviderReads": 10,
+      "valid": 0,
+      "rejected": 0,
+      "represented": 0,
+      "invariant": 0,
+      "sensitive": 0,
+      "plannerCalls": 0,
+      "changedNativeCommands": 0,
+      "unknownCommitmentCoverage": 0,
+      "fullIncumbentSnapshots": 0,
+      "ownerObservations": 10,
+      "syntheticProposal": false
+    },
+    {
+      "mode": "Q",
+      "comparisonMode": "I",
+      "cycles": 10,
+      "proposalChecks": 10,
+      "proposalProviderReads": 10,
+      "valid": 10,
+      "rejected": 0,
+      "represented": 10,
+      "invariant": 10,
+      "sensitive": 0,
+      "plannerCalls": 0,
+      "changedNativeCommands": 0,
+      "unknownCommitmentCoverage": 10,
+      "fullIncumbentSnapshots": 10,
+      "ownerObservations": 10,
+      "syntheticProposal": true
+    },
+    {
+      "mode": "Q",
+      "comparisonMode": "P",
+      "cycles": 10,
+      "proposalChecks": 10,
+      "proposalProviderReads": 10,
+      "valid": 10,
+      "rejected": 0,
+      "represented": 10,
+      "invariant": 0,
+      "sensitive": 10,
+      "plannerCalls": 10,
+      "changedNativeCommands": 0,
+      "unknownCommitmentCoverage": 10,
+      "fullIncumbentSnapshots": 10,
+      "ownerObservations": 10,
+      "syntheticProposal": true
+    },
+    {
+      "mode": "U",
+      "comparisonMode": "I",
+      "cycles": 10,
+      "proposalChecks": 10,
+      "proposalProviderReads": 10,
+      "valid": 0,
+      "rejected": 10,
+      "represented": 0,
+      "invariant": 0,
+      "sensitive": 0,
+      "plannerCalls": 0,
+      "changedNativeCommands": 0,
+      "unknownCommitmentCoverage": 0,
+      "fullIncumbentSnapshots": 10,
+      "ownerObservations": 10,
+      "syntheticProposal": true
+    }
+  ],
+  "endToEnd": {
+    "controls": [
+      {
+        "label": "GG-1",
+        "mode": "G",
+        "comparisonMode": "I",
+        "rendererId": 21428,
+        "calibrationWork": {
+          "elapsedMs": 120,
+          "x": -1617826303
+        },
+        "calibrationTaskDurationSec": 0.12040100000000109,
+        "rendererCpuSec": 11.727163999999998,
+        "activeRendererCpuSec": 11.726081999999998,
+        "taskDurationSec": 10.123277000000002,
+        "scriptDurationSec": 0.038397000000000014,
+        "wallMs": 10154.386700000003,
+        "rows": [
+          {
+            "type": "browser",
+            "id": 42000,
+            "beforeCpuSec": 2.202387,
+            "afterCpuSec": 2.232332,
+            "cpuSec": 0.02994500000000011,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 21428,
+            "beforeCpuSec": 27.418492,
+            "afterCpuSec": 39.144574,
+            "cpuSec": 11.726081999999998,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35388,
+            "beforeCpuSec": 31.592054,
+            "afterCpuSec": 31.593005,
+            "cpuSec": 0.0009510000000005903,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35552,
+            "beforeCpuSec": 0.047103,
+            "afterCpuSec": 0.047234,
+            "cpuSec": 0.00013099999999999917,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "GPU",
+            "id": 40036,
+            "beforeCpuSec": 4.704756,
+            "afterCpuSec": 4.990268,
+            "cpuSec": 0.28551200000000065,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "id": 42328,
+            "beforeCpuSec": 0.309398,
+            "afterCpuSec": 0.309801,
+            "cpuSec": 0.0004029999999999867,
+            "created": false,
+            "terminated": false
+          }
+        ]
+      },
+      {
+        "label": "GG-2",
+        "mode": "G",
+        "comparisonMode": "I",
+        "rendererId": 44868,
+        "calibrationWork": {
+          "elapsedMs": 120,
+          "x": -1617826303
+        },
+        "calibrationTaskDurationSec": 0.12036399999999858,
+        "rendererCpuSec": 11.681400999999994,
+        "activeRendererCpuSec": 11.680607999999996,
+        "taskDurationSec": 10.119595,
+        "scriptDurationSec": 0.03858600000000001,
+        "wallMs": 10146.94140000001,
+        "rows": [
+          {
+            "type": "browser",
+            "id": 42000,
+            "beforeCpuSec": 2.386449,
+            "afterCpuSec": 2.414472,
+            "cpuSec": 0.02802300000000013,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 44868,
+            "beforeCpuSec": 27.844508,
+            "afterCpuSec": 39.525116,
+            "cpuSec": 11.680607999999996,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35388,
+            "beforeCpuSec": 31.594895,
+            "afterCpuSec": 31.595688,
+            "cpuSec": 0.0007929999999980453,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35552,
+            "beforeCpuSec": 0.047234,
+            "afterCpuSec": 0.047234,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "GPU",
+            "id": 40036,
+            "beforeCpuSec": 5.624986,
+            "afterCpuSec": 5.906473,
+            "cpuSec": 0.28148700000000026,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "id": 42328,
+            "beforeCpuSec": 0.345733,
+            "afterCpuSec": 0.346031,
+            "cpuSec": 0.00029799999999996496,
+            "created": false,
+            "terminated": false
+          }
+        ]
+      },
+      {
+        "label": "GG-3",
+        "mode": "G",
+        "comparisonMode": "I",
+        "rendererId": 41476,
+        "calibrationWork": {
+          "elapsedMs": 120,
+          "x": -1617826303
+        },
+        "calibrationTaskDurationSec": 0.12038199999999932,
+        "rendererCpuSec": 11.025969000000003,
+        "activeRendererCpuSec": 11.025140000000004,
+        "taskDurationSec": 9.509552,
+        "scriptDurationSec": 0.03442600000000007,
+        "wallMs": 9537.111199999985,
+        "rows": [
+          {
+            "type": "browser",
+            "id": 42000,
+            "beforeCpuSec": 2.563254,
+            "afterCpuSec": 2.591606,
+            "cpuSec": 0.028351999999999933,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 41476,
+            "beforeCpuSec": 26.768371,
+            "afterCpuSec": 37.793511,
+            "cpuSec": 11.025140000000004,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35388,
+            "beforeCpuSec": 31.597445,
+            "afterCpuSec": 31.598274,
+            "cpuSec": 0.0008289999999995246,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35552,
+            "beforeCpuSec": 0.047481,
+            "afterCpuSec": 0.047481,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "GPU",
+            "id": 40036,
+            "beforeCpuSec": 6.521862,
+            "afterCpuSec": 6.78849,
+            "cpuSec": 0.26662800000000075,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "id": 42328,
+            "beforeCpuSec": 0.379839,
+            "afterCpuSec": 0.380306,
+            "cpuSec": 0.0004669999999999952,
+            "created": false,
+            "terminated": false
+          }
+        ]
+      },
+      {
+        "label": "GG-4",
+        "mode": "G",
+        "comparisonMode": "I",
+        "rendererId": 41120,
+        "calibrationWork": {
+          "elapsedMs": 120,
+          "x": -1617826303
+        },
+        "calibrationTaskDurationSec": 0.1203039999999973,
+        "rendererCpuSec": 12.517046,
+        "activeRendererCpuSec": 12.516126,
+        "taskDurationSec": 10.899492999999996,
+        "scriptDurationSec": 0.05072000000000004,
+        "wallMs": 10930.070100000012,
+        "rows": [
+          {
+            "type": "browser",
+            "id": 42000,
+            "beforeCpuSec": 2.74267,
+            "afterCpuSec": 2.772758,
+            "cpuSec": 0.030088000000000115,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35388,
+            "beforeCpuSec": 31.600018,
+            "afterCpuSec": 31.600938,
+            "cpuSec": 0.000920000000000698,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 41120,
+            "beforeCpuSec": 26.74564,
+            "afterCpuSec": 39.261766,
+            "cpuSec": 12.516126,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "renderer",
+            "id": 35552,
+            "beforeCpuSec": 0.047481,
+            "afterCpuSec": 0.047481,
+            "cpuSec": 0,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "GPU",
+            "id": 40036,
+            "beforeCpuSec": 7.40843,
+            "afterCpuSec": 7.716323,
+            "cpuSec": 0.307893,
+            "created": false,
+            "terminated": false
+          },
+          {
+            "type": "network.mojom.NetworkService",
+            "id": 42328,
+            "beforeCpuSec": 0.41413,
+            "afterCpuSec": 0.414384,
+            "cpuSec": 0.00025399999999997647,
+            "created": false,
+            "terminated": false
+          }
+        ]
+      }
+    ],
+    "repeatedControlVariationPercent": 12.703309170691018,
+    "resolvesTwoPercent": false,
+    "cells": [],
+    "decision": "unresolved-control-variation-exceeded-2-percent"
+  }
+}
