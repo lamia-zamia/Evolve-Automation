@@ -80,6 +80,100 @@ export interface SmelterDecision {
   readonly tooltips: readonly SmelterTooltip[];
 }
 
+export type SmelterSteelTimeInvarianceReason =
+  | "steel-required-time-unchanged"
+  | "production-mode-does-not-use-required-time"
+  | "steel-demand-overrides-required-time"
+  | "no-miners-or-iron-ships-force-steel-weighting";
+
+function hasFrozenDataGraph(value: unknown, visited: Set<object>): boolean {
+  if (value === null || typeof value !== "object") return true;
+  if (visited.has(value)) return true;
+  if (!Object.isFrozen(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (
+    (Array.isArray(value) && prototype !== Array.prototype) ||
+    (!Array.isArray(value) &&
+      prototype !== Object.prototype &&
+      prototype !== null)
+  )
+    return false;
+  visited.add(value);
+  return Reflect.ownKeys(value).every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return (
+      descriptor !== undefined &&
+      "value" in descriptor &&
+      hasFrozenDataGraph(descriptor.value, visited)
+    );
+  });
+}
+
+/**
+ * Proves that changing only `steelTimeToRequired` cannot change the complete
+ * decision. `undefined` means the inputs do not establish one of the source
+ * backed invariants below; callers must use `planSmelter` for that case.
+ */
+export function proveSmelterSteelTimeInvariance(
+  incumbent: Readonly<SmelterInput>,
+  hypothetical: Readonly<SmelterInput>,
+): SmelterSteelTimeInvarianceReason | undefined {
+  try {
+    const visited = new Set<object>();
+    if (
+      !hasFrozenDataGraph(incumbent, visited) ||
+      !hasFrozenDataGraph(hypothetical, visited)
+    )
+      return undefined;
+    const incumbentKeys = Reflect.ownKeys(incumbent);
+    const hypotheticalKeys = Reflect.ownKeys(hypothetical);
+    if (
+      incumbentKeys.length !== hypotheticalKeys.length ||
+      Object.getPrototypeOf(incumbent) !==
+        Object.getPrototypeOf(hypothetical) ||
+      incumbentKeys.some((key) => !hypotheticalKeys.includes(key)) ||
+      incumbentKeys.some((key) => {
+        const before = Object.getOwnPropertyDescriptor(incumbent, key);
+        const after = Object.getOwnPropertyDescriptor(hypothetical, key);
+        return (
+          before === undefined ||
+          after === undefined ||
+          !("value" in before) ||
+          !("value" in after) ||
+          (key !== "steelTimeToRequired" &&
+            !Object.is(before.value, after.value))
+        );
+      }) ||
+      !Number.isFinite(incumbent.steelTimeToRequired) ||
+      !Number.isFinite(hypothetical.steelTimeToRequired) ||
+      typeof incumbent.steelDemanded !== "boolean"
+    )
+      return undefined;
+  } catch {
+    return undefined;
+  }
+
+  if (
+    Object.is(incumbent.steelTimeToRequired, hypothetical.steelTimeToRequired)
+  )
+    return "steel-required-time-unchanged";
+  if (
+    incumbent.productionSmelting === "iron" ||
+    incumbent.productionSmelting === "steel" ||
+    incumbent.productionSmelting === "storage"
+  )
+    return "production-mode-does-not-use-required-time";
+  if (incumbent.productionSmelting === "required" && incumbent.steelDemanded)
+    return "steel-demand-overrides-required-time";
+  if (
+    incumbent.productionSmelting === "required" &&
+    incumbent.minerCount === 0 &&
+    incumbent.beltIronShipStateOnCount === 0
+  )
+    return "no-miners-or-iron-ships-force-steel-weighting";
+  return undefined;
+}
+
 const EMPTY_DECISION: SmelterDecision = Object.freeze({
   fuelAdjustments: Object.freeze([]),
   smeltAdjustments: Object.freeze([]),

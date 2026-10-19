@@ -4581,6 +4581,14 @@
     let shadow = finite(readProperty(readProperty(root, "tech"), "shadow")), race = readProperty(root, "race");
     return shadow !== void 0 && shadow >= 5 && !!readProperty(race, "supplyZones") && !!readProperty(race, "supplySplit");
   }
+  function capturedSupplyScope(root) {
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race");
+    if (!isRecord(tech) || !isRecord(race)) return "unavailable";
+    let shadowValue = readProperty(tech, "shadow"), supplyZones = readProperty(race, "supplyZones"), supplySplit = readProperty(race, "supplySplit");
+    if (!supplyZones || !shadowValue || !supplySplit) return "civilization-wide";
+    let shadow = finite(shadowValue);
+    return shadow === void 0 ? "unavailable" : shadow >= 5 ? "regional" : "civilization-wide";
+  }
   var ANYWHERE_POOL = "*";
   function hasRegionalLedger(resource) {
     return isRecord(readProperty(resource, "reg")) || isRecord(readProperty(resource, "regMax")) || isRecord(readProperty(resource, "regDiff"));
@@ -35584,7 +35592,6 @@
         permissionEnabled: settings.autoSmelter === !0,
         control,
         steelResource: void 0,
-        steelSupplyScope: "unavailable",
         demandAuthorityAvailable
       });
     let cap = readCount(smelter.cap), star = readCount(smelter.Star), ironCount = readCount(smelter.Iron), steelCount = readCount(smelter.Steel), iridiumCount = readCount(smelter.Iridium);
@@ -35596,7 +35603,6 @@
         permissionEnabled: settings.autoSmelter === !0,
         control,
         steelResource: void 0,
-        steelSupplyScope: "unavailable",
         demandAuthorityAvailable
       });
     let iron = readResource2(resources, "Iron"), steel = readResource2(resources, "Steel"), coal = readResource2(resources, "Coal"), titanium = readResource2(resources, "Titanium");
@@ -35608,7 +35614,6 @@
         permissionEnabled: settings.autoSmelter === !0,
         control,
         steelResource: void 0,
-        steelSupplyScope: "unavailable",
         demandAuthorityAvailable
       });
     let fuels = FUEL_IDS.map(
@@ -35622,7 +35627,6 @@
         permissionEnabled: settings.autoSmelter === !0,
         control,
         steelResource: steel,
-        steelSupplyScope: isRegionalSupply(root) ? "regional" : "civilization-wide",
         demandAuthorityAvailable
       });
     let withSmelterCounts = [...fuels].filter((fuel) => fuel !== void 0).sort(
@@ -35646,7 +35650,6 @@
         permissionEnabled: settings.autoSmelter === !0,
         control,
         steelResource: void 0,
-        steelSupplyScope: "unavailable",
         demandAuthorityAvailable
       });
     let miner = readProperty(readProperty(root, "civic"), "miner"), ironShip = readProperty(readProperty(root, "space"), "iron_ship"), titaniumRatio = titanium.maximum > 0 ? titanium.amount / titanium.maximum : 1, input = Object.freeze({
@@ -35688,7 +35691,6 @@
       permissionEnabled: settings.autoSmelter === !0,
       control,
       steelResource: steel,
-      steelSupplyScope: isRegionalSupply(root) ? "regional" : "civilization-wide",
       demandAuthorityAvailable
     });
   }
@@ -35764,7 +35766,7 @@
             maximum: session.steelResource.maximum,
             rate: session.steelResource.rate
           }) : void 0,
-          steelSupplyScope: session.steelSupplyScope,
+          steelSupplyScope: capturedSupplyScope(session.root),
           demandAuthorityAvailable: session.demandAuthorityAvailable
         }) : void 0;
         publishPlan && dependencies.observePlanForDiagnostics?.(

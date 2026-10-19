@@ -6,9 +6,10 @@ import {
   type SmelterCostView,
   type SmelterFuelView,
   type SmelterInput,
+  proveSmelterSteelTimeInvariance,
 } from "../../../../domain/economy/production/smelter.ts";
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
-import { isRegionalSupply } from "../../captured-affordability.ts";
+import { capturedSupplyScope } from "../../captured-affordability.ts";
 import type { CapturedDemandSample } from "../resources/captured-resource-demand.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameControlHandle } from "../../../../ports/game-control-registry.ts";
@@ -156,7 +157,6 @@ interface SmelterSession {
   readonly permissionEnabled: boolean;
   readonly control: GameControlHandle | undefined;
   readonly steelResource: ResourceView | undefined;
-  readonly steelSupplyScope: "civilization-wide" | "regional" | "unavailable";
   readonly demandAuthorityAvailable: boolean;
 }
 
@@ -403,7 +403,6 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
-      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -427,7 +426,6 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
-      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -448,7 +446,6 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
-      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -463,9 +460,6 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: steel,
-      steelSupplyScope: isRegionalSupply(root)
-        ? "regional"
-        : "civilization-wide",
       demandAuthorityAvailable,
     });
   }
@@ -503,7 +497,6 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
-      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -558,7 +551,6 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     permissionEnabled: settings["autoSmelter"] === true,
     control,
     steelResource: steel,
-    steelSupplyScope: isRegionalSupply(root) ? "regional" : "civilization-wide",
     demandAuthorityAvailable,
   });
 }
@@ -1094,6 +1086,9 @@ export function compareCapturedSmelterSteelDemand(
   requestUnavailableReasons: readonly string[];
   quantityRepresented: boolean;
   hypotheticalPlannerCalls: 0 | 1;
+  comparisonMethod: "proven-invariant" | "planned" | "unavailable";
+  invarianceReason:
+    ReturnType<typeof proveSmelterSteelTimeInvariance> | undefined;
   incumbentDemand: CapturedSmelterIncumbentSnapshot["demand"];
   currentSteel: CapturedSmelterIncumbentSnapshot["steelResource"];
   incumbentInput: CapturedSmelterIncumbentSnapshot["input"];
@@ -1248,11 +1243,27 @@ export function compareCapturedSmelterSteelDemand(
   const policyPermitted = quantityRepresented
     ? snapshot.permissionEnabled
     : undefined;
+  const invarianceReason = proposedInput
+    ? proveSmelterSteelTimeInvariance(snapshot.input, proposedInput)
+    : undefined;
+  const comparisonMethod: "proven-invariant" | "planned" | "unavailable" =
+    proposedInput && policyPermitted
+      ? invarianceReason === undefined
+        ? "planned"
+        : "proven-invariant"
+      : "unavailable";
   const proposedDecision =
-    proposedInput && policyPermitted ? planSmelter(proposedInput) : undefined;
-  const hypotheticalPlannerCalls: 0 | 1 = proposedDecision ? 1 : 0;
+    comparisonMethod === "proven-invariant"
+      ? snapshot.decision
+      : comparisonMethod === "planned" && proposedInput
+        ? planSmelter(proposedInput)
+        : undefined;
+  const hypotheticalPlannerCalls: 0 | 1 =
+    comparisonMethod === "planned" ? 1 : 0;
   const proposedCommands = proposedDecision
-    ? normalizedCommands(proposedDecision)
+    ? comparisonMethod === "proven-invariant"
+      ? incumbent
+      : normalizedCommands(proposedDecision)
     : undefined;
   const commandsChanged = proposedCommands
     ? JSON.stringify(proposedCommands) !== JSON.stringify(incumbent)
@@ -1317,6 +1328,8 @@ export function compareCapturedSmelterSteelDemand(
     requestUnavailableReasons: Object.freeze(requestUnavailableReasons),
     quantityRepresented,
     hypotheticalPlannerCalls,
+    comparisonMethod,
+    invarianceReason,
     incumbentDemand: snapshot.demand,
     currentSteel: snapshot.steelResource,
     incumbentInput: snapshot.input,
@@ -1461,7 +1474,7 @@ export function createCapturedSmelterAutomation(
                   rate: session.steelResource.rate,
                 })
               : undefined,
-            steelSupplyScope: session.steelSupplyScope,
+            steelSupplyScope: capturedSupplyScope(session.root),
             demandAuthorityAvailable: session.demandAuthorityAvailable,
           })
         : undefined;

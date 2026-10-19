@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   costFitsNow,
   costFitsStorage,
+  capturedSupplyScope,
   isRegionalSupply,
   readCapturedResourceView,
 } from "../../../src/adapters/evolve/captured-affordability.ts";
@@ -235,6 +236,7 @@ const logisticsRoot = {
   },
 };
 assert.equal(isRegionalSupply(logisticsRoot), false);
+assert.equal(capturedSupplyScope(logisticsRoot), "civilization-wide");
 assert.equal(
   costFitsNow(logisticsRoot, { Money: 50 }, { pool: "spc_home" }),
   true,
@@ -263,6 +265,7 @@ const legacySupplyRoot = {
   race: { ...logisticsRoot.race, supplyZones: true, supplySplit: "sol" },
 };
 assert.equal(isRegionalSupply(legacySupplyRoot), true);
+assert.equal(capturedSupplyScope(legacySupplyRoot), "regional");
 assert.equal(
   costFitsNow(legacySupplyRoot, { Money: 50 }, { pool: "spc_home" }),
   false,
@@ -324,5 +327,29 @@ assert.equal(
   true,
 );
 assert.equal(isRegionalSupply(undefined), false);
+assert.equal(capturedSupplyScope({ tech: {}, race: {} }), "civilization-wide");
+assert.equal(
+  capturedSupplyScope({ tech: { shadow: 5 }, race: { supplyZones: true } }),
+  "civilization-wide",
+  "the game's missing split stage is falsy and therefore keeps global supply",
+);
+assert.equal(
+  capturedSupplyScope({ tech: { shadow: 0 }, race: { supplyZones: true } }),
+  "civilization-wide",
+  "a known Shadow level below the regional threshold establishes global scope",
+);
+assert.equal(
+  capturedSupplyScope({
+    tech: { shadow: "unknown" },
+    race: { supplyZones: true, supplySplit: true },
+  }),
+  "unavailable",
+  "a truthy malformed Shadow value cannot establish either supply scope",
+);
+assert.equal(
+  capturedSupplyScope({ tech: { shadow: 5 }, race: undefined }),
+  "unavailable",
+  "a missing authority container fails closed",
+);
 
 console.log("captured-affordability ok");

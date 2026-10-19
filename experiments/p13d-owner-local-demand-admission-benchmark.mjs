@@ -65,7 +65,7 @@ const sampleSd = (values) => {
 
 const prelude = `
 globalThis.__EA_TEST_HOOKS__ = { ...(globalThis.__EA_TEST_HOOKS__ ?? {}) };
-const __p13d = { mode: "G", instrument: false, calls: 0, publications: 0, admissions: 0, hypotheticalPlannerCalls: 0, outcomes: [], results: [], callbackMs: [], snapshotMs: [], snapshot: undefined };
+const __p13d = { mode: "G", instrument: false, calls: 0, publications: 0, admissions: 0, quantityConstructions: 0, invarianceProofs: 0, hypotheticalPlannerCalls: 0, outcomes: [], results: [], callbackMs: [], snapshotMs: [], snapshot: undefined };
 const __p13dHooks = globalThis.__EA_TEST_HOOKS__;
 __p13dHooks.readSmelterComparisonClockForTest = () => window.__EA_RUNNER__.nativeNow();
 __p13dHooks.readSmelterGoalDemandProposalForTest = (input, decision, demand, observation, ownerCycle) => {
@@ -87,7 +87,7 @@ __p13dHooks.readSmelterGoalDemandProposalForTest = (input, decision, demand, obs
   };
 };
 __p13dHooks.observeSmelterGoalDemandAdmissionForTest = (result, comparisonElapsedMs) => {
-  if (__p13d.instrument) { __p13d.admissions++; __p13d.hypotheticalPlannerCalls += result.comparison?.hypotheticalPlannerCalls ?? 0; __p13d.results.push({ status: result.status, structurallyValid: result.structurallyValid, valid: result.proposalValidForEvaluation, available: result.ownerLocalComparisonAvailable, quantityRepresented: result.comparison?.quantityRepresented, quantitativeComparison: result.comparison?.quantitativeComparison, hypotheticalPlannerCalls: result.comparison?.hypotheticalPlannerCalls ?? 0, requestedAmount: 10, incumbentDemand: result.comparison?.incumbentDemand, steelScope: result.comparison?.steelSupplyScope, steel: result.comparison?.currentSteel, incumbentInput: result.comparison?.incumbentInput, incumbentDecision: result.comparison?.incumbentDecision, proposedInput: result.comparison?.proposedInput, incumbentSteelTimeToRequired: result.comparison?.incumbentSteelTimeToRequired, proposedSteelTimeToRequired: result.comparison?.proposedInput?.steelTimeToRequired, effectiveAdditionalSteel: result.comparison?.effectiveAdditionalSteel, storageClamped: result.comparison?.storageClamped, incumbentCommands: result.comparison?.incumbentCommands, proposedCommands: result.comparison?.proposedCommands, commandsChanged: result.comparison?.commandsChanged, comparisonElapsedMs, freshness: result.freshness, knownCommitments: result.knownCommitments, sourceBackedCompetingClaims: result.sourceBackedCompetingClaims, demonstratedConflicts: result.demonstratedConflicts, unknownCommitmentCoverage: result.unknownCommitmentCoverage, requestBlockedByCompetingCommitment: result.requestBlockedByCompetingCommitment, reasons: result.reasons, comparisonUnavailableReasons: result.comparison?.unavailableReasons }); }
+  if (__p13d.instrument) { __p13d.admissions++; __p13d.quantityConstructions += result.comparison?.proposedInput ? 1 : 0; __p13d.invarianceProofs += result.comparison?.invarianceReason ? 1 : 0; __p13d.hypotheticalPlannerCalls += result.comparison?.hypotheticalPlannerCalls ?? 0; __p13d.results.push({ ownerCycle: result.freshness.currentOwnerCycle, status: result.status, structurallyValid: result.structurallyValid, valid: result.proposalValidForEvaluation, available: result.ownerLocalComparisonAvailable, quantityRepresented: result.comparison?.quantityRepresented, comparisonMethod: result.comparison?.comparisonMethod, invarianceReason: result.comparison?.invarianceReason, quantitativeComparison: result.comparison?.quantitativeComparison, hypotheticalPlannerCalls: result.comparison?.hypotheticalPlannerCalls ?? 0, requestedAmount: 10, incumbentDemand: result.comparison?.incumbentDemand, steelScope: result.comparison?.steelSupplyScope, steel: result.comparison?.currentSteel, incumbentInput: result.comparison?.incumbentInput, incumbentDecision: result.comparison?.incumbentDecision, proposedInput: result.comparison?.proposedInput, incumbentSteelTimeToRequired: result.comparison?.incumbentSteelTimeToRequired, proposedSteelTimeToRequired: result.comparison?.proposedInput?.steelTimeToRequired, effectiveAdditionalSteel: result.comparison?.effectiveAdditionalSteel, storageClamped: result.comparison?.storageClamped, incumbentCommands: result.comparison?.incumbentCommands, proposedCommands: result.comparison?.proposedCommands, actualOwnerCommands: [...(result.comparison?.incumbentDecision?.fuelAdjustments ?? []), ...(result.comparison?.incumbentDecision?.smeltAdjustments ?? [])].flatMap((adjustment) => Array.from({ length: Math.abs(adjustment.delta) }, () => String(adjustment.delta > 0 ? adjustment.fuelId ? "addFuel" : "addMetal" : adjustment.fuelId ? "subFuel" : "subMetal") + ":" + (adjustment.fuelId ?? adjustment.productionId))), commandsChanged: result.comparison?.commandsChanged, comparisonElapsedMs, freshness: result.freshness, knownCommitments: result.knownCommitments, sourceBackedCompetingClaims: result.sourceBackedCompetingClaims, demonstratedConflicts: result.demonstratedConflicts, unknownCommitmentCoverage: result.unknownCommitmentCoverage, requestBlockedByCompetingCommitment: result.requestBlockedByCompetingCommitment, reasons: result.reasons, comparisonUnavailableReasons: result.comparison?.unavailableReasons }); }
 };
 __p13dHooks.observeSmelterOutcomeForTest = (outcome, observation, postcondition) => {
   if (__p13dHooks.captureSmelterOutcomeForTest) __p13d.outcomes.push({ outcome, postcondition: postcondition.status === "no-op" ? { status: "no-op", allocations: {} } : postcondition });
@@ -117,10 +117,10 @@ __p13dHooks.setP13C1Mode = (mode) => {
 };
 __p13dHooks.setP13C1Instrumentation = (enabled) => { __p13d.instrument = Boolean(enabled); };
 __p13dHooks.resetP13C1Window = () => {
-  __p13d.calls = 0; __p13d.publications = 0; __p13d.admissions = 0; __p13d.hypotheticalPlannerCalls = 0; __p13d.outcomes = []; __p13d.results = []; __p13d.callbackMs = []; __p13d.snapshotMs = [];
+  __p13d.calls = 0; __p13d.publications = 0; __p13d.admissions = 0; __p13d.quantityConstructions = 0; __p13d.invarianceProofs = 0; __p13d.hypotheticalPlannerCalls = 0; __p13d.outcomes = []; __p13d.results = []; __p13d.callbackMs = []; __p13d.snapshotMs = [];
 };
 __p13dHooks.readP13C1Window = () => ({
-  mode: __p13d.mode, ownerObservationCalls: __p13d.calls, hypotheticalPlannerCalls: __p13d.hypotheticalPlannerCalls,
+  mode: __p13d.mode, ownerObservationCalls: __p13d.calls, proposalValidations: __p13d.admissions, quantityConstructions: __p13d.quantityConstructions, invarianceProofs: __p13d.invarianceProofs, hypotheticalPlannerCalls: __p13d.hypotheticalPlannerCalls,
   snapshotPublications: __p13d.publications, admissions: __p13d.admissions, outcomes: [...__p13d.outcomes], results: [...__p13d.results], callbackMs: [...__p13d.callbackMs],
   snapshotMs: [...__p13d.snapshotMs], snapshot: __p13d.snapshot,
 });`;
@@ -495,7 +495,7 @@ assert.equal(
 );
 assert.equal(
   correctness.find((cell) => cell.mode === "Q").hooks.hypotheticalPlannerCalls,
-  10,
+  0,
 );
 assert.ok(
   correctness
@@ -509,10 +509,53 @@ assert.ok(
     .hooks.results.every(
       (result) =>
         result.quantityRepresented &&
-        result.hypotheticalPlannerCalls === 1 &&
+        result.comparisonMethod === "proven-invariant" &&
+        result.hypotheticalPlannerCalls === 0 &&
         result.quantitativeComparison === "available",
     ),
-  "every Q owner cycle must represent the request and invoke the pure planner once",
+  JSON.stringify(
+    correctness
+      .find((cell) => cell.mode === "Q")
+      .hooks.results.map((result) => ({
+        ownerCycle: result.ownerCycle,
+        quantityRepresented: result.quantityRepresented,
+        comparisonMethod: result.comparisonMethod,
+        invarianceReason: result.invarianceReason,
+        hypotheticalPlannerCalls: result.hypotheticalPlannerCalls,
+        quantitativeComparison: result.quantitativeComparison,
+      })),
+  ),
+);
+assert.deepEqual(
+  correctness
+    .find((cell) => cell.mode === "Q")
+    .hooks.results.map((result) => result.ownerCycle),
+  Array.from({ length: 10 }, (_, index) => 224 + index),
+  "the verified fixture's owner-cycle window changed",
+);
+assert.ok(
+  correctness
+    .find((cell) => cell.mode === "Q")
+    .hooks.results.slice(0, 8)
+    .every(
+      (result) =>
+        result.invarianceReason === "steel-demand-overrides-required-time" &&
+        result.proposedSteelTimeToRequired !==
+          result.incumbentSteelTimeToRequired,
+    ),
+  "the first eight captured Q rows should be invariant by Steel demand override",
+);
+assert.ok(
+  correctness
+    .find((cell) => cell.mode === "Q")
+    .hooks.results.slice(8)
+    .every(
+      (result) =>
+        result.invarianceReason === "steel-required-time-unchanged" &&
+        result.proposedSteelTimeToRequired ===
+          result.incumbentSteelTimeToRequired,
+    ),
+  "the final two captured Q rows should have identical required-time inputs",
 );
 assert.equal(
   correctness.find((cell) => cell.mode === "U").hooks.admissions,
@@ -521,9 +564,10 @@ assert.equal(
 const qCorrectnessResults = correctness.find((cell) => cell.mode === "Q").hooks
   .results;
 const qOwnerPlannerCallsPerWorktick =
-  qCorrectnessResults.filter(
-    (result) => result.quantitativeComparison === "available",
-  ).length / qCorrectnessResults.length;
+  qCorrectnessResults.reduce(
+    (sum, result) => sum + result.hypotheticalPlannerCalls,
+    0,
+  ) / qCorrectnessResults.length;
 assertIdenticalBundleHashes(correctness.map((cell) => cell.bundleSha256));
 console.log("correctness cohort complete");
 const qCell = correctness.find((cell) => cell.mode === "Q");
@@ -942,7 +986,14 @@ const calibratedForTwoPercent =
   );
 const totalObservationInterval =
   contrastSummary["G-Q"].approximate95PercentInterval;
-const qComparisonEstablished = qOwnerPlannerCallsPerWorktick === 1;
+const qComparisonEstablished =
+  qCorrectnessResults.length === 10 &&
+  qCorrectnessResults.every(
+    (result) =>
+      result.quantityRepresented &&
+      result.quantitativeComparison === "available" &&
+      result.commandsChanged === false,
+  );
 const decision = !qComparisonEstablished
   ? "C — Owner-local quantitative comparison unavailable"
   : !calibratedForTwoPercent

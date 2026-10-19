@@ -10,7 +10,10 @@ import {
   isCapturedSmelterSnapshotCurrent,
   setCapturedSmelterObservationModeForTest,
 } from "../../../src/adapters/evolve/economy/production/captured-smelter.ts";
-import { planSmelter } from "../../../src/domain/economy/production/smelter.ts";
+import {
+  planSmelter,
+  proveSmelterSteelTimeInvariance,
+} from "../../../src/domain/economy/production/smelter.ts";
 
 globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
 assert.equal(capturedSmelterSkipReason(false, true), "permission-disabled");
@@ -38,9 +41,317 @@ assert.equal(
 );
 assert.equal(setCapturedSmelterObservationModeForTest(undefined, "S"), false);
 
+const differentialFuel = (limited) =>
+  Object.freeze({
+    id: "Coal",
+    unlocked: true,
+    isInfernoBeforeOil: false,
+    currentFuelCount: limited ? 0 : 1,
+    cost: Object.freeze([
+      Object.freeze({
+        resourceName: "Coal",
+        currentQuantity: limited ? 0 : 1000,
+        rateOfChange: limited ? 0 : 100,
+        minRateOfChange: 2,
+        quantity: 1,
+        isDemanded: false,
+      }),
+    ]),
+  });
+let differentialCases = 0;
+for (const productionSmelting of ["required", "iron", "steel", "storage"])
+  for (const steelDemanded of [false, true])
+    for (const ironDemanded of [false, true])
+      for (const fuelLimited of [false, true])
+        for (const steelInputShortage of [false, true])
+          for (const iridiumCount of [0, 1])
+            for (const noMiners of [false, true])
+              for (const ironShipOn of [0, 1])
+                for (const capacityAvailable of [false, true])
+                  for (const stockVariant of [0, 1]) {
+                    const incumbent = Object.freeze({
+                      initialised: true,
+                      hasForge: false,
+                      totalSmelters: capacityAvailable ? 5 : 1,
+                      extraOperating: 0,
+                      consumptionBalanceMin: 0.5,
+                      fuels: Object.freeze([differentialFuel(fuelLimited)]),
+                      ironCount: capacityAvailable ? 1 : 0,
+                      steelCount: stockVariant,
+                      iridiumCount,
+                      iridiumUnlocked: true,
+                      iridiumCapped: false,
+                      productionSmeltingIridium: 0.5,
+                      productionSmelting,
+                      steelCost: Object.freeze([
+                        Object.freeze({
+                          resourceName: "Iron",
+                          currentQuantity: steelInputShortage ? 0 : 1000,
+                          rateOfChange: steelInputShortage ? 0 : 100,
+                          minRateOfChange: 6,
+                          quantity: 2,
+                          isDemanded: ironDemanded,
+                        }),
+                      ]),
+                      ironTimeToFull: stockVariant ? 0 : 10,
+                      ironTimeToRequired: stockVariant ? 1 : 20,
+                      ironDemanded,
+                      steelTimeToFull: stockVariant ? 0 : 15,
+                      steelTimeToRequired: 3,
+                      steelDemanded,
+                      minerCount: noMiners ? 0 : 1,
+                      beltIronShipStateOnCount: ironShipOn,
+                      titaniumStorageRatio: stockVariant ? 1 : 0.5,
+                      haveTitaniumTech: true,
+                    });
+                    const hypothetical = Object.freeze({
+                      ...incumbent,
+                      steelTimeToRequired: 7,
+                    });
+                    const reason = proveSmelterSteelTimeInvariance(
+                      incumbent,
+                      hypothetical,
+                    );
+                    if (reason !== undefined) {
+                      assert.deepEqual(
+                        planSmelter(incumbent),
+                        planSmelter(hypothetical),
+                        `complete decision differs under ${reason}: ${JSON.stringify({ productionSmelting, steelDemanded, ironDemanded, fuelLimited, steelInputShortage, iridiumCount, noMiners, capacityAvailable, stockVariant })}`,
+                      );
+                      differentialCases++;
+                    }
+                  }
+assert.ok(differentialCases > 0);
+const sensitiveBase = Object.freeze({
+  initialised: true,
+  hasForge: true,
+  totalSmelters: 2,
+  extraOperating: 0,
+  consumptionBalanceMin: 0.5,
+  fuels: Object.freeze([]),
+  ironCount: 2,
+  steelCount: 0,
+  iridiumCount: 0,
+  iridiumUnlocked: false,
+  iridiumCapped: true,
+  productionSmeltingIridium: 0.5,
+  productionSmelting: "required",
+  steelCost: Object.freeze([]),
+  ironTimeToFull: 10,
+  ironTimeToRequired: 20,
+  ironDemanded: false,
+  steelTimeToFull: 15,
+  steelTimeToRequired: 0,
+  steelDemanded: false,
+  minerCount: 1,
+  beltIronShipStateOnCount: 0,
+  titaniumStorageRatio: 1,
+  haveTitaniumTech: true,
+});
+const sensitiveHypothetical = Object.freeze({
+  ...sensitiveBase,
+  steelTimeToRequired: 110,
+});
+assert.equal(
+  proveSmelterSteelTimeInvariance(sensitiveBase, sensitiveHypothetical),
+  undefined,
+  "required production with Steel not demanded remains sensitive",
+);
+assert.equal(
+  proveSmelterSteelTimeInvariance(sensitiveBase, {
+    ...sensitiveHypothetical,
+    minerCount: 0,
+    beltIronShipStateOnCount: 1,
+  }),
+  undefined,
+  "an operating Iron ship prevents the no-miner override proof",
+);
+const unchangedTimeInput = Object.freeze({
+  ...sensitiveBase,
+  steelTimeToRequired: 12,
+});
+assert.equal(
+  proveSmelterSteelTimeInvariance(
+    unchangedTimeInput,
+    Object.freeze({ ...unchangedTimeInput }),
+  ),
+  "steel-required-time-unchanged",
+);
+assert.equal(
+  proveSmelterSteelTimeInvariance(
+    { ...unchangedTimeInput },
+    { ...unchangedTimeInput },
+  ),
+  undefined,
+  "mutable planner inputs do not establish an invariance proof",
+);
+assert.deepEqual(
+  planSmelter(unchangedTimeInput),
+  planSmelter({ ...unchangedTimeInput }),
+);
+
+const ordinaryReadCounts = {
+  rootSnapshots: 0,
+  rootTechRaceReads: 0,
+  supplyScopeLeafReads: 0,
+  demandReads: 0,
+  controlResolves: 0,
+  observerCalls: 0,
+};
+const ordinaryReadRootData = structuredClone({
+  race: { supplyZones: false, supplySplit: false },
+  tech: { shadow: 0, smelting: 2, titanium: 1 },
+  resource: {
+    Iron: { name: "Iron", amount: 50, max: 100, diff: 1, display: true },
+    Steel: { name: "Steel", amount: 0, max: 3000, diff: 10, display: true },
+    Titanium: {
+      name: "Titanium",
+      amount: 10,
+      max: 100,
+      diff: 1,
+      display: true,
+    },
+    Coal: { name: "Coal", amount: 1000, max: 2000, diff: 100, display: true },
+    Lumber: {
+      name: "Lumber",
+      amount: 1000,
+      max: 2000,
+      diff: 100,
+      display: true,
+    },
+    Oil: { name: "Oil", amount: 0, max: 0, diff: 0, display: false },
+    Super_Fuel: {
+      name: "Super Fuel",
+      amount: 0,
+      max: 100,
+      diff: 0,
+      display: false,
+    },
+  },
+  city: {
+    smelter: {
+      cap: 2,
+      Star: 0,
+      Iron: 2,
+      Steel: 0,
+      Iridium: 0,
+      Coal: 2,
+      Oil: 0,
+      Wood: 0,
+      Inferno: 0,
+      Super: 0,
+    },
+  },
+  civic: { miner: { workers: 1 } },
+  space: { iron_ship: { on: 0 } },
+});
+Object.defineProperty(ordinaryReadRootData.tech, "shadow", {
+  enumerable: true,
+  get() {
+    ordinaryReadCounts.supplyScopeLeafReads++;
+    return 0;
+  },
+});
+for (const key of ["supplyZones", "supplySplit"])
+  Object.defineProperty(ordinaryReadRootData.race, key, {
+    enumerable: true,
+    get() {
+      ordinaryReadCounts.supplyScopeLeafReads++;
+      return false;
+    },
+  });
+const ordinaryReadRoot = new Proxy(ordinaryReadRootData, {
+  get(target, key, receiver) {
+    if (key === "tech" || key === "race")
+      ordinaryReadCounts.rootTechRaceReads++;
+    return Reflect.get(target, key, receiver);
+  },
+});
+const ordinaryReadAutomation = createCapturedSmelterAutomation({
+  rootState: {
+    readRoot: () => {
+      ordinaryReadCounts.rootSnapshots++;
+      return ordinaryReadRoot;
+    },
+  },
+  controls: {
+    resolve: () => {
+      ordinaryReadCounts.controlResolves++;
+      return { elementId: "iSmelter", generation: 1, methods: [] };
+    },
+    invoke: () =>
+      assert.fail("the baseline ordinary decision should be a no-op"),
+  },
+  readSettings: () => ({ productionSmelting: "iron" }),
+  readDemand: () => {
+    ordinaryReadCounts.demandReads++;
+    return {
+      requestedQuantity: () => 0,
+      isDemanded: () => false,
+      storageRequired: () => 1,
+    };
+  },
+  shouldObservePlanForDiagnostics: () => false,
+  observePlanForDiagnostics: () => ordinaryReadCounts.observerCalls++,
+});
+ordinaryReadAutomation.run();
+assert.deepEqual(ordinaryReadCounts, {
+  rootSnapshots: 1,
+  rootTechRaceReads: 2,
+  supplyScopeLeafReads: 0,
+  demandReads: 1,
+  controlResolves: 1,
+  observerCalls: 0,
+});
+ordinaryReadCounts.rootSnapshots = 0;
+ordinaryReadCounts.rootTechRaceReads = 0;
+ordinaryReadCounts.supplyScopeLeafReads = 0;
+ordinaryReadCounts.demandReads = 0;
+ordinaryReadCounts.controlResolves = 0;
+let diagnosticSupplyScope;
+const diagnosticReadAutomation = createCapturedSmelterAutomation({
+  rootState: {
+    readRoot: () => {
+      ordinaryReadCounts.rootSnapshots++;
+      return ordinaryReadRoot;
+    },
+  },
+  controls: {
+    resolve: () => {
+      ordinaryReadCounts.controlResolves++;
+      return { elementId: "iSmelter", generation: 1, methods: [] };
+    },
+    invoke: () => assert.fail("the diagnostic decision should be a no-op"),
+  },
+  readSettings: () => ({ productionSmelting: "iron" }),
+  readDemand: () => {
+    ordinaryReadCounts.demandReads++;
+    return {
+      requestedQuantity: () => 0,
+      isDemanded: () => false,
+      storageRequired: () => 1,
+    };
+  },
+  shouldObservePlanForDiagnostics: () => true,
+  observePlanForDiagnostics: (_input, _decision, _demand, observation) => {
+    ordinaryReadCounts.observerCalls++;
+    diagnosticSupplyScope = observation?.steelSupplyScope;
+  },
+});
+diagnosticReadAutomation.run();
+assert.equal(diagnosticSupplyScope, "civilization-wide");
+assert.deepEqual(ordinaryReadCounts, {
+  rootSnapshots: 1,
+  rootTechRaceReads: 4,
+  supplyScopeLeafReads: 3,
+  demandReads: 1,
+  controlResolves: 1,
+  observerCalls: 1,
+});
+
 const root = {
-  race: {},
-  tech: { smelting: 2, titanium: 1 },
+  race: { supplyZones: false, supplySplit: false },
+  tech: { shadow: 0, smelting: 2, titanium: 1 },
   resource: {
     Iron: { name: "Iron", amount: 50, max: 100, diff: 1, display: true },
     Steel: { name: "Steel", amount: 0, max: 3000, diff: 10, display: true },
@@ -228,6 +539,7 @@ assert.equal(incumbentSnapshot.demand.savingTargetPool, undefined);
 assert.equal(incumbentSnapshot.demand.savingTargetPoolWasPresent, false);
 assert.equal(incumbentSnapshot.demand.steelTarget, 1000);
 assert.equal(incumbentSnapshot.demand.savingTargetSteelCostWasPresent, true);
+assert.equal(incumbentSnapshot.steelSupplyScope, "civilization-wide");
 assert.deepEqual(incumbentSnapshot.demand.savingTargetCost, {
   Money: 10000,
   Crystal: 125,
@@ -248,7 +560,12 @@ const missingSteelSavingCost = compareCapturedSmelterSteelDemand(
 );
 assert.equal(missingSteelSavingCost.quantityRepresented, true);
 assert.equal(missingSteelSavingCost.incumbentDemand.requestedSteel, 1000);
-assert.equal(missingSteelSavingCost.hypotheticalPlannerCalls, 1);
+assert.equal(missingSteelSavingCost.comparisonMethod, "proven-invariant");
+assert.equal(
+  missingSteelSavingCost.invarianceReason,
+  "steel-demand-overrides-required-time",
+);
+assert.equal(missingSteelSavingCost.hypotheticalPlannerCalls, 0);
 const explicitCitySavingTarget = Object.freeze({
   ...incumbentSnapshot,
   demand: Object.freeze({
@@ -281,7 +598,12 @@ const largeDemand = compareCapturedSmelterSteelDemand(incumbentSnapshot, {
 });
 assert.equal(smallDemand.requestValid, true);
 assert.equal(smallDemand.quantityRepresented, true);
-assert.equal(smallDemand.hypotheticalPlannerCalls, 1);
+assert.equal(smallDemand.comparisonMethod, "proven-invariant");
+assert.equal(
+  smallDemand.invarianceReason,
+  "steel-demand-overrides-required-time",
+);
+assert.equal(smallDemand.hypotheticalPlannerCalls, 0);
 assert.equal(smallDemand.proposedInput.steelTimeToRequired, 101);
 assert.equal(largeDemand.proposedInput.steelTimeToRequired, 200);
 assert.equal(smallDemand.proposedInput.steelDemanded, true);
@@ -389,7 +711,7 @@ assert.deepEqual(admittedProposal.comparison.proposedAllocation, {
 });
 assert.equal(admittedProposal.comparison.incrementalProductionKnown, false);
 assert.equal(admittedProposal.comparison.economicBenefitKnown, false);
-assert.equal(admittedProposal.comparison.hypotheticalPlannerCalls, 1);
+assert.equal(admittedProposal.comparison.hypotheticalPlannerCalls, 0);
 const explicitConflict = evaluateCapturedSmelterGoalDemandProposal(
   incumbentSnapshot,
   {
@@ -410,7 +732,7 @@ assert.equal(
   explicitConflict.status,
   "request-blocked-by-competing-commitment",
 );
-assert.equal(explicitConflict.comparison.hypotheticalPlannerCalls, 1);
+assert.equal(explicitConflict.comparison.hypotheticalPlannerCalls, 0);
 const sourceClaimWithoutConflict = evaluateCapturedSmelterGoalDemandProposal(
   incumbentSnapshot,
   {
@@ -542,6 +864,8 @@ const changedHypothetical = compareCapturedSmelterSteelDemand(
 );
 assert.equal(changedHypothetical.requestValid, true);
 assert.equal(changedHypothetical.quantityRepresented, true);
+assert.equal(changedHypothetical.comparisonMethod, "planned");
+assert.equal(changedHypothetical.invarianceReason, undefined);
 assert.equal(changedHypothetical.hypotheticalPlannerCalls, 1);
 assert.equal(changedHypothetical.proposedInput.steelTimeToRequired, 110);
 assert.ok(changedHypothetical.commandsChanged);

@@ -34,6 +34,29 @@ export function isRegionalSupply(root: unknown): boolean {
   );
 }
 
+/**
+ * Diagnostic supply-scope authority. Unlike `isRegionalSupply`, this preserves
+ * an unavailable result when the captured root lacks any input used by the
+ * game's `supplyMode()` decision.
+ */
+export function capturedSupplyScope(
+  root: unknown,
+): "regional" | "civilization-wide" | "unavailable" {
+  const tech = readProperty(root, "tech");
+  const race = readProperty(root, "race");
+  if (!isRecord(tech) || !isRecord(race)) return "unavailable";
+  const shadowValue = readProperty(tech, "shadow");
+  const supplyZones = readProperty(race, "supplyZones");
+  const supplySplit = readProperty(race, "supplySplit");
+  // The pinned game evaluates `supplyZones && shadow && shadow >= 5` before
+  // `supplySplit`. An absent optional leaf is therefore known false under the
+  // same JavaScript semantics, while missing authority containers stay unknown.
+  if (!supplyZones || !shadowValue || !supplySplit) return "civilization-wide";
+  const shadow = finite(shadowValue);
+  if (shadow === undefined) return "unavailable";
+  return shadow >= 5 ? "regional" : "civilization-wide";
+}
+
 /** The game's sentinel pool for a cost that draws on the whole civilization; research uses it. */
 export const ANYWHERE_POOL = "*";
 
