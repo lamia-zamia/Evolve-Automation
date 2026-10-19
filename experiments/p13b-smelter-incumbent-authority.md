@@ -1,18 +1,18 @@
-# P13B — Smelter incumbent authority
+# P13B.1 — Quantitative Smelter demand comparison
 
 | Field                 | Value                                                              |
 | --------------------- | ------------------------------------------------------------------ |
 | Date                  | 2026-10-19                                                         |
 | Branch                | `deadspace`                                                        |
-| Starting HEAD         | `02aa9449b4259901fdcae8fb4c69f410e0960ab6`                         |
+| Starting HEAD         | `4a98c88bba5224c403c35fd9f7beb822ea9dac87`                         |
 | Pinned game           | `pmotschmann/Evolve @ db38e2af831907d49aeb5348d678d8d8745d6c3f`    |
 | Game snapshot SHA-256 | `05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7` |
 
 ## Decision
 
-**A — Incumbent authority established.** A test-only observer at the ordinary Smelter owner boundary can publish the actual input, demand, plan, normalized native command intention, root reference, progression and control generations, effective permission, and expected pre-command allocations. The owner records the native outcome and checked post-command allocations separately. A read-only hypothetical Steel-demand comparison reuses `planSmelter()` and does not execute its proposal.
+**A — Quantitative demand authority established.** The numeric request can be faithfully represented using source-backed current inputs, and the comparison distinguishes policy insensitivity from economic redundancy. The test-only observer retains the ordinary Smelter input, demand authority, normalized native commands, root reference, progression and control generations, effective permission, Steel amount/capacity/rate, and expected pre-command allocations at the same owner boundary. The owner records the native outcome and checked post-command allocations separately. The read-only comparison uses `incumbent requested Steel + additionalSteel`, applies the ordinary adapter's `timeTo()` helper to the captured Steel amount/capacity/rate, retains every other input (including incumbent `steelDemanded` and Construction demand), runs `planSmelter()`, and compares complete ordered command intentions. It performs no independent resource read or native call.
 
-**CPU feasibility: C — unresolved.** The matched renderer CPU and CDP `TaskDuration` pairs disagree in direction and vary far beyond the 2% budget. The evidence does not support a CPU pass or an overhead rejection.
+**CPU — C, unresolved.** The matched renderer CPU and CDP `TaskDuration` pairs disagree in direction and vary far beyond the 2% budget. The evidence does not support a CPU pass or an overhead rejection.
 
 Cross-owner commitment coverage remains explicitly unavailable. This Smelter observation does not authorize another owner, reserve stock, or establish a measured future production marginal.
 
@@ -34,7 +34,7 @@ The experiment rebuilt the verified Stage 2F starting save and settings, seed `4
 | Native result           | succeeded                                                         |
 | Separate postcondition  | verified: Iron 14, Steel 1                                        |
 
-The capture reproduces P12G’s ordinary decision and actual native postcondition. The read-only additional-Steel comparison returns the same planned allocation and no changed commands because the ordinary incumbent already consumes the current Steel demand. Its `productionEffectKnown` result is false: allocation commands do not establish future resource production.
+The capture reproduces P12G’s ordinary decision and actual native postcondition. Regression cases represent distinct additional amounts as distinct `steelTimeToRequired` values. When incumbent `steelDemanded` is already true, the planner's required-time weighting is overridden by its existing maximum-weight demand rule; the resulting complete ordered commands can therefore remain identical. That result is classified `quantity-represented-but-native-policy-insensitive`. It is not called redundant: unchanged commands do not prove the additional quantity is delivered. `quantityDeliverable`, incremental production, and economic benefit remain unknown because this comparison has no measured production trajectory or horizon. `redundant` is set only when the captured city Steel stock already meets the combined incumbent-plus-additional target.
 
 The known P12G Steel-oriented alternative remains a separate measured result. Over its matched 100-period replay it added 54.94 more Steel, displaced 23.48 Iron and 1 Coal, and did not advance the Steel Containers purchase: both arms first met the 250-Steel price at period 40 and purchased at period 72. This result applies to that tested boundary only; it does not establish that future Steel requests are redundant.
 
@@ -44,7 +44,7 @@ The pure evaluator now derives final request admissibility after all blockers ar
 
 Capacity authority is owner-specific. Jobs require source assignment, protected minimum, default pool, worker capacity and Foundry coupling. Smelter requires available capacity, source/target assignments, fuel allocation and supported displacement. Other owners remain unavailable until characterized. Planned commands are not production marginals; missing resource rows are zero only under an explicit complete measured-effect scope.
 
-The focused regressions cover root replacement, progression change, control replacement, permission change, allocation change, demand change, capacity change, partial command execution, command rejection, missing methods, disabled Smelter, and unavailable Construction demand. They also cover command identity, pool separation, unknown collateral, incomplete coverage, no hypothetical request, a conflicting Iron demand, and fuel/displacement constraints. Stale snapshots remain descriptive but fail currentness checks after any changed authority or state input.
+The focused regressions cover finite positive numeric requests, distinct small and large quantities, current-stock coverage, zero and insufficient Steel rates, near-capacity time-to sentinels, storage beyond the captured cap, fuel and Smelter capacity limits, competing Iron demand, preserved Construction demand, existing Steel-demand override, invalid numbers and resource/pool identities, invalid incumbent demand authority, missing Steel quantity inputs, unavailable/replaced controls, root/progression/control/allocation changes, and snapshots made stale by the incumbent's native execution. Invalid requests produce no proposed input or plan and do not report policy permission. A nonzero proposed Steel allocation is not delivery evidence.
 
 ## G/S performance experiment
 
@@ -65,5 +65,5 @@ The worktick callback latency distributions also varied between order groups: G/
 - `npm run build`
 - `npm run check`
 - `node tools/chromium-evolve-runner-test.mjs`
-- P12G same-cycle G/S performance replay above.
+- Existing P12G same-cycle observation and G/S performance evidence above; no new benchmark was run for this correctness correction.
 - `git diff --check`
