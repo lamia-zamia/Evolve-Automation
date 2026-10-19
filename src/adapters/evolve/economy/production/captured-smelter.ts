@@ -8,6 +8,7 @@ import {
   type SmelterInput,
 } from "../../../../domain/economy/production/smelter.ts";
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
+import { isRegionalSupply } from "../../captured-affordability.ts";
 import type { CapturedDemandSample } from "../resources/captured-resource-demand.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameControlHandle } from "../../../../ports/game-control-registry.ts";
@@ -118,6 +119,7 @@ export interface CapturedSmelterDependencies {
       progressionGeneration: number | undefined;
       steelResource:
         Readonly<{ amount: number; maximum: number; rate: number }> | undefined;
+      steelSupplyScope: "civilization-wide" | "regional" | "unavailable";
       demandAuthorityAvailable: boolean;
     }>,
   ) => void;
@@ -154,6 +156,7 @@ interface SmelterSession {
   readonly permissionEnabled: boolean;
   readonly control: GameControlHandle | undefined;
   readonly steelResource: ResourceView | undefined;
+  readonly steelSupplyScope: "civilization-wide" | "regional" | "unavailable";
   readonly demandAuthorityAvailable: boolean;
 }
 
@@ -400,6 +403,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
+      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -423,6 +427,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
+      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -443,6 +448,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
+      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -457,6 +463,9 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: steel,
+      steelSupplyScope: isRegionalSupply(root)
+        ? "regional"
+        : "civilization-wide",
       demandAuthorityAvailable,
     });
   }
@@ -494,6 +503,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       permissionEnabled: settings["autoSmelter"] === true,
       control,
       steelResource: undefined,
+      steelSupplyScope: "unavailable",
       demandAuthorityAvailable,
     });
   }
@@ -548,6 +558,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     permissionEnabled: settings["autoSmelter"] === true,
     control,
     steelResource: steel,
+    steelSupplyScope: isRegionalSupply(root) ? "regional" : "civilization-wide",
     demandAuthorityAvailable,
   });
 }
@@ -603,12 +614,18 @@ export interface CapturedSmelterIncumbentSnapshot {
     steelDemanded: boolean;
     savingTargetName: string | undefined;
     savingTargetPool: string | undefined;
+    savingTargetPoolWasPresent: boolean;
     steelTarget: number | undefined;
+    savingTargetSteelCostWasPresent: boolean;
+    savingTargetCost: Readonly<Record<string, number>> | undefined;
+    steelSupplyScope: "civilization-wide" | "regional" | "unavailable";
   }>;
   readonly input: Readonly<SmelterInput>;
   /** Steel amount, storage and rate from the same ordinary owner input capture. */
   readonly steelResource:
     Readonly<{ amount: number; maximum: number; rate: number }> | undefined;
+  /** The pinned game's Steel payment scope, derived from this same root snapshot. */
+  readonly steelSupplyScope: "civilization-wide" | "regional" | "unavailable";
   readonly demandAuthorityAvailable: boolean;
   readonly decision: ReturnType<typeof planSmelter>;
   readonly commands: readonly string[];
@@ -646,6 +663,13 @@ export interface CapturedSmelterGoalDemandProposal {
     invalidatedBy: readonly string[];
   }>;
   readonly knownCompetingCommitments: readonly string[];
+  /** A conflict blocks only when a source explicitly proves it for Steel and this pool. */
+  readonly provenConflictingCommitments?: readonly Readonly<{
+    sourceBacked: true;
+    resourceId: string;
+    pool: string;
+    reason: string;
+  }>[];
   readonly unknownCommitmentCoverage: boolean;
 }
 
@@ -655,6 +679,7 @@ export function evaluateCapturedSmelterGoalDemandProposal(
   ownerCycle: number,
 ): Readonly<{
   proposalValidForEvaluation: boolean;
+  structurallyValid: boolean;
   ownerLocalComparisonAvailable: boolean;
   goalRequestAuthorized: false;
   status: string;
@@ -662,6 +687,27 @@ export function evaluateCapturedSmelterGoalDemandProposal(
   reasons: readonly string[];
   requestBlockedByCompetingCommitment: boolean;
   unknownCommitmentCoverage: boolean | undefined;
+  freshness: Readonly<{
+    sameCycleRoot: boolean;
+    sameCycleProgression: boolean;
+    sameCyclePermission: boolean;
+    demandGenerationTokenMatchesOwnerCycle: boolean;
+    demandIdentity: "unknown";
+    proposalDemandGeneration: number | undefined;
+    currentOwnerCycle: number;
+    invalidationListIsDeclarationOnly: true;
+    declaredInvalidations: readonly string[];
+    missingInvalidationDeclarations: readonly string[];
+    verifiedPriceIdentity: false;
+    currentGoalIdentity: "unknown";
+    offerFreshness: "unknown";
+    goalFreshness: "unknown";
+    queueFreshness: "unknown";
+    authorizationToExecute: false;
+  }>;
+  knownCommitments: readonly string[];
+  sourceBackedCompetingClaims: readonly unknown[];
+  demonstratedConflicts: readonly unknown[];
   productionEffectKnown: false;
   economicBenefitKnown: false;
   comparison: ReturnType<typeof compareCapturedSmelterSteelDemand> | undefined;
@@ -688,40 +734,34 @@ export function evaluateCapturedSmelterGoalDemandProposal(
     "incomplete-candidate-enumeration",
     "newer-owner-cycle",
   ];
+  const structuralReasons: string[] = [];
   if (typeof item["goalId"] !== "string" || !item["goalId"])
-    reasons.push("goal-identity-unavailable");
+    structuralReasons.push("goal-identity-unavailable");
   if (typeof item["requirementId"] !== "string" || !item["requirementId"])
-    reasons.push("requirement-identity-unavailable");
+    structuralReasons.push("requirement-identity-unavailable");
   if (
     item["provenance"] !== "verified-mandatory" &&
     item["provenance"] !== "provisional-advisory"
   )
-    reasons.push("requirement-provenance-unavailable");
+    structuralReasons.push("requirement-provenance-unavailable");
   if (
     nativeActionPrice &&
     (typeof nativeActionPrice["actionId"] !== "string" ||
       typeof nativeActionPrice["priceIdentity"] !== "string")
   )
-    reasons.push("native-action-price-identity-unavailable");
+    structuralReasons.push("native-action-price-identity-unavailable");
   if (
     typeof item["additionalQuantity"] !== "number" ||
     !Number.isFinite(item["additionalQuantity"])
   )
-    reasons.push("additional-quantity-must-be-finite");
+    structuralReasons.push("additional-quantity-must-be-finite");
   else if (item["additionalQuantity"] <= 0)
-    reasons.push("additional-quantity-must-be-positive");
+    structuralReasons.push("additional-quantity-must-be-positive");
   if (item["resourceId"] !== "Steel" || item["pool"] !== "city")
-    reasons.push("unsupported-resource-pool");
+    structuralReasons.push("unsupported-resource-pool");
   if (item["originatingOwner"] !== "smelter")
-    reasons.push("originating-owner-mismatch");
-  if (item["root"] !== snapshot.root) reasons.push("root-replaced");
-  if (item["progressionGeneration"] !== snapshot.progressionGeneration)
-    reasons.push("progression-changed");
-  if (item["demandGeneration"] !== ownerCycle)
-    reasons.push("demand-generation-stale");
-  if (item["permissionEnabled"] !== snapshot.permissionEnabled)
-    reasons.push("permission-changed");
-  if (validity["valid"] !== true) reasons.push("request-invalid");
+    structuralReasons.push("originating-owner-mismatch");
+  if (validity["valid"] !== true) structuralReasons.push("request-invalid");
   if (
     !Number.isSafeInteger(validity["expiresAtOwnerCycle"]) ||
     (validity["expiresAtOwnerCycle"] as number) < ownerCycle
@@ -729,17 +769,32 @@ export function evaluateCapturedSmelterGoalDemandProposal(
     reasons.push("request-expired");
   if (
     !Array.isArray(validity["invalidatedBy"]) ||
-    requiredInvalidations.some(
-      (condition) =>
-        !(validity["invalidatedBy"] as unknown[]).includes(condition),
+    !(validity["invalidatedBy"] as unknown[]).every(
+      (condition) => typeof condition === "string",
     )
   )
-    reasons.push("invalidation-conditions-unavailable");
+    structuralReasons.push("invalidation-declaration-malformed");
   if (!Array.isArray(item["knownCompetingCommitments"]))
-    reasons.push("competing-commitments-unavailable");
+    structuralReasons.push("competing-commitments-unavailable");
+  if (
+    Array.isArray(item["knownCompetingCommitments"]) &&
+    !(item["knownCompetingCommitments"] as unknown[]).every(
+      (commitment) => typeof commitment === "string",
+    )
+  )
+    structuralReasons.push("competing-commitments-malformed");
   if (typeof item["unknownCommitmentCoverage"] !== "boolean")
-    reasons.push("commitment-coverage-unavailable");
-  const proposalValidForEvaluation = reasons.length === 0;
+    structuralReasons.push("commitment-coverage-unavailable");
+  reasons.push(...structuralReasons);
+  if (item["root"] !== snapshot.root) reasons.push("root-replaced");
+  if (item["progressionGeneration"] !== snapshot.progressionGeneration)
+    reasons.push("progression-changed");
+  if (item["demandGeneration"] !== ownerCycle)
+    reasons.push("demand-generation-stale");
+  if (item["permissionEnabled"] !== snapshot.permissionEnabled)
+    reasons.push("permission-changed");
+  const structurallyValid = structuralReasons.length === 0;
+  const proposalValidForEvaluation = structurallyValid && reasons.length === 0;
   const comparison = proposalValidForEvaluation
     ? compareCapturedSmelterSteelDemand(snapshot, {
         resourceId: item["resourceId"],
@@ -751,7 +806,24 @@ export function evaluateCapturedSmelterGoalDemandProposal(
     reasons.push(...comparison.requestUnavailableReasons);
   if (comparison && !comparison.quantityRepresented)
     reasons.push(...comparison.unavailableReasons);
-  const knownCommitments = item["knownCompetingCommitments"];
+  const knownCommitments = Array.isArray(item["knownCompetingCommitments"])
+    ? item["knownCompetingCommitments"].filter(
+        (commitment): commitment is string => typeof commitment === "string",
+      )
+    : [];
+  const sourceBackedClaims = Array.isArray(item["provenConflictingCommitments"])
+    ? item["provenConflictingCommitments"].filter(
+        (claim): claim is Record<string, unknown> =>
+          isRecord(claim) && claim["sourceBacked"] === true,
+      )
+    : [];
+  const demonstratedConflicts = sourceBackedClaims.filter(
+    (claim) =>
+      claim["resourceId"] === "Steel" &&
+      claim["pool"] === "city" &&
+      typeof claim["reason"] === "string" &&
+      claim["reason"].trim().length > 0,
+  );
   const ownerLocalComparisonAvailable =
     proposalValidForEvaluation &&
     comparison?.quantitativeComparison === "available";
@@ -770,7 +842,7 @@ export function evaluateCapturedSmelterGoalDemandProposal(
           )
         ? "request-invalidated"
         : "invalid-request"
-    : Array.isArray(knownCommitments) && knownCommitments.length > 0
+    : demonstratedConflicts.length > 0
       ? "request-blocked-by-competing-commitment"
       : !comparison?.quantityRepresented
         ? "unavailable-authority"
@@ -806,7 +878,7 @@ export function evaluateCapturedSmelterGoalDemandProposal(
       : []),
     "production-effect-unknown",
     "economic-benefit-unknown",
-    ...(Array.isArray(knownCommitments) && knownCommitments.length > 0
+    ...(demonstratedConflicts.length > 0
       ? ["request-blocked-by-competing-commitment"]
       : []),
     ...(item["unknownCommitmentCoverage"] === true
@@ -815,17 +887,56 @@ export function evaluateCapturedSmelterGoalDemandProposal(
   ];
   return Object.freeze({
     proposalValidForEvaluation: requestValid,
+    structurallyValid,
     ownerLocalComparisonAvailable,
     goalRequestAuthorized: false,
     status,
     diagnosticStates: Object.freeze([...new Set(diagnosticStates)]),
     reasons: Object.freeze([...new Set(reasons)]),
-    requestBlockedByCompetingCommitment:
-      Array.isArray(knownCommitments) && knownCommitments.length > 0,
+    requestBlockedByCompetingCommitment: demonstratedConflicts.length > 0,
     unknownCommitmentCoverage:
       typeof item["unknownCommitmentCoverage"] === "boolean"
         ? item["unknownCommitmentCoverage"]
         : undefined,
+    freshness: Object.freeze({
+      sameCycleRoot: item["root"] === snapshot.root,
+      sameCycleProgression:
+        item["progressionGeneration"] === snapshot.progressionGeneration,
+      sameCyclePermission:
+        item["permissionEnabled"] === snapshot.permissionEnabled,
+      demandGenerationTokenMatchesOwnerCycle:
+        item["demandGeneration"] === ownerCycle,
+      demandIdentity: "unknown",
+      proposalDemandGeneration:
+        typeof item["demandGeneration"] === "number"
+          ? item["demandGeneration"]
+          : undefined,
+      currentOwnerCycle: ownerCycle,
+      invalidationListIsDeclarationOnly: true,
+      declaredInvalidations: Object.freeze(
+        Array.isArray(validity["invalidatedBy"])
+          ? (validity["invalidatedBy"] as unknown[]).filter(
+              (condition): condition is string => typeof condition === "string",
+            )
+          : [],
+      ),
+      missingInvalidationDeclarations: Object.freeze(
+        requiredInvalidations.filter(
+          (condition) =>
+            !Array.isArray(validity["invalidatedBy"]) ||
+            !(validity["invalidatedBy"] as unknown[]).includes(condition),
+        ),
+      ),
+      verifiedPriceIdentity: false,
+      currentGoalIdentity: "unknown",
+      offerFreshness: "unknown",
+      goalFreshness: "unknown",
+      queueFreshness: "unknown",
+      authorizationToExecute: false,
+    }),
+    knownCommitments: Object.freeze([...knownCommitments]),
+    sourceBackedCompetingClaims: Object.freeze(sourceBackedClaims),
+    demonstratedConflicts: Object.freeze(demonstratedConflicts),
     productionEffectKnown: false,
     economicBenefitKnown: false,
     comparison,
@@ -849,6 +960,7 @@ export function createCapturedSmelterIncumbentSnapshot(
     progressionGeneration: number | undefined;
     steelResource:
       Readonly<{ amount: number; maximum: number; rate: number }> | undefined;
+    steelSupplyScope: "civilization-wide" | "regional" | "unavailable";
     demandAuthorityAvailable: boolean;
   }>,
 ): CapturedSmelterIncumbentSnapshot {
@@ -883,10 +995,17 @@ export function createCapturedSmelterIncumbentSnapshot(
       steelDemanded: demand.isSteelDemanded,
       savingTargetName: savingTarget?.name,
       savingTargetPool: savingTarget?.pool,
+      savingTargetPoolWasPresent:
+        savingTarget != null && Object.hasOwn(savingTarget, "pool"),
       steelTarget: savingTarget?.cost["Steel"],
+      savingTargetSteelCostWasPresent:
+        savingTarget != null && Object.hasOwn(savingTarget.cost, "Steel"),
+      savingTargetCost: savingTarget?.cost,
+      steelSupplyScope: observation.steelSupplyScope,
     }),
     input,
     steelResource: observation.steelResource,
+    steelSupplyScope: observation.steelSupplyScope,
     demandAuthorityAvailable: observation.demandAuthorityAvailable,
     decision,
     commands: Object.freeze([...observation.plannedCommands]),
@@ -906,7 +1025,11 @@ export function isCapturedSmelterSnapshotCurrent(
     steelDemanded: boolean;
     savingTargetName: string | undefined;
     savingTargetPool: string | undefined;
+    savingTargetPoolWasPresent: boolean;
     steelTarget: number | undefined;
+    savingTargetSteelCostWasPresent: boolean;
+    savingTargetCost: Readonly<Record<string, number>> | undefined;
+    steelSupplyScope: "civilization-wide" | "regional" | "unavailable";
     controlGeneration: number | undefined;
     controlMethods: readonly string[];
     allocations: Readonly<Record<string, number>>;
@@ -941,7 +1064,14 @@ export function isCapturedSmelterSnapshotCurrent(
     snapshot.demand.steelDemanded === current.steelDemanded &&
     snapshot.demand.savingTargetName === current.savingTargetName &&
     snapshot.demand.savingTargetPool === current.savingTargetPool &&
+    snapshot.demand.savingTargetPoolWasPresent ===
+      current.savingTargetPoolWasPresent &&
     snapshot.demand.steelTarget === current.steelTarget &&
+    snapshot.demand.savingTargetSteelCostWasPresent ===
+      current.savingTargetSteelCostWasPresent &&
+    JSON.stringify(snapshot.demand.savingTargetCost) ===
+      JSON.stringify(current.savingTargetCost) &&
+    snapshot.demand.steelSupplyScope === current.steelSupplyScope &&
     snapshot.controlGeneration === current.controlGeneration &&
     JSON.stringify([...snapshot.controlMethods].sort()) ===
       JSON.stringify([...current.controlMethods].sort()) &&
@@ -963,11 +1093,24 @@ export function compareCapturedSmelterSteelDemand(
   requestValid: boolean;
   requestUnavailableReasons: readonly string[];
   quantityRepresented: boolean;
+  hypotheticalPlannerCalls: 0 | 1;
+  incumbentDemand: CapturedSmelterIncumbentSnapshot["demand"];
+  currentSteel: CapturedSmelterIncumbentSnapshot["steelResource"];
+  incumbentInput: CapturedSmelterIncumbentSnapshot["input"];
+  incumbentDecision: CapturedSmelterIncumbentSnapshot["decision"];
+  steelSupplyScope: CapturedSmelterIncumbentSnapshot["steelSupplyScope"];
+  incumbentSteelTimeToRequired: number;
+  requestedSteelBefore: number | undefined;
+  requestedSteelAfter: number | undefined;
+  effectiveAdditionalSteel: number | undefined;
+  storageClamped: boolean | undefined;
   quantitativeComparison: "available" | "unavailable";
   proposedInput: Readonly<SmelterInput> | undefined;
   policyPermitted: boolean | undefined;
   nativeAllocationFeasible: boolean | undefined;
   commandsChanged: boolean | undefined;
+  incumbentCommands: readonly string[];
+  proposedCommands: readonly string[] | undefined;
   incumbentAllocation: Readonly<Record<string, number>>;
   proposedAllocation: Readonly<Record<string, number>> | undefined;
   changedCommands:
@@ -1018,9 +1161,10 @@ export function compareCapturedSmelterSteelDemand(
   else if (additionalSteel <= 0)
     requestUnavailableReasons.push("additional-quantity-must-be-positive");
   const requestedSteel = snapshot.demand.requestedSteel;
+  const steel = snapshot.steelResource;
   const incumbentDemandValid =
     Number.isFinite(requestedSteel) && requestedSteel >= 0;
-  const combinedTarget =
+  const unclampedTarget =
     typeof additionalSteel === "number" && incumbentDemandValid
       ? requestedSteel + additionalSteel
       : NaN;
@@ -1028,11 +1172,30 @@ export function compareCapturedSmelterSteelDemand(
     typeof additionalSteel === "number" &&
     additionalSteel > 0 &&
     incumbentDemandValid &&
-    !Number.isFinite(combinedTarget)
+    !Number.isFinite(unclampedTarget)
   )
     requestUnavailableReasons.push("combined-demand-quantity-overflow");
+  const storageCapacity = steel?.maximum;
+  const storageAuthorityValid =
+    typeof storageCapacity === "number" &&
+    Number.isFinite(storageCapacity) &&
+    storageCapacity >= 0;
+  const combinedTarget =
+    Number.isFinite(unclampedTarget) && storageAuthorityValid
+      ? Math.min(unclampedTarget, storageCapacity)
+      : NaN;
   const requestValid = requestUnavailableReasons.length === 0;
   const representationUnavailableReasons: string[] = [];
+  if (
+    typeof additionalSteel === "number" &&
+    additionalSteel > 0 &&
+    incumbentDemandValid &&
+    unclampedTarget - requestedSteel !== additionalSteel &&
+    unclampedTarget < storageCapacity!
+  )
+    representationUnavailableReasons.push(
+      "additional-quantity-below-representable-resolution",
+    );
   if (!snapshot.demandAuthorityAvailable)
     representationUnavailableReasons.push(
       "incumbent-demand-authority-unavailable",
@@ -1045,22 +1208,20 @@ export function compareCapturedSmelterSteelDemand(
     representationUnavailableReasons.push(
       "incumbent-demand-presence-unavailable",
     );
-  if (
-    snapshot.demand.savingTargetName !== undefined &&
-    (snapshot.demand.savingTargetPool !== "city" ||
-      !Number.isFinite(snapshot.demand.steelTarget) ||
-      snapshot.demand.steelTarget! < 0)
-  )
-    representationUnavailableReasons.push(
-      "incumbent-demand-pool-or-target-unsupported",
-    );
   if (!snapshot.steelResource)
     representationUnavailableReasons.push("steel-quantity-input-unavailable");
+  if (snapshot.demand.steelSupplyScope === "regional")
+    representationUnavailableReasons.push(
+      "regional-steel-request-scope-unavailable",
+    );
+  else if (snapshot.demand.steelSupplyScope !== "civilization-wide")
+    representationUnavailableReasons.push("steel-payment-scope-unavailable");
+  if (!storageAuthorityValid)
+    representationUnavailableReasons.push("steel-storage-capacity-unavailable");
   if (!snapshot.input.initialised)
     representationUnavailableReasons.push("smelter-input-unavailable");
   if (!snapshot.input.productionSmelting)
     representationUnavailableReasons.push("required-target-policy-unavailable");
-  const steel = snapshot.steelResource;
   let proposedSteelTimeToRequired: number | undefined;
   if (
     requestValid &&
@@ -1068,10 +1229,6 @@ export function compareCapturedSmelterSteelDemand(
     incumbentDemandValid &&
     steel
   ) {
-    if (combinedTarget - requestedSteel !== additionalSteel)
-      representationUnavailableReasons.push(
-        "additional-quantity-below-representable-resolution",
-      );
     const target = Math.max(steel.amount, combinedTarget);
     proposedSteelTimeToRequired = timeTo(steel, target);
     if (target > steel.amount && proposedSteelTimeToRequired === 0)
@@ -1093,6 +1250,7 @@ export function compareCapturedSmelterSteelDemand(
     : undefined;
   const proposedDecision =
     proposedInput && policyPermitted ? planSmelter(proposedInput) : undefined;
+  const hypotheticalPlannerCalls: 0 | 1 = proposedDecision ? 1 : 0;
   const proposedCommands = proposedDecision
     ? normalizedCommands(proposedDecision)
     : undefined;
@@ -1145,10 +1303,6 @@ export function compareCapturedSmelterSteelDemand(
       0,
     ) <=
       snapshot.input.totalSmelters + snapshot.input.extraOperating;
-  const stockCoversTarget =
-    quantityRepresented &&
-    steel !== undefined &&
-    steel.amount >= combinedTarget;
   const unavailableReasons = !requestValid
     ? [...requestUnavailableReasons, ...representationUnavailableReasons]
     : !quantityRepresented
@@ -1162,11 +1316,33 @@ export function compareCapturedSmelterSteelDemand(
     requestValid,
     requestUnavailableReasons: Object.freeze(requestUnavailableReasons),
     quantityRepresented,
+    hypotheticalPlannerCalls,
+    incumbentDemand: snapshot.demand,
+    currentSteel: snapshot.steelResource,
+    incumbentInput: snapshot.input,
+    incumbentDecision: snapshot.decision,
+    steelSupplyScope: snapshot.demand.steelSupplyScope,
+    incumbentSteelTimeToRequired: snapshot.input.steelTimeToRequired,
+    requestedSteelBefore: incumbentDemandValid ? requestedSteel : undefined,
+    requestedSteelAfter:
+      quantityRepresented && Number.isFinite(combinedTarget)
+        ? combinedTarget
+        : undefined,
+    effectiveAdditionalSteel:
+      quantityRepresented && incumbentDemandValid
+        ? Math.max(0, combinedTarget - requestedSteel)
+        : undefined,
+    storageClamped:
+      quantityRepresented && Number.isFinite(unclampedTarget)
+        ? combinedTarget < unclampedTarget
+        : undefined,
     quantitativeComparison: proposedDecision ? "available" : "unavailable",
     proposedInput,
     policyPermitted,
     nativeAllocationFeasible: proposedDecision ? commandsFeasible : undefined,
     commandsChanged,
+    incumbentCommands: Object.freeze([...incumbent]),
+    proposedCommands,
     incumbentAllocation,
     proposedAllocation: proposedAllocationResult,
     changedCommands,
@@ -1188,7 +1364,9 @@ export function compareCapturedSmelterSteelDemand(
     quantityDeliverable: undefined,
     incrementalProductionKnown: false,
     economicBenefitKnown: false,
-    redundant: stockCoversTarget ? true : undefined,
+    // A current stock comparison is not an economic redundancy proof. The
+    // request remains a represented demand even when it leaves native policy unchanged.
+    redundant: undefined,
     classification: !proposedDecision
       ? "unavailable"
       : commandsChanged
@@ -1283,6 +1461,7 @@ export function createCapturedSmelterAutomation(
                   rate: session.steelResource.rate,
                 })
               : undefined,
+            steelSupplyScope: session.steelSupplyScope,
             demandAuthorityAvailable: session.demandAuthorityAvailable,
           })
         : undefined;

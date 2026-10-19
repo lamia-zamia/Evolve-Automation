@@ -5636,16 +5636,30 @@ export function startCapturedRuntime({
                   },
                   observation,
                 );
+                const comparisonClock = readProperty(
+                  hooks,
+                  "readSmelterComparisonClockForTest",
+                );
+                const comparisonStartedAt =
+                  typeof comparisonClock === "function"
+                    ? comparisonClock()
+                    : undefined;
                 const result = evaluateCapturedSmelterGoalDemandProposal(
                   snapshot,
                   proposal,
                   ownerCycle,
                 );
+                const comparisonElapsedMs =
+                  typeof comparisonClock === "function" &&
+                  typeof comparisonStartedAt === "number"
+                    ? comparisonClock() - comparisonStartedAt
+                    : undefined;
                 const report = readProperty(
                   hooks,
                   "observeSmelterGoalDemandAdmissionForTest",
                 );
-                if (typeof report === "function") report(result);
+                if (typeof report === "function")
+                  report(result, comparisonElapsedMs);
               }
             }
           },

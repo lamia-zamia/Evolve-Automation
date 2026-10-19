@@ -65,8 +65,9 @@ const sampleSd = (values) => {
 
 const prelude = `
 globalThis.__EA_TEST_HOOKS__ = { ...(globalThis.__EA_TEST_HOOKS__ ?? {}) };
-const __p13d = { mode: "G", instrument: false, calls: 0, publications: 0, admissions: 0, outcomes: [], results: [], callbackMs: [], snapshotMs: [], snapshot: undefined };
+const __p13d = { mode: "G", instrument: false, calls: 0, publications: 0, admissions: 0, hypotheticalPlannerCalls: 0, outcomes: [], results: [], callbackMs: [], snapshotMs: [], snapshot: undefined };
 const __p13dHooks = globalThis.__EA_TEST_HOOKS__;
+__p13dHooks.readSmelterComparisonClockForTest = () => window.__EA_RUNNER__.nativeNow();
 __p13dHooks.readSmelterGoalDemandProposalForTest = (input, decision, demand, observation, ownerCycle) => {
   if (__p13d.mode === "U") return { resourceId: "Knowledge" };
   if (__p13d.mode !== "Q") return undefined;
@@ -85,8 +86,8 @@ __p13dHooks.readSmelterGoalDemandProposalForTest = (input, decision, demand, obs
     unknownCommitmentCoverage: true,
   };
 };
-__p13dHooks.observeSmelterGoalDemandAdmissionForTest = (result) => {
-  if (__p13d.instrument) { __p13d.admissions++; __p13d.results.push({ status: result.status, valid: result.proposalValidForEvaluation, available: result.ownerLocalComparisonAvailable, quantityRepresented: result.comparison?.quantityRepresented, quantitativeComparison: result.comparison?.quantitativeComparison, reasons: result.reasons }); }
+__p13dHooks.observeSmelterGoalDemandAdmissionForTest = (result, comparisonElapsedMs) => {
+  if (__p13d.instrument) { __p13d.admissions++; __p13d.hypotheticalPlannerCalls += result.comparison?.hypotheticalPlannerCalls ?? 0; __p13d.results.push({ status: result.status, structurallyValid: result.structurallyValid, valid: result.proposalValidForEvaluation, available: result.ownerLocalComparisonAvailable, quantityRepresented: result.comparison?.quantityRepresented, quantitativeComparison: result.comparison?.quantitativeComparison, hypotheticalPlannerCalls: result.comparison?.hypotheticalPlannerCalls ?? 0, requestedAmount: 10, incumbentDemand: result.comparison?.incumbentDemand, steelScope: result.comparison?.steelSupplyScope, steel: result.comparison?.currentSteel, incumbentInput: result.comparison?.incumbentInput, incumbentDecision: result.comparison?.incumbentDecision, proposedInput: result.comparison?.proposedInput, incumbentSteelTimeToRequired: result.comparison?.incumbentSteelTimeToRequired, proposedSteelTimeToRequired: result.comparison?.proposedInput?.steelTimeToRequired, effectiveAdditionalSteel: result.comparison?.effectiveAdditionalSteel, storageClamped: result.comparison?.storageClamped, incumbentCommands: result.comparison?.incumbentCommands, proposedCommands: result.comparison?.proposedCommands, commandsChanged: result.comparison?.commandsChanged, comparisonElapsedMs, freshness: result.freshness, knownCommitments: result.knownCommitments, sourceBackedCompetingClaims: result.sourceBackedCompetingClaims, demonstratedConflicts: result.demonstratedConflicts, unknownCommitmentCoverage: result.unknownCommitmentCoverage, requestBlockedByCompetingCommitment: result.requestBlockedByCompetingCommitment, reasons: result.reasons, comparisonUnavailableReasons: result.comparison?.unavailableReasons }); }
 };
 __p13dHooks.observeSmelterOutcomeForTest = (outcome, observation, postcondition) => {
   if (__p13dHooks.captureSmelterOutcomeForTest) __p13d.outcomes.push({ outcome, postcondition: postcondition.status === "no-op" ? { status: "no-op", allocations: {} } : postcondition });
@@ -116,10 +117,10 @@ __p13dHooks.setP13C1Mode = (mode) => {
 };
 __p13dHooks.setP13C1Instrumentation = (enabled) => { __p13d.instrument = Boolean(enabled); };
 __p13dHooks.resetP13C1Window = () => {
-  __p13d.calls = 0; __p13d.publications = 0; __p13d.admissions = 0; __p13d.outcomes = []; __p13d.results = []; __p13d.callbackMs = []; __p13d.snapshotMs = [];
+  __p13d.calls = 0; __p13d.publications = 0; __p13d.admissions = 0; __p13d.hypotheticalPlannerCalls = 0; __p13d.outcomes = []; __p13d.results = []; __p13d.callbackMs = []; __p13d.snapshotMs = [];
 };
 __p13dHooks.readP13C1Window = () => ({
-  mode: __p13d.mode, ownerObservationCalls: __p13d.calls,
+  mode: __p13d.mode, ownerObservationCalls: __p13d.calls, hypotheticalPlannerCalls: __p13d.hypotheticalPlannerCalls,
   snapshotPublications: __p13d.publications, admissions: __p13d.admissions, outcomes: [...__p13d.outcomes], results: [...__p13d.results], callbackMs: [...__p13d.callbackMs],
   snapshotMs: [...__p13d.snapshotMs], snapshot: __p13d.snapshot,
 });`;
@@ -394,6 +395,23 @@ async function runCorrectness(mode) {
       session,
       fixtureVerified ? fixtureProbePeriods : warmupPeriods,
     );
+    const comparisonTimerResolutionMs = await session.evaluate(() => {
+      const nativeNow = window.__EA_RUNNER__.nativeNow;
+      let previous = nativeNow();
+      let minimumPositiveDelta = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < 10000; index++) {
+        const current = nativeNow();
+        if (current > previous)
+          minimumPositiveDelta = Math.min(
+            minimumPositiveDelta,
+            current - previous,
+          );
+        previous = current;
+      }
+      return Number.isFinite(minimumPositiveDelta)
+        ? minimumPositiveDelta
+        : undefined;
+    });
     await session.evaluate(() => {
       window.__EA_TEST_HOOKS__.setP13C1Instrumentation(true);
       window.__EA_TEST_HOOKS__.resetP13C1Window();
@@ -405,6 +423,7 @@ async function runCorrectness(mode) {
     return {
       mode,
       bundleSha256: session.bundle.sha256,
+      comparisonTimerResolutionMs,
       periods: await session.periods(),
       callbackLatencyMs: diagnostics.callbackDurationsMs
         ?.filter(
@@ -474,11 +493,26 @@ assert.equal(
   correctness.find((cell) => cell.mode === "Q").hooks.admissions,
   10,
 );
+assert.equal(
+  correctness.find((cell) => cell.mode === "Q").hooks.hypotheticalPlannerCalls,
+  10,
+);
 assert.ok(
   correctness
     .find((cell) => cell.mode === "Q")
     .hooks.results.every((result) => result.valid),
   JSON.stringify(correctness.find((cell) => cell.mode === "Q").hooks.results),
+);
+assert.ok(
+  correctness
+    .find((cell) => cell.mode === "Q")
+    .hooks.results.every(
+      (result) =>
+        result.quantityRepresented &&
+        result.hypotheticalPlannerCalls === 1 &&
+        result.quantitativeComparison === "available",
+    ),
+  "every Q owner cycle must represent the request and invoke the pure planner once",
 );
 assert.equal(
   correctness.find((cell) => cell.mode === "U").hooks.admissions,
@@ -492,6 +526,95 @@ const qOwnerPlannerCallsPerWorktick =
   ).length / qCorrectnessResults.length;
 assertIdenticalBundleHashes(correctness.map((cell) => cell.bundleSha256));
 console.log("correctness cohort complete");
+const qCell = correctness.find((cell) => cell.mode === "Q");
+const gCell = correctness.find((cell) => cell.mode === "G");
+const focusedQEvidence = {
+  schema: "p13d1-live-smelter-demand-authority-v1",
+  repository: {
+    branch: "deadspace",
+    expectedHead: "3a17e465d2c68f582b55f83395a305afc35b67e4",
+  },
+  game: {
+    sourceRef: "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    snapshotSha256: runner.inputs.gameSnapshot.sha256,
+  },
+  inputs: {
+    sourceSave: path.relative(root, savePath),
+    inputSaveSha256,
+    settingsSha256,
+    seed,
+    epoch,
+    warmupPeriods,
+    ownerWindowPeriods: 80,
+    ownerWorkticks: 10,
+    comparisonTimerResolutionMs: qCell.comparisonTimerResolutionMs,
+    bundleSha256,
+  },
+  qWindow: {
+    validations: qCell.hooks.admissions,
+    representedRequests: qCell.hooks.results.filter(
+      (result) => result.quantityRepresented,
+    ).length,
+    hypotheticalPlannerCalls: qCell.hooks.hypotheticalPlannerCalls,
+    observations: qCell.hooks.results.map((result) => ({
+      ...result,
+      originalComparatorRejectionConditions:
+        result.incumbentDemand?.savingTargetName !== undefined
+          ? {
+              namedSavingTarget: true,
+              poolPresent: result.incumbentDemand.savingTargetPoolWasPresent,
+              poolWasCity: result.incumbentDemand.savingTargetPool === "city",
+              steelCostPresent:
+                result.incumbentDemand.savingTargetSteelCostWasPresent,
+              steelCostFinite: Number.isFinite(
+                result.incumbentDemand.steelTarget,
+              ),
+            }
+          : undefined,
+      originalComparatorRejection:
+        result.incumbentDemand?.savingTargetName !== undefined &&
+        (result.incumbentDemand.savingTargetPool !== "city" ||
+          !Number.isFinite(result.incumbentDemand.steelTarget) ||
+          result.incumbentDemand.steelTarget < 0)
+          ? "incumbent-demand-pool-or-target-unsupported"
+          : undefined,
+    })),
+    comparisonCallbackElapsedMs: qCell.hooks.results.map(
+      (result) => result.comparisonElapsedMs,
+    ),
+    additionalSourceReads: 3,
+    additionalRootSnapshotReads: 0,
+    additionalNativeCalls: 0,
+    additionalSourceReadDetail: [
+      "tech.shadow",
+      "race.supplyZones",
+      "race.supplySplit",
+    ],
+  },
+  parity: {
+    exportEqual: gCell.export === qCell.export,
+    nativeInvocationCount: qCell.diagnostics.nativeInvocations?.length,
+    nativeInvocationOrderEqual:
+      JSON.stringify(gCell.diagnostics.nativeInvocations) ===
+      JSON.stringify(qCell.diagnostics.nativeInvocations),
+    nativeInvocationOrderSha256: digest(
+      JSON.stringify(qCell.diagnostics.nativeInvocations ?? []),
+    ),
+    controlUsageEqual:
+      JSON.stringify(gCell.diagnostics.controlUsage) ===
+      JSON.stringify(qCell.diagnostics.controlUsage),
+    ownerOutcomesEqual:
+      JSON.stringify(gCell.hooks.outcomes) ===
+      JSON.stringify(qCell.hooks.outcomes),
+    randomCallsEqual:
+      gCell.diagnostics.randomCalls === qCell.diagnostics.randomCalls,
+    ownerOutcomes: qCell.hooks.outcomes,
+  },
+};
+await writeFile(
+  artifact("p13d1-live-smelter-demand-authority.json"),
+  JSON.stringify(focusedQEvidence, null, 2) + String.fromCharCode(10),
+);
 await writeFile(
   artifact("p13d-owner-outcome-parity.json"),
   `${JSON.stringify(

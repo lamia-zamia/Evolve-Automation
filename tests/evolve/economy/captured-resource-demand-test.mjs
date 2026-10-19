@@ -379,6 +379,32 @@ function arpaProductionScenario({
   assert.equal(sample.requestedQuantity("Stone"), 400);
 }
 
+// Steel requests combine by maximum and clamp to the native storage ceiling.
+{
+  const steelRoot = {
+    ...root,
+    resource: {
+      ...root.resource,
+      Steel: { amount: 20, max: 100, stackable: true },
+    },
+  };
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => steelRoot },
+    reservations: {
+      readReservations: () => ({
+        targets: [
+          { name: "Construction Steel", cause: "Queue", cost: { Steel: 80 } },
+          { name: "Research Steel", cause: "Queue", cost: { Steel: 150 } },
+        ],
+        unavailable: false,
+      }),
+    },
+    readSettings: () => ({}),
+  }).sample();
+  assert.equal(sample.requestedQuantity("Steel"), 100);
+  assert.equal(sample.isDemanded("Steel"), true);
+}
+
 // No request can exceed what storage holds; an uncapped resource has no ceiling.
 {
   const sample = withTargets([
