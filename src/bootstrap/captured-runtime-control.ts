@@ -173,7 +173,10 @@ import { CONSUMPTION_BALANCE_MIN } from "../config.ts";
 import {
   applyCapturedSmelterTestCandidate,
   capturedSmelterSkipReason,
+  createCapturedSmelterIncumbentSnapshot,
+  compareCapturedSmelterSteelDemand,
   createCapturedSmelterAutomation,
+  setCapturedSmelterObservationModeForTest,
   SMELTER_CONTROL,
 } from "../adapters/evolve/economy/production/captured-smelter.ts";
 import {
@@ -5584,6 +5587,8 @@ export function startCapturedRuntime({
             );
           },
           shouldObservePlanForDiagnostics: () =>
+            readProperty(smelterTestHooks(), "smelterObservationMode") !==
+              "G" &&
             typeof readProperty(
               smelterTestHooks(),
               "observeSmelterPlanForTest",
@@ -5614,6 +5619,23 @@ export function startCapturedRuntime({
   ) {
     const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
     if (isRecord(hooks)) {
+      Reflect.set(
+        hooks,
+        "setSmelterObservationModeForTest",
+        (mode: unknown) => {
+          return setCapturedSmelterObservationModeForTest(hooks, mode);
+        },
+      );
+      Reflect.set(
+        hooks,
+        "createSmelterSnapshotForTest",
+        createCapturedSmelterIncumbentSnapshot,
+      );
+      Reflect.set(
+        hooks,
+        "compareSmelterSnapshotForTest",
+        compareCapturedSmelterSteelDemand,
+      );
       Reflect.set(hooks, "readSmelterPlanForTest", () =>
         smelter.readPlanForDiagnostics(),
       );

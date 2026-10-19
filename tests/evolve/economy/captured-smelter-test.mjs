@@ -7,6 +7,7 @@ import {
   createCapturedSmelterIncumbentSnapshot,
   capturedSmelterSkipReason,
   isCapturedSmelterSnapshotCurrent,
+  setCapturedSmelterObservationModeForTest,
 } from "../../../src/adapters/evolve/economy/production/captured-smelter.ts";
 import { planSmelter } from "../../../src/domain/economy/production/smelter.ts";
 
@@ -17,6 +18,24 @@ assert.equal(
   "construction-demand-unavailable",
 );
 assert.equal(capturedSmelterSkipReason(true, true), undefined);
+const observationControl = {};
+assert.equal(
+  setCapturedSmelterObservationModeForTest(observationControl, "G"),
+  true,
+);
+assert.equal(observationControl.smelterObservationMode, "G");
+for (const mode of ["H", "S"]) {
+  assert.equal(
+    setCapturedSmelterObservationModeForTest(observationControl, mode),
+    true,
+  );
+  assert.equal(observationControl.smelterObservationMode, mode);
+}
+assert.equal(
+  setCapturedSmelterObservationModeForTest(observationControl, "C"),
+  false,
+);
+assert.equal(setCapturedSmelterObservationModeForTest(undefined, "S"), false);
 
 const root = {
   race: {},
@@ -942,5 +961,134 @@ assert.equal(
   "succeeded",
 );
 assert.deepEqual(calls, []);
+
+const modeRuns = [];
+for (const mode of ["G", "H", "S"]) {
+  const modeHooks = {};
+  assert.equal(setCapturedSmelterObservationModeForTest(modeHooks, mode), true);
+  let observerCalls = 0;
+  const modeRoot = structuredClone(root);
+  const modeCalls = [];
+  const modeAutomation = createCapturedSmelterAutomation({
+    rootState: { readRoot: () => modeRoot },
+    controls: {
+      ...controls,
+      resolve: () => ({
+        elementId: "iSmelter",
+        generation: 1,
+        methods: ["addFuel", "subFuel", "addMetal", "subMetal"],
+      }),
+      invoke: (_handle, method, args = []) => {
+        modeCalls.push([method, ...args]);
+        return { ok: true, value: undefined };
+      },
+    },
+    readSettings: () => ({ autoSmelter: true }),
+    readDemand: () => ({
+      requestedQuantity: () => 0,
+      isDemanded: () => false,
+      storageRequired: () => 1,
+    }),
+    shouldObservePlanForDiagnostics: () =>
+      modeHooks.smelterObservationMode !== "G",
+    observePlanForDiagnostics: () => observerCalls++,
+  });
+  modeAutomation.run();
+  modeRuns.push({ mode, observerCalls, nativeCalls: modeCalls });
+}
+assert.deepEqual(
+  modeRuns.map(({ observerCalls }) => observerCalls),
+  [0, 1, 1],
+);
+assert.deepEqual(modeRuns[1].nativeCalls, modeRuns[0].nativeCalls);
+assert.deepEqual(modeRuns[2].nativeCalls, modeRuns[0].nativeCalls);
+
+const noSignalCounts = {
+  demandReads: 0,
+  controlResolves: 0,
+  progressionReads: 0,
+  observerCalls: 0,
+  nativeCalls: 0,
+};
+let noSignalInput;
+let noSignalDecision;
+let noSignalObservation;
+let noSignalOutcome;
+const noSignalAutomation = createCapturedSmelterAutomation({
+  rootState: { readRoot: () => ({ city: { smelter: {} } }) },
+  controls: {
+    resolve: () => {
+      noSignalCounts.controlResolves++;
+      return undefined;
+    },
+    invoke: () => {
+      noSignalCounts.nativeCalls++;
+      assert.fail("an uninitialized owner cannot invoke a native command");
+    },
+  },
+  readSettings: () => ({ autoSmelter: true }),
+  readDemand: () => {
+    noSignalCounts.demandReads++;
+    return {
+      savingTarget: null,
+      requestedQuantity: () => 0,
+      isDemanded: () => false,
+      storageRequired: () => 1,
+    };
+  },
+  shouldObservePlanForDiagnostics: () => true,
+  readProgressionGeneration: () => {
+    noSignalCounts.progressionReads++;
+    return 1;
+  },
+  observePlanForDiagnostics: (input, decision, _demand, observation) => {
+    noSignalCounts.observerCalls++;
+    noSignalInput = input;
+    noSignalDecision = decision;
+    noSignalObservation = observation;
+  },
+  observeOutcomeForTest: (outcome) => {
+    noSignalOutcome = outcome;
+  },
+});
+assert.equal(noSignalAutomation.run().status, "succeeded");
+assert.equal(noSignalInput.initialised, false);
+assert.deepEqual(noSignalDecision.fuelAdjustments, []);
+assert.deepEqual(noSignalDecision.smeltAdjustments, []);
+assert.deepEqual(noSignalObservation.plannedCommands, []);
+assert.equal(noSignalObservation.controlGeneration, undefined);
+assert.deepEqual(noSignalCounts, {
+  demandReads: 1,
+  controlResolves: 1,
+  progressionReads: 1,
+  observerCalls: 1,
+  nativeCalls: 0,
+});
+assert.equal(noSignalOutcome.status, "succeeded");
+
+let unavailableAuthorityObservation;
+let unavailableAuthorityNativeCalls = 0;
+const unavailableAuthorityOutcome = createCapturedSmelterAutomation({
+  rootState: { readRoot: () => ({ city: { smelter: {} } }) },
+  controls: {
+    resolve: () => undefined,
+    invoke: () => {
+      unavailableAuthorityNativeCalls++;
+      assert.fail(
+        "missing demand and native control cannot execute allocation",
+      );
+    },
+  },
+  readSettings: () => ({ autoSmelter: false }),
+  shouldObservePlanForDiagnostics: () => true,
+  observePlanForDiagnostics: (_input, _decision, _demand, observation) => {
+    unavailableAuthorityObservation = observation;
+  },
+}).run();
+assert.equal(unavailableAuthorityOutcome.status, "succeeded");
+assert.equal(unavailableAuthorityObservation.demandAuthorityAvailable, false);
+assert.equal(unavailableAuthorityObservation.permissionEnabled, false);
+assert.equal(unavailableAuthorityObservation.controlGeneration, undefined);
+assert.equal(unavailableAuthorityNativeCalls, 0);
 
 console.log("captured-smelter ok");

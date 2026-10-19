@@ -19,6 +19,18 @@ declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 export const SMELTER_CONTROL = "iSmelter";
 
+export type CapturedSmelterObservationModeForTest = "G" | "H" | "S";
+
+export function setCapturedSmelterObservationModeForTest(
+  hooks: unknown,
+  mode: unknown,
+): boolean {
+  if (!isRecord(hooks) || (mode !== "G" && mode !== "H" && mode !== "S"))
+    return false;
+  Reflect.set(hooks, "smelterObservationMode", mode);
+  return true;
+}
+
 export function capturedSmelterSkipReason(
   enabled: boolean,
   prerequisiteDemandReady: boolean,
