@@ -19,13 +19,20 @@ declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 export const SMELTER_CONTROL = "iSmelter";
 
-export type CapturedSmelterObservationModeForTest = "G" | "H" | "S";
+export type CapturedSmelterObservationModeForTest = "G" | "H" | "S" | "Q" | "U";
 
 export function setCapturedSmelterObservationModeForTest(
   hooks: unknown,
   mode: unknown,
 ): boolean {
-  if (!isRecord(hooks) || (mode !== "G" && mode !== "H" && mode !== "S"))
+  if (
+    !isRecord(hooks) ||
+    (mode !== "G" &&
+      mode !== "H" &&
+      mode !== "S" &&
+      mode !== "Q" &&
+      mode !== "U")
+  )
     return false;
   Reflect.set(hooks, "smelterObservationMode", mode);
   return true;
@@ -128,6 +135,7 @@ export interface CapturedSmelterDependencies {
       allocations: Readonly<Record<string, number | undefined>>;
     }>,
   ) => void;
+  readonly shouldObserveOutcomeForTest?: () => boolean;
   readonly readProgressionGeneration?: () => number | undefined;
 }
 
@@ -616,6 +624,214 @@ export interface CapturedSmelterSteelDemandRequest {
   readonly additionalSteel: number;
 }
 
+export interface CapturedSmelterGoalDemandProposal {
+  readonly goalId: string;
+  readonly requirementId: string;
+  readonly provenance: "verified-mandatory" | "provisional-advisory";
+  readonly nativeActionPrice?: Readonly<{
+    actionId: string;
+    priceIdentity: string;
+  }>;
+  readonly resourceId: string;
+  readonly pool: string;
+  readonly additionalQuantity: number;
+  readonly root: unknown;
+  readonly progressionGeneration: number;
+  readonly demandGeneration: number;
+  readonly permissionEnabled: boolean;
+  readonly originatingOwner: string;
+  readonly validity: Readonly<{
+    valid: boolean;
+    expiresAtOwnerCycle: number;
+    invalidatedBy: readonly string[];
+  }>;
+  readonly knownCompetingCommitments: readonly string[];
+  readonly unknownCommitmentCoverage: boolean;
+}
+
+export function evaluateCapturedSmelterGoalDemandProposal(
+  snapshot: CapturedSmelterIncumbentSnapshot,
+  proposal: unknown,
+  ownerCycle: number,
+): Readonly<{
+  proposalValidForEvaluation: boolean;
+  ownerLocalComparisonAvailable: boolean;
+  goalRequestAuthorized: false;
+  status: string;
+  diagnosticStates: readonly string[];
+  reasons: readonly string[];
+  requestBlockedByCompetingCommitment: boolean;
+  unknownCommitmentCoverage: boolean | undefined;
+  productionEffectKnown: false;
+  economicBenefitKnown: false;
+  comparison: ReturnType<typeof compareCapturedSmelterSteelDemand> | undefined;
+}> {
+  const item = isRecord(proposal) ? proposal : {};
+  const validity = isRecord(item["validity"]) ? item["validity"] : {};
+  const nativeActionPrice = isRecord(item["nativeActionPrice"])
+    ? item["nativeActionPrice"]
+    : undefined;
+  const reasons: string[] = [];
+  const requiredInvalidations = [
+    "root-replacement",
+    "progression-change",
+    "offer-price-change",
+    "goal-change-or-satisfaction",
+    "resource-stock-change",
+    "demand-change",
+    "native-control-generation-change",
+    "permission-change",
+    "construction-queue-change",
+    "conflicting-iron-demand",
+    "unknown-commitment-coverage",
+    "owner-disabled-or-uninitialized",
+    "incomplete-candidate-enumeration",
+    "newer-owner-cycle",
+  ];
+  if (typeof item["goalId"] !== "string" || !item["goalId"])
+    reasons.push("goal-identity-unavailable");
+  if (typeof item["requirementId"] !== "string" || !item["requirementId"])
+    reasons.push("requirement-identity-unavailable");
+  if (
+    item["provenance"] !== "verified-mandatory" &&
+    item["provenance"] !== "provisional-advisory"
+  )
+    reasons.push("requirement-provenance-unavailable");
+  if (
+    nativeActionPrice &&
+    (typeof nativeActionPrice["actionId"] !== "string" ||
+      typeof nativeActionPrice["priceIdentity"] !== "string")
+  )
+    reasons.push("native-action-price-identity-unavailable");
+  if (
+    typeof item["additionalQuantity"] !== "number" ||
+    !Number.isFinite(item["additionalQuantity"])
+  )
+    reasons.push("additional-quantity-must-be-finite");
+  else if (item["additionalQuantity"] <= 0)
+    reasons.push("additional-quantity-must-be-positive");
+  if (item["resourceId"] !== "Steel" || item["pool"] !== "city")
+    reasons.push("unsupported-resource-pool");
+  if (item["originatingOwner"] !== "smelter")
+    reasons.push("originating-owner-mismatch");
+  if (item["root"] !== snapshot.root) reasons.push("root-replaced");
+  if (item["progressionGeneration"] !== snapshot.progressionGeneration)
+    reasons.push("progression-changed");
+  if (item["demandGeneration"] !== ownerCycle)
+    reasons.push("demand-generation-stale");
+  if (item["permissionEnabled"] !== snapshot.permissionEnabled)
+    reasons.push("permission-changed");
+  if (validity["valid"] !== true) reasons.push("request-invalid");
+  if (
+    !Number.isSafeInteger(validity["expiresAtOwnerCycle"]) ||
+    (validity["expiresAtOwnerCycle"] as number) < ownerCycle
+  )
+    reasons.push("request-expired");
+  if (
+    !Array.isArray(validity["invalidatedBy"]) ||
+    requiredInvalidations.some(
+      (condition) =>
+        !(validity["invalidatedBy"] as unknown[]).includes(condition),
+    )
+  )
+    reasons.push("invalidation-conditions-unavailable");
+  if (!Array.isArray(item["knownCompetingCommitments"]))
+    reasons.push("competing-commitments-unavailable");
+  if (typeof item["unknownCommitmentCoverage"] !== "boolean")
+    reasons.push("commitment-coverage-unavailable");
+  const proposalValidForEvaluation = reasons.length === 0;
+  const comparison = proposalValidForEvaluation
+    ? compareCapturedSmelterSteelDemand(snapshot, {
+        resourceId: item["resourceId"],
+        pool: item["pool"],
+        additionalSteel: item["additionalQuantity"],
+      })
+    : undefined;
+  if (comparison && !comparison.requestValid)
+    reasons.push(...comparison.requestUnavailableReasons);
+  if (comparison && !comparison.quantityRepresented)
+    reasons.push(...comparison.unavailableReasons);
+  const knownCommitments = item["knownCompetingCommitments"];
+  const ownerLocalComparisonAvailable =
+    proposalValidForEvaluation &&
+    comparison?.quantitativeComparison === "available";
+  const requestValid =
+    proposalValidForEvaluation && comparison?.requestValid !== false;
+  const status = !requestValid
+    ? reasons.includes("request-expired")
+      ? "request-expired"
+      : reasons.some((reason) =>
+            [
+              "root-replaced",
+              "progression-changed",
+              "permission-changed",
+              "demand-generation-stale",
+            ].includes(reason),
+          )
+        ? "request-invalidated"
+        : "invalid-request"
+    : Array.isArray(knownCommitments) && knownCommitments.length > 0
+      ? "request-blocked-by-competing-commitment"
+      : !comparison?.quantityRepresented
+        ? "unavailable-authority"
+        : comparison.commandsChanged
+          ? comparison.nativeAllocationFeasible
+            ? "commands-changed"
+            : "native-allocation-infeasible"
+          : "quantity-represented-but-native-policy-insensitive";
+  const diagnosticStates = [
+    ...(!requestValid ? ["invalid-request"] : []),
+    ...(reasons.includes("request-expired") ? ["request-expired"] : []),
+    ...(reasons.some((reason) =>
+      [
+        "root-replaced",
+        "progression-changed",
+        "permission-changed",
+        "demand-generation-stale",
+      ].includes(reason),
+    )
+      ? ["request-invalidated"]
+      : []),
+    ...(comparison && !comparison.quantityRepresented
+      ? ["unavailable-authority"]
+      : []),
+    ...(comparison?.quantityRepresented ? ["quantity-represented"] : []),
+    ...(comparison?.classification ===
+    "quantity-represented-but-native-policy-insensitive"
+      ? ["quantity-represented-but-native-policy-insensitive"]
+      : []),
+    ...(comparison?.commandsChanged ? ["commands-changed"] : []),
+    ...(comparison?.nativeAllocationFeasible === false
+      ? ["native-allocation-infeasible"]
+      : []),
+    "production-effect-unknown",
+    "economic-benefit-unknown",
+    ...(Array.isArray(knownCommitments) && knownCommitments.length > 0
+      ? ["request-blocked-by-competing-commitment"]
+      : []),
+    ...(item["unknownCommitmentCoverage"] === true
+      ? ["unknown-commitment-coverage"]
+      : []),
+  ];
+  return Object.freeze({
+    proposalValidForEvaluation: requestValid,
+    ownerLocalComparisonAvailable,
+    goalRequestAuthorized: false,
+    status,
+    diagnosticStates: Object.freeze([...new Set(diagnosticStates)]),
+    reasons: Object.freeze([...new Set(reasons)]),
+    requestBlockedByCompetingCommitment:
+      Array.isArray(knownCommitments) && knownCommitments.length > 0,
+    unknownCommitmentCoverage:
+      typeof item["unknownCommitmentCoverage"] === "boolean"
+        ? item["unknownCommitmentCoverage"]
+        : undefined,
+    productionEffectKnown: false,
+    economicBenefitKnown: false,
+    comparison,
+  });
+}
+
 export function createCapturedSmelterIncumbentSnapshot(
   input: Readonly<SmelterInput>,
   decision: ReturnType<typeof planSmelter>,
@@ -1097,6 +1313,29 @@ export function createCapturedSmelterAutomation(
             observation,
             postcondition,
           );
+        else if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true &&
+          dependencies.shouldObserveOutcomeForTest?.() === true
+        ) {
+          dependencies.observeOutcomeForTest?.(
+            outcome,
+            Object.freeze({
+              root: session.root,
+              plannedCommands: normalizedCommands(decision),
+              expectedAllocations: Object.freeze({
+                Iron: input.ironCount,
+                Steel: input.steelCount,
+                Iridium: input.iridiumCount,
+                ...Object.fromEntries(
+                  input.fuels.map((fuel) => [fuel.id, fuel.currentFuelCount]),
+                ),
+              }),
+              controlGeneration: session.control?.generation,
+            }),
+            postcondition,
+          );
+        }
         return outcome;
       };
       if (!session.input.initialised) return finish(SUCCEEDED);

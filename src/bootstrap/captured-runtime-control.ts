@@ -175,6 +175,7 @@ import {
   capturedSmelterSkipReason,
   createCapturedSmelterIncumbentSnapshot,
   compareCapturedSmelterSteelDemand,
+  evaluateCapturedSmelterGoalDemandProposal,
   createCapturedSmelterAutomation,
   setCapturedSmelterObservationModeForTest,
   SMELTER_CONTROL,
@@ -5600,6 +5601,53 @@ export function startCapturedRuntime({
             );
             if (typeof observer === "function")
               observer(input, decision, demand, observation);
+            const hooks = smelterTestHooks();
+            const proposalProvider = readProperty(
+              hooks,
+              "readSmelterGoalDemandProposalForTest",
+            );
+            if (
+              observation &&
+              isRecord(hooks) &&
+              typeof proposalProvider === "function" &&
+              ["Q", "U"].includes(
+                readProperty(hooks, "smelterObservationMode") as string,
+              )
+            ) {
+              const ownerCycle =
+                Number(readProperty(hooks, "smelterOwnerCycleForTest") ?? 0) +
+                1;
+              Reflect.set(hooks, "smelterOwnerCycleForTest", ownerCycle);
+              const proposal = proposalProvider(
+                input,
+                decision,
+                demand,
+                observation,
+                ownerCycle,
+              );
+              if (proposal !== undefined) {
+                const snapshot = createCapturedSmelterIncumbentSnapshot(
+                  input,
+                  decision,
+                  {
+                    requestedSteel: demand.requestedSteel,
+                    isSteelDemanded: demand.isSteelDemanded,
+                    savingTarget: demand.savingTarget,
+                  },
+                  observation,
+                );
+                const result = evaluateCapturedSmelterGoalDemandProposal(
+                  snapshot,
+                  proposal,
+                  ownerCycle,
+                );
+                const report = readProperty(
+                  hooks,
+                  "observeSmelterGoalDemandAdmissionForTest",
+                );
+                if (typeof report === "function") report(result);
+              }
+            }
           },
           observeOutcomeForTest: (outcome, observation, postcondition) => {
             const observer = readProperty(
@@ -5609,6 +5657,9 @@ export function startCapturedRuntime({
             if (typeof observer === "function")
               observer(outcome, observation, postcondition);
           },
+          shouldObserveOutcomeForTest: () =>
+            readProperty(smelterTestHooks(), "captureSmelterOutcomeForTest") ===
+            true,
           readProgressionGeneration: progression.readRootGeneration,
         }
       : {}),
@@ -5628,6 +5679,13 @@ export function startCapturedRuntime({
       );
       Reflect.set(
         hooks,
+        "setSmelterOutcomeCaptureForTest",
+        (enabled: unknown) => {
+          Reflect.set(hooks, "captureSmelterOutcomeForTest", enabled === true);
+        },
+      );
+      Reflect.set(
+        hooks,
         "createSmelterSnapshotForTest",
         createCapturedSmelterIncumbentSnapshot,
       );
@@ -5635,6 +5693,11 @@ export function startCapturedRuntime({
         hooks,
         "compareSmelterSnapshotForTest",
         compareCapturedSmelterSteelDemand,
+      );
+      Reflect.set(
+        hooks,
+        "evaluateSmelterGoalDemandProposalForTest",
+        evaluateCapturedSmelterGoalDemandProposal,
       );
       Reflect.set(hooks, "readSmelterPlanForTest", () =>
         smelter.readPlanForDiagnostics(),

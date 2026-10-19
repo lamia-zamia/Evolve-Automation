@@ -5,6 +5,7 @@ import {
   compareCapturedSmelterSteelDemand,
   createCapturedSmelterAutomation,
   createCapturedSmelterIncumbentSnapshot,
+  evaluateCapturedSmelterGoalDemandProposal,
   capturedSmelterSkipReason,
   isCapturedSmelterSnapshotCurrent,
   setCapturedSmelterObservationModeForTest,
@@ -24,7 +25,7 @@ assert.equal(
   true,
 );
 assert.equal(observationControl.smelterObservationMode, "G");
-for (const mode of ["H", "S"]) {
+for (const mode of ["H", "S", "Q", "U"]) {
   assert.equal(
     setCapturedSmelterObservationModeForTest(observationControl, mode),
     true,
@@ -252,6 +253,126 @@ assert.equal(smallDemand.incrementalProductionKnown, false);
 assert.equal(smallDemand.economicBenefitKnown, false);
 assert.equal(smallDemand.policyPermitted, true);
 assert.equal(smallDemand.nativeAllocationFeasible, true);
+const boundedProposal = {
+  goalId: "test-only:steel-containers",
+  requirementId: "test-only:steel-containers:steel",
+  provenance: "provisional-advisory",
+  nativeActionPrice: {
+    actionId: "tech-steel_containers",
+    priceIdentity: "test-price",
+  },
+  resourceId: "Steel",
+  pool: "city",
+  additionalQuantity: 10,
+  root,
+  progressionGeneration: incumbentSnapshot.progressionGeneration,
+  demandGeneration: 12,
+  permissionEnabled: true,
+  originatingOwner: "smelter",
+  validity: {
+    valid: true,
+    expiresAtOwnerCycle: 12,
+    invalidatedBy: [
+      "root-replacement",
+      "progression-change",
+      "offer-price-change",
+      "goal-change-or-satisfaction",
+      "resource-stock-change",
+      "demand-change",
+      "native-control-generation-change",
+      "permission-change",
+      "construction-queue-change",
+      "conflicting-iron-demand",
+      "unknown-commitment-coverage",
+      "owner-disabled-or-uninitialized",
+      "incomplete-candidate-enumeration",
+      "newer-owner-cycle",
+    ],
+  },
+  knownCompetingCommitments: ["Construction:city-coal_power:Steel=1000"],
+  unknownCommitmentCoverage: true,
+};
+const admittedProposal = evaluateCapturedSmelterGoalDemandProposal(
+  incumbentSnapshot,
+  boundedProposal,
+  12,
+);
+assert.equal(incumbentSnapshot.demand.requestedSteel, 1000);
+assert.equal(admittedProposal.proposalValidForEvaluation, true);
+assert.equal(admittedProposal.ownerLocalComparisonAvailable, true);
+assert.equal(admittedProposal.goalRequestAuthorized, false);
+assert.equal(
+  admittedProposal.status,
+  "request-blocked-by-competing-commitment",
+);
+assert.ok(
+  admittedProposal.diagnosticStates.includes(
+    "quantity-represented-but-native-policy-insensitive",
+  ),
+);
+assert.ok(
+  admittedProposal.diagnosticStates.includes("unknown-commitment-coverage"),
+);
+assert.equal(
+  admittedProposal.comparison.proposedInput.steelTimeToRequired,
+  101,
+);
+assert.deepEqual(admittedProposal.comparison.proposedAllocation, {
+  ...admittedProposal.comparison.incumbentAllocation,
+  Steel: 1,
+});
+assert.equal(admittedProposal.comparison.incrementalProductionKnown, false);
+assert.equal(admittedProposal.comparison.economicBenefitKnown, false);
+for (const additionalQuantity of [
+  0,
+  -1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+]) {
+  const invalidQuantity = evaluateCapturedSmelterGoalDemandProposal(
+    incumbentSnapshot,
+    { ...boundedProposal, additionalQuantity },
+    12,
+  );
+  assert.equal(invalidQuantity.proposalValidForEvaluation, false);
+  assert.equal(invalidQuantity.status, "invalid-request");
+  assert.equal(invalidQuantity.comparison, undefined);
+}
+for (const [field, value, reason] of [
+  ["root", {}, "root-replaced"],
+  ["progressionGeneration", 99, "progression-changed"],
+  ["permissionEnabled", false, "permission-changed"],
+  ["demandGeneration", 11, "demand-generation-stale"],
+]) {
+  const rejectedProposal = evaluateCapturedSmelterGoalDemandProposal(
+    incumbentSnapshot,
+    { ...boundedProposal, [field]: value },
+    12,
+  );
+  assert.equal(rejectedProposal.proposalValidForEvaluation, false, reason);
+  assert.equal(rejectedProposal.comparison, undefined, reason);
+  assert.ok(rejectedProposal.reasons.includes(reason), reason);
+}
+const expiredProposal = evaluateCapturedSmelterGoalDemandProposal(
+  incumbentSnapshot,
+  {
+    ...boundedProposal,
+    validity: { ...boundedProposal.validity, expiresAtOwnerCycle: 11 },
+  },
+  12,
+);
+assert.ok(expiredProposal.reasons.includes("request-expired"));
+assert.equal(expiredProposal.status, "request-expired");
+const missingInvalidationConditions = evaluateCapturedSmelterGoalDemandProposal(
+  incumbentSnapshot,
+  {
+    ...boundedProposal,
+    validity: { ...boundedProposal.validity, invalidatedBy: [] },
+  },
+  12,
+);
+assert.equal(missingInvalidationConditions.proposalValidForEvaluation, false);
+assert.equal(missingInvalidationConditions.status, "invalid-request");
 const noSteelIncumbentInput = Object.freeze({
   ...incumbentSnapshot.input,
   steelDemanded: false,
@@ -963,7 +1084,7 @@ assert.equal(
 assert.deepEqual(calls, []);
 
 const modeRuns = [];
-for (const mode of ["G", "H", "S"]) {
+for (const mode of ["G", "H", "S", "Q", "U"]) {
   const modeHooks = {};
   assert.equal(setCapturedSmelterObservationModeForTest(modeHooks, mode), true);
   let observerCalls = 0;
@@ -998,7 +1119,7 @@ for (const mode of ["G", "H", "S"]) {
 }
 assert.deepEqual(
   modeRuns.map(({ observerCalls }) => observerCalls),
-  [0, 1, 1],
+  [0, 1, 1, 1, 1],
 );
 assert.deepEqual(modeRuns[1].nativeCalls, modeRuns[0].nativeCalls);
 assert.deepEqual(modeRuns[2].nativeCalls, modeRuns[0].nativeCalls);
