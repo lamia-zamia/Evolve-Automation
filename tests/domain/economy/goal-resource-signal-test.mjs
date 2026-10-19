@@ -203,10 +203,26 @@ for (const [name, mutate, expectedReason] of [
     "native-control-replaced",
   ],
   [
+    "uncaptured native control generation sentinel",
+    (input) => {
+      input.offer.controlGeneration = 0;
+      input.current.controlGeneration = 0;
+    },
+    "native-control-replaced",
+  ],
+  [
     "unknown offer binding generation",
     (input) => {
       input.offer.generation = undefined;
       input.current.offerGeneration = undefined;
+    },
+    "native-control-generation-changed",
+  ],
+  [
+    "uncaptured offer binding generation sentinel",
+    (input) => {
+      input.offer.generation = 0;
+      input.current.offerGeneration = 0;
     },
     "native-control-generation-changed",
   ],

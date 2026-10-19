@@ -132,6 +132,8 @@ export interface GoalResourceSignal {
 
 const finiteNonNegative = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value) && value >= 0;
+const positiveSafeGeneration = (value: number | undefined): value is number =>
+  value !== undefined && Number.isSafeInteger(value) && value > 0;
 
 function unique(values: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(values)]);
@@ -234,8 +236,8 @@ export function evaluateGoalResourceSignal(
   )
     unavailableReasons.push("construction-target-changed");
   if (
-    offer.generation === undefined ||
-    current.offerGeneration === undefined ||
+    !positiveSafeGeneration(offer.generation) ||
+    !positiveSafeGeneration(current.offerGeneration) ||
     offer.generation !== current.offerGeneration
   )
     unavailableReasons.push("native-control-generation-changed");
@@ -244,8 +246,8 @@ export function evaluateGoalResourceSignal(
   if (offer.progressionGeneration !== current.progressionGeneration)
     unavailableReasons.push("native-offer-progression-changed");
   if (
-    offer.controlGeneration === undefined ||
-    current.controlGeneration === undefined ||
+    !positiveSafeGeneration(offer.controlGeneration) ||
+    !positiveSafeGeneration(current.controlGeneration) ||
     offer.controlGeneration !== current.controlGeneration
   )
     unavailableReasons.push("native-control-replaced");
