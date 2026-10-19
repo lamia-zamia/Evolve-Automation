@@ -692,8 +692,28 @@ const contrastSummary = Object.fromEntries(
     const [from, to] = key.split("-");
     const items = contrasts.filter((row) => row.from === from && row.to === to);
     const cpu = items.map((row) => row.cpuPercent);
+    const task = items.map((row) => row.taskPercent);
+    const tCritical95ByDf = [
+      undefined,
+      12.706,
+      4.303,
+      3.182,
+      2.776,
+      2.571,
+      2.447,
+      2.365,
+      2.306,
+      2.262,
+    ];
+    const tCritical95 = tCritical95ByDf[cpu.length - 1];
+    const interval95 = (values) => {
+      if (values.length < 2 || !tCritical95) return undefined;
+      const average = mean(values);
+      const halfWidth =
+        (tCritical95 * sampleSd(values)) / Math.sqrt(values.length);
+      return { lower: average - halfWidth, upper: average + halfWidth };
+    };
     const spread = sampleSd(cpu);
-    const detectablePercent = cpu.length > 1 ? 2.8 * spread : undefined;
     return [
       key,
       {
@@ -701,7 +721,12 @@ const contrastSummary = Object.fromEntries(
         cpuPercent: cpu,
         meanPercent: cpu.length ? mean(cpu) : undefined,
         sdPercent: spread,
-        approximate95PercentHalfWidth: detectablePercent,
+        confidenceMethod: "two-sided paired Student t interval",
+        degreesOfFreedom: cpu.length - 1,
+        approximate95PercentInterval: interval95(cpu),
+        taskPercent: task,
+        taskMeanPercent: task.length ? mean(task) : undefined,
+        taskApproximate95PercentInterval: interval95(task),
       },
     ];
   }),
@@ -710,22 +735,19 @@ const taskCalibrationRatio =
   calibration.taskDurationSec / (calibration.workload.elapsedMs / 1000);
 const cpuCalibrationRatio =
   calibration.activeRendererCpuSec / (calibration.workload.elapsedMs / 1000);
-const detected2Percent =
+const calibratedForTwoPercent =
   calibrationResolvesTwoPercent &&
   Object.values(controls).every(
     (pairs) =>
       pairs.length >= 2 && pairs.every((row) => Math.abs(row.cpuPercent) < 2),
-  ) &&
-  Object.values(contrastSummary).every(
-    (row) => row.approximate95PercentHalfWidth < 2,
   );
-const decision = !detected2Percent
+const totalObservationInterval =
+  contrastSummary["G-S"].approximate95PercentInterval;
+const decision = !calibratedForTwoPercent
   ? "C — Measurement insufficient"
-  : contrastSummary["G-S"].meanPercent > 2 &&
-      contrastSummary["G-S"].cpuPercent.every((value) => value > 2)
+  : totalObservationInterval?.lower > 2
     ? "B — Performance budget exceeded"
-    : contrastSummary["G-S"].meanPercent < 2 &&
-        contrastSummary["G-S"].cpuPercent.every((value) => value < 2)
+    : totalObservationInterval?.upper < 2
       ? "A — Performance feasible"
       : "C — Measurement insufficient";
 
