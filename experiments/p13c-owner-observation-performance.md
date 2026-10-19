@@ -6,36 +6,36 @@
 | Branch / starting HEAD | `deadspace` / `80b8eb815b2b87f8dfcfb747309d15d647f0419a`           |
 | Game                   | `pmotschmann/Evolve @ db38e2af831907d49aeb5348d678d8d8745d6c3f`    |
 | Game snapshot SHA-256  | `05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7` |
-| Test bundle SHA-256    | `de0befe32f40dd5e71b94f05922f50c481e8062f26e5cd10eceaefa8212d84da` |
+| Test bundle SHA-256    | `d0c6119f023f59f5f619f504249a27beb365b90dd127afc75104e1ba8e33400f` |
 
 ## Decision: C — measurement insufficient
 
-The calibrated repeated G/G and S/S controls vary well above the 2% renderer-CPU target. The benchmark therefore stopped at the calibration gate and did not run the G/H/S factorial. Its executable evidence shows why neither a pass nor a fail can be assigned to owner-local observation overhead.
+The calibrated repeated controls cleared the sensitivity gate, so the benchmark ran four matched G/H/S triplets, including reversed order. The resulting contrasts and uncertainty still do not support a conclusion below 2%: the G-to-S renderer-CPU estimate is −1.82% with an approximate 95% matched-window interval of −6.35% to +2.70%. Decision C reflects unresolved measurement uncertainty, not an observed performance regression.
 
-The final controls each started from the same source save, settings, seed, epoch, game snapshot and byte-identical bundle. Each replayed the 1,784-period warm-up and measured 800 periods (100 workticks) with tracing and callback profiling disabled. Each row identifies its active renderer PID from a known workload in that page. There was no PID churn, and the other renderer rows had zero CPU delta.
+Each cell used the same source save, settings, seed, epoch, game snapshot and byte-identical bundle. It replayed the 1,784-period warm-up and measured 800 periods (100 workticks) with tracing and callback profiling disabled. Each row identifies its active renderer PID from a known workload in that page. There was no PID churn in measured cells, and other renderer activity is preserved per PID in the raw rows.
 
-| Control pair | First CPU / TaskDuration | Second CPU / TaskDuration | Matched difference |
-| ------------ | -----------------------: | ------------------------: | -----------------: |
-| G/G 1        |        14.44 s / 12.59 s |         12.03 s / 10.51 s |  −16.69% / −16.48% |
-| G/G 2        |        13.80 s / 12.17 s |          11.23 s / 9.72 s |  −18.68% / −20.15% |
-| S/S 1        |        12.00 s / 10.46 s |         13.51 s / 11.93 s |  +12.61% / +14.06% |
-| S/S 2        |        11.99 s / 10.46 s |         13.55 s / 12.01 s |  +13.07% / +14.83% |
+| Control pair | Renderer CPU difference | TaskDuration difference |
+| ------------ | ----------------------: | ----------------------: |
+| G/G 1        |                  +0.95% |                  +1.02% |
+| G/G 2        |                  +0.80% |                  +0.62% |
+| S/S 1        |                  −0.72% |                  −0.60% |
+| S/S 2        |                  +0.19% |                  +0.72% |
 
-The largest absolute same-cell difference was 20.15%, used as the conservative detection floor. The 250 ms same-page workload calibration added 0.265328 s to the active renderer and 0.251552 s to CDP `TaskDuration`; `ScriptDuration` moved 0 s and is excluded as a CPU denominator. `TaskDuration` tracked the injected workload closely, but repeated controlled windows still moved 12.61–20.15%, so this runner cannot resolve a 2% change at the measured scope.
+The largest absolute repeated-control difference was 1.025%, the conservative detection floor. A 250 ms page workload added 0.181070 s to the identified renderer and 0.251115 s to CDP `TaskDuration`; `ScriptDuration` moved 0 s and is excluded as a CPU denominator. The renderer CPU response was 72.4% of injected wall time while `TaskDuration` tracked it at 100.4%. The gate allowed the factorial to run, but contrast uncertainty remained wider than the 2% decision boundary.
 
 ## Starting boundary and correctness
 
 A post-warm-up export was tested and rejected as a fixture. Reloading it preserved effective settings, an available native control and root/progression authority, but did not reproduce Smelter assignments, the owner snapshot or the deterministic next-worktick export. Every valid control cell therefore replayed the established warm-up from the source save; warm-up was outside each measured window. The observed Construction Steel target at period 1,784 was 1,000.
 
-The short correctness cohort used the same bundle in G, H and S. All three exports matched. Each had 94,940 native invocations with the same invocation-order SHA-256, 1,746 random calls, and identical control usage. H entered the empty callback 10 times and published no snapshot; S published 10 snapshots. The runner does not expose a separate Research-draw counter in this cohort; matching random-call counts and the full native invocation order are the independent parity evidence.
+The short correctness cohort used the same bundle in G, H and S. All three exports matched (SHA-256 `36524514089e64ce22342fd56095d2d239c6f3483809d134ea3e2cb8a22dded7`). Each had 94,940 native invocations with the same invocation-order SHA-256, 1,746 random calls, and identical control usage. G made no observer callback; H entered the empty callback 10 times and published no snapshot; S published 10 snapshots. The runner does not expose a separate Research-draw counter in this cohort; matching random-call counts and the full native invocation order are the independent parity evidence.
 
-The test-only mode control is applied after page startup and changes neither saved settings nor ordinary native execution. S constructs snapshots from the already-computed owner input and decision. The callback retains only its latest immutable snapshot and bounded timing samples. No separate timer or worktick callback was added.
+The test-only mode control is applied after page startup and changes neither saved settings nor ordinary native execution. H immediately returns without clock reads, counts or data retention in CPU windows. S constructs snapshots from the already-computed owner input and decision and retains only the latest immutable snapshot plus a publication count. Snapshot and callback timings are collected only in the short instrumented correctness cohort. No separate timer or worktick callback was added.
 
 ## Separate comparison and owner timing
 
-The four S control cells each ran one pure source-backed comparison after their CPU window. Elapsed time was 0.3–0.5 ms; renderer CPU deltas were 0.00–0.10 s and `TaskDuration` deltas were 0.00–0.01 s at the counter’s reported precision. The comparison was invoked at one per worktick (once every 8 periods, or 0.125 per period). These post-window samples are recorded separately and are not charged to recurring S CPU.
+Each of the eight S windows ran one pure source-backed comparison after its CPU window. Elapsed time was 0.3–0.5 ms; renderer CPU deltas were 0.00–0.10 s and `TaskDuration` deltas were 0.00–0.01 s at the counter’s reported precision. The comparison frequency was one per worktick (once every 8 periods, or 0.125 per period). These post-window samples are recorded separately and are not charged to recurring S CPU.
 
-Snapshot construction averaged about 0.00–0.01 ms on the page clock. G recorded no observer callback; H and S each recorded 100 callback entries per measured window. S published 100 snapshots and made 100 additional progression-generation reads. Owner calls were 100 per cell (the enabled owner’s worktick schedule, corroborated by H/S callback counts and correctness parity). The observer added no second input read, demand read, owner planner call, native planner call, native control call, Research draw or catalog scan in the timed path. These are snapshot-only observations and do not estimate a future complete allocator.
+The correctness-cohort clock has 0.1 ms resolution: snapshot construction and callback elapsed samples were 0–0.1 ms. In measured windows, owner calls were 100 per cell; G had 0 callbacks, H had 100 callback entries inferred from the enabled owner schedule and separately verified H correctness cohort, and S had 100 publications. S made 100 additional progression-generation reads. No mode added a second input read, demand read, owner planner call, native planner call, native control call, Research draw or catalog scan. These snapshot-only measurements do not estimate a future complete allocator.
 
 ## No-signal and invalidation characterization
 
@@ -88,27 +88,37 @@ neither a pass nor a fail. Snapshot construction's clock samples (0 ms p50,
 0.1 ms p95 at 0.1 ms resolution) and one 0.7–0.8 ms comparison cannot repair
 the CPU attribution.
 
-## P13C.1 calibration gate result
+## P13C.1 calibrated paired result
 
-The benchmark implemented the equivalent-code G/H/S/C path in one test bundle
-and switched modes at runtime. It calibrated the page workload, renderer PID,
-and `TaskDuration`, then ran two repeated pairs each of G/G and S/S. The
-matched controls exceeded 2%, so the script correctly stopped before the
-factorial cells; it does not report an observation overhead estimate.
+The benchmark compiled one bundle and switched modes at runtime. It calibrated
+the page workload, renderer PID and `TaskDuration`, then ran two repeated pairs
+each of G/G and S/S. Their largest matched difference was 1.025%, so four
+interleaved and reversed G/H/S triplets followed. Individual window results,
+per-PID CPU rows and comparison samples are in the raw JSON.
 
 - G: observer publication disabled at the existing owner boundary.
-- H: same hook lookup and callback boundary, callback returns without reading
-  owner data or retaining a snapshot.
+- H: same hook lookup and callback boundary; during CPU windows the callback
+  returns immediately without clock reads, counters or retained data.
 - S: callback constructs and retains the frozen same-cycle snapshot.
 - C: one bounded comparison against the captured snapshot after the timed
   interval, with no native Smelter write.
 
 The post-warm-up save equivalence check failed, so every valid cell instead
 replayed the same deterministic 1,784-period warm-up from the source save.
-The final control cells have identical inputs and a per-session active renderer
-identified by a bounded same-page workload. All per-PID before/after rows and
-process churn flags are retained. These corrections still left large
-same-cell variation.
+Every page had its active renderer identified by a bounded same-page workload.
+All per-PID before/after rows and process churn flags are retained. The
+calibrated matched estimates were:
+
+| Contrast | Renderer CPU mean | Approx. 95% matched interval | TaskDuration mean |
+| -------- | ----------------: | ---------------------------: | ----------------: |
+| G → H    |            −0.71% |              −7.31% to 5.89% |            −1.07% |
+| H → S    |            −1.11% |              −3.60% to 1.39% |            −0.73% |
+| G → S    |            −1.82% |              −6.35% to 2.70% |            −1.81% |
+
+Intervals use the four matched windows and a small-sample t multiplier. The
+total G → S interval still includes overhead above the 2% target, so these
+results cannot establish the required bound. Negative point estimates do not
+count as a pass.
 
 Instrument only the owner boundary in a dedicated test bundle, with no
 always-on production instrumentation and no added worktick callback. Record
@@ -124,21 +134,20 @@ regressions, and the correctness cohort matched state exports, native
 invocation order, control usage and random-call counts. Since the CPU gate
 failed, those tests are not represented as measured performance cells.
 
-The remaining measurement problem is run-to-run renderer/task variation across
-fresh isolated pages (12.61–20.15% in repeated same-cell controls), despite matched
-source inputs and active PID attribution. The benchmark therefore leaves the
-2% gate unresolved and does not claim that snapshot-only or a complete future
-allocator meets the budget.
+The remaining measurement problem is the width of the matched G → S estimate
+across fresh isolated pages: its approximate 95% interval extends to +2.70%.
+The benchmark therefore leaves the 2% gate unresolved and does not claim that
+snapshot-only observation or a complete future allocator meets the budget.
 
 ## Verification and scope
 
 Verification completed: focused Smelter and owner-coordination regressions,
 `npm run build`, `npm run check`, Chromium runner contracts, the executable
-P13C.1 benchmark and `git diff --check`. The run measured G/G and S/S controls,
-calibrated renderer CPU and `TaskDuration`, ran separate post-window C samples,
-and verified G/H/S correctness parity. It did not run mixed-mode CPU windows
-because calibration established that the current measurement cannot resolve
-the 2% threshold. No production allocator, request port, cross-owner
+P13C.1 benchmark and `git diff --check`. The run measured repeated G/G and S/S
+controls, calibrated renderer CPU and `TaskDuration`, ran four matched G/H/S
+triplets with separate post-window C samples, and verified G/H/S correctness
+parity. It returned C because the matched total-overhead interval did not
+resolve the 2% bound. No production allocator, request port, cross-owner
 reservation, recurring planner or opt-in was added. `quantitativeComparison`,
 native feasibility, command changes, production marginals and economic
 benefit remain separate claims.
