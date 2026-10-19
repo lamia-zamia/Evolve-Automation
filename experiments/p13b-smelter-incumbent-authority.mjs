@@ -169,7 +169,7 @@ async function runCell(runner, mode, order) {
         const started = window.__EA_RUNNER__.nativeNow();
         const value = window.P13BSmelter.compareCapturedSmelterSteelDemand(
           window.__P13B.p12gBoundary,
-          10,
+          { resourceId: "Steel", pool: "city", additionalSteel: 10 },
         );
         return { value, elapsedMs: window.__EA_RUNNER__.nativeNow() - started };
       });

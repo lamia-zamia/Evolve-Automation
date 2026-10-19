@@ -35575,14 +35575,16 @@
       requestedQuantityForMechPriority: () => 0,
       isDemanded: () => !1,
       storageRequired: () => 1
-    };
+    }, demandAuthorityAvailable = dependencies.readDemand !== void 0;
     if (!isRecord(smelter) || !isRecord(resources) || !isRecord(race) || !isRecord(tech) || race.steelen || control === void 0)
       return Object.freeze({
         root,
         input: emptyInput9(),
         demand,
         permissionEnabled: settings.autoSmelter === !0,
-        control
+        control,
+        steelResource: void 0,
+        demandAuthorityAvailable
       });
     let cap = readCount(smelter.cap), star = readCount(smelter.Star), ironCount = readCount(smelter.Iron), steelCount = readCount(smelter.Steel), iridiumCount = readCount(smelter.Iridium);
     if (cap === void 0 || star === void 0 || ironCount === void 0 || steelCount === void 0 || iridiumCount === void 0 || star > cap)
@@ -35591,7 +35593,9 @@
         input: emptyInput9(),
         demand,
         permissionEnabled: settings.autoSmelter === !0,
-        control
+        control,
+        steelResource: void 0,
+        demandAuthorityAvailable
       });
     let iron = readResource2(resources, "Iron"), steel = readResource2(resources, "Steel"), coal = readResource2(resources, "Coal"), titanium = readResource2(resources, "Titanium");
     if (iron === void 0 || steel === void 0 || coal === void 0 || titanium === void 0)
@@ -35600,7 +35604,9 @@
         input: emptyInput9(),
         demand,
         permissionEnabled: settings.autoSmelter === !0,
-        control
+        control,
+        steelResource: void 0,
+        demandAuthorityAvailable
       });
     let fuels = FUEL_IDS.map(
       (id) => readFuel(id, resources, race, tech, settings, demand)
@@ -35611,7 +35617,9 @@
         input: emptyInput9(),
         demand,
         permissionEnabled: settings.autoSmelter === !0,
-        control
+        control,
+        steelResource: steel,
+        demandAuthorityAvailable
       });
     let withSmelterCounts = [...fuels].filter((fuel) => fuel !== void 0).sort(
       (left, right) => (finite(settings[`smelter_fuel_p_${left.id}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite(settings[`smelter_fuel_p_${right.id}`]) ?? FUEL_IDS.indexOf(right.id))
@@ -35632,7 +35640,9 @@
         input: emptyInput9(),
         demand,
         permissionEnabled: settings.autoSmelter === !0,
-        control
+        control,
+        steelResource: void 0,
+        demandAuthorityAvailable
       });
     let miner = readProperty(readProperty(root, "civic"), "miner"), ironShip = readProperty(readProperty(root, "space"), "iron_ship"), titaniumRatio = titanium.maximum > 0 ? titanium.amount / titanium.maximum : 1, input = Object.freeze({
       initialised: !0,
@@ -35671,7 +35681,9 @@
       input,
       demand,
       permissionEnabled: settings.autoSmelter === !0,
-      control
+      control,
+      steelResource: steel,
+      demandAuthorityAvailable
     });
   }
   function currentValue(root, id) {
@@ -35740,7 +35752,13 @@
           ]),
           plannedCommands,
           expectedAllocations,
-          progressionGeneration: dependencies.readProgressionGeneration?.()
+          progressionGeneration: dependencies.readProgressionGeneration?.(),
+          steelResource: session.steelResource ? Object.freeze({
+            amount: session.steelResource.amount,
+            maximum: session.steelResource.maximum,
+            rate: session.steelResource.rate
+          }) : void 0,
+          demandAuthorityAvailable: session.demandAuthorityAvailable
         }) : void 0;
         publishPlan && dependencies.observePlanForDiagnostics?.(
           input,

@@ -23,7 +23,7 @@ const root = {
   tech: { smelting: 2, titanium: 1 },
   resource: {
     Iron: { name: "Iron", amount: 50, max: 100, diff: 1, display: true },
-    Steel: { name: "Steel", amount: 0, max: 100, diff: 10, display: true },
+    Steel: { name: "Steel", amount: 0, max: 3000, diff: 10, display: true },
     Titanium: {
       name: "Titanium",
       amount: 10,
@@ -177,6 +177,8 @@ const testSurfaceAutomation = createCapturedSmelterAutomation({
       allocations: observation.expectedAllocations,
       capacity: input.totalSmelters,
       inputSignature: JSON.stringify(input),
+      steelResource: observation.steelResource,
+      demandAuthorityAvailable: observation.demandAuthorityAvailable,
     };
   },
   observeOutcomeForTest: (outcome, _observation, postcondition) => {
@@ -201,13 +203,36 @@ assert.deepEqual(incumbentSnapshot.commands, [
   "addMetal:Steel",
 ]);
 assert.ok(Object.isFrozen(incumbentSnapshot));
-const hypothetical = compareCapturedSmelterSteelDemand(incumbentSnapshot, 100);
-assert.equal(hypothetical.incumbentAllocation.Iron, 1);
-assert.equal(hypothetical.proposedAllocation.Steel, 1);
-assert.equal(hypothetical.displacedAllocation.Iron, undefined);
-assert.equal(hypothetical.redundant, true);
-assert.equal(hypothetical.productionEffectKnown, false);
-assert.equal(hypothetical.policyPermitted, true);
+const smallDemand = compareCapturedSmelterSteelDemand(incumbentSnapshot, {
+  resourceId: "Steel",
+  pool: "city",
+  additionalSteel: 10,
+});
+const largeDemand = compareCapturedSmelterSteelDemand(incumbentSnapshot, {
+  resourceId: "Steel",
+  pool: "city",
+  additionalSteel: 1000,
+});
+assert.equal(smallDemand.requestValid, true);
+assert.equal(smallDemand.quantityRepresented, true);
+assert.equal(smallDemand.proposedInput.steelTimeToRequired, 101);
+assert.equal(largeDemand.proposedInput.steelTimeToRequired, 200);
+assert.equal(smallDemand.proposedInput.steelDemanded, true);
+assert.equal(largeDemand.proposedInput.steelDemanded, true);
+assert.equal(smallDemand.commandsChanged, false);
+assert.equal(largeDemand.commandsChanged, false);
+assert.equal(
+  smallDemand.classification,
+  "quantity-represented-but-native-policy-insensitive",
+);
+assert.equal(smallDemand.incumbentAllocation.Iron, 1);
+assert.equal(smallDemand.proposedAllocation.Steel, 1);
+assert.equal(smallDemand.redundant, undefined);
+assert.equal(smallDemand.quantityDeliverable, undefined);
+assert.equal(smallDemand.incrementalProductionKnown, false);
+assert.equal(smallDemand.economicBenefitKnown, false);
+assert.equal(smallDemand.policyPermitted, true);
+assert.equal(smallDemand.nativeAllocationFeasible, true);
 const noSteelIncumbentInput = Object.freeze({
   ...incumbentSnapshot.input,
   steelDemanded: false,
@@ -225,13 +250,18 @@ const noSteelIncumbent = createCapturedSmelterIncumbentSnapshot(
     controlMethods: incumbentSnapshot.controlMethods,
     plannedCommands: [],
     progressionGeneration: incumbentSnapshot.progressionGeneration,
+    steelResource: incumbentSnapshot.steelResource,
+    demandAuthorityAvailable: incumbentSnapshot.demandAuthorityAvailable,
   },
 );
 const changedHypothetical = compareCapturedSmelterSteelDemand(
   noSteelIncumbent,
-  100,
+  { resourceId: "Steel", pool: "city", additionalSteel: 100 },
 );
-assert.ok(changedHypothetical.changedCommands);
+assert.equal(changedHypothetical.requestValid, true);
+assert.equal(changedHypothetical.quantityRepresented, true);
+assert.equal(changedHypothetical.proposedInput.steelTimeToRequired, 110);
+assert.ok(changedHypothetical.commandsChanged);
 assert.equal(changedHypothetical.proposedAllocation.Steel, 1);
 assert.equal(changedHypothetical.displacedAllocation.Iron, 1);
 const ironConflictInput = Object.freeze({
@@ -249,29 +279,323 @@ const ironConflict = createCapturedSmelterIncumbentSnapshot(
     controlMethods: incumbentSnapshot.controlMethods,
     plannedCommands: [],
     progressionGeneration: incumbentSnapshot.progressionGeneration,
+    steelResource: incumbentSnapshot.steelResource,
+    demandAuthorityAvailable: incumbentSnapshot.demandAuthorityAvailable,
   },
 );
 const conflictingHypothetical = compareCapturedSmelterSteelDemand(
   ironConflict,
-  100,
+  { resourceId: "Steel", pool: "city", additionalSteel: 100 },
 );
-assert.equal(conflictingHypothetical.physicallyRepresentable, false);
+assert.equal(conflictingHypothetical.quantityRepresented, true);
 assert.equal(conflictingHypothetical.proposedAllocation.Steel, 0);
+assert.equal(conflictingHypothetical.nativeAllocationFeasible, true);
 const noHypotheticalRequest = compareCapturedSmelterSteelDemand(
   incumbentSnapshot,
-  0,
+  { resourceId: "Steel", pool: "city", additionalSteel: 0 },
 );
-assert.equal(noHypotheticalRequest.physicallyRepresentable, false);
-assert.equal(noHypotheticalRequest.policyPermitted, false);
+assert.equal(noHypotheticalRequest.requestValid, false);
+assert.equal(noHypotheticalRequest.proposedInput, undefined);
+assert.equal(noHypotheticalRequest.proposedAllocation, undefined);
+assert.equal(noHypotheticalRequest.policyPermitted, undefined);
 assert.equal(noHypotheticalRequest.redundant, undefined);
 const disabledHypothetical = compareCapturedSmelterSteelDemand(
   Object.freeze({ ...incumbentSnapshot, permissionEnabled: false }),
-  100,
+  { resourceId: "Steel", pool: "city", additionalSteel: 100 },
 );
 assert.equal(disabledHypothetical.policyPermitted, false);
-assert.deepEqual(
-  disabledHypothetical.proposedAllocation,
-  disabledHypothetical.incumbentAllocation,
+assert.equal(disabledHypothetical.quantityRepresented, true);
+assert.equal(disabledHypothetical.proposedAllocation, undefined);
+assert.equal(disabledHypothetical.quantitativeComparison, "unavailable");
+for (const additionalSteel of [
+  0,
+  -1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+  "100",
+]) {
+  const refused = compareCapturedSmelterSteelDemand(incumbentSnapshot, {
+    resourceId: "Steel",
+    pool: "city",
+    additionalSteel,
+  });
+  assert.equal(refused.requestValid, false);
+  assert.equal(refused.quantityRepresented, false);
+  assert.equal(refused.proposedInput, undefined);
+  assert.equal(refused.proposedAllocation, undefined);
+  assert.equal(refused.policyPermitted, undefined);
+}
+for (const unsupportedIdentity of [
+  { resourceId: "Iron", pool: "city", additionalSteel: 10 },
+  { resourceId: "Steel", pool: "orbital", additionalSteel: 10 },
+]) {
+  const refused = compareCapturedSmelterSteelDemand(
+    incumbentSnapshot,
+    unsupportedIdentity,
+  );
+  assert.equal(refused.requestValid, false);
+  assert.equal(refused.proposedInput, undefined);
+}
+const overflowDemand = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    demand: Object.freeze({
+      ...incumbentSnapshot.demand,
+      requestedSteel: Number.MAX_VALUE,
+    }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: Number.MAX_VALUE },
+);
+assert.equal(overflowDemand.requestValid, false);
+assert.ok(
+  overflowDemand.requestUnavailableReasons.includes(
+    "combined-demand-quantity-overflow",
+  ),
+);
+const invalidIncumbentDemand = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    demand: Object.freeze({ ...incumbentSnapshot.demand, requestedSteel: NaN }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(invalidIncumbentDemand.requestValid, true);
+assert.equal(invalidIncumbentDemand.quantityRepresented, false);
+assert.equal(invalidIncumbentDemand.policyPermitted, undefined);
+const unsupportedIncumbentPool = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    demand: Object.freeze({
+      ...incumbentSnapshot.demand,
+      savingTargetPool: "orbital",
+    }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(unsupportedIncumbentPool.requestValid, true);
+assert.equal(unsupportedIncumbentPool.quantityRepresented, false);
+const noSteelQuantityAuthority = compareCapturedSmelterSteelDemand(
+  Object.freeze({ ...incumbentSnapshot, steelResource: undefined }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(noSteelQuantityAuthority.requestValid, true);
+assert.equal(noSteelQuantityAuthority.quantityRepresented, false);
+const missingDemandAuthority = compareCapturedSmelterSteelDemand(
+  Object.freeze({ ...incumbentSnapshot, demandAuthorityAvailable: false }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(missingDemandAuthority.requestValid, true);
+assert.equal(missingDemandAuthority.quantityRepresented, false);
+assert.equal(missingDemandAuthority.policyPermitted, undefined);
+const roundedAwayDemand = compareCapturedSmelterSteelDemand(incumbentSnapshot, {
+  resourceId: "Steel",
+  pool: "city",
+  additionalSteel: Number.MIN_VALUE,
+});
+assert.equal(roundedAwayDemand.requestValid, true);
+assert.equal(roundedAwayDemand.quantityRepresented, false);
+assert.ok(
+  roundedAwayDemand.unavailableReasons.includes(
+    "additional-quantity-below-representable-resolution",
+  ),
+);
+const partiallyRoundedDemand = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    demand: Object.freeze({ ...incumbentSnapshot.demand, requestedSteel: 1 }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 1.2e-16 },
+);
+assert.equal(partiallyRoundedDemand.requestValid, true);
+assert.equal(partiallyRoundedDemand.quantityRepresented, false);
+assert.ok(
+  partiallyRoundedDemand.unavailableReasons.includes(
+    "additional-quantity-below-representable-resolution",
+  ),
+);
+const timeUnderflowDemand = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    demand: Object.freeze({ ...incumbentSnapshot.demand, requestedSteel: 0 }),
+    steelResource: Object.freeze({ amount: 0, maximum: 100, rate: 10 }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: Number.MIN_VALUE },
+);
+assert.equal(timeUnderflowDemand.requestValid, true);
+assert.equal(timeUnderflowDemand.quantityRepresented, false);
+assert.ok(
+  timeUnderflowDemand.unavailableReasons.includes(
+    "additional-quantity-underflow-in-required-time",
+  ),
+);
+const currentStockCovers = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    steelResource: Object.freeze({
+      ...incumbentSnapshot.steelResource,
+      amount: 1500,
+    }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 100 },
+);
+assert.equal(currentStockCovers.quantityRepresented, true);
+assert.equal(currentStockCovers.redundant, true);
+assert.equal(currentStockCovers.proposedInput.steelTimeToRequired, 0);
+const slowSteelRate = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    steelResource: Object.freeze({
+      ...incumbentSnapshot.steelResource,
+      rate: 0.1,
+    }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(slowSteelRate.proposedInput.steelTimeToRequired, 10100);
+const zeroSteelRate = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    steelResource: Object.freeze({
+      ...incumbentSnapshot.steelResource,
+      rate: 0,
+    }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(
+  zeroSteelRate.proposedInput.steelTimeToRequired,
+  Number.MAX_SAFE_INTEGER,
+);
+const decliningSteelRate = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    steelResource: Object.freeze({
+      ...incumbentSnapshot.steelResource,
+      rate: -1,
+    }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(
+  decliningSteelRate.proposedInput.steelTimeToRequired,
+  Number.MAX_SAFE_INTEGER,
+);
+const storageNearCap = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    steelResource: Object.freeze({ amount: 2970, maximum: 3000, rate: 10 }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(
+  storageNearCap.proposedInput.steelTimeToRequired,
+  Number.MIN_SAFE_INTEGER,
+);
+const targetAboveStorageCapacity = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    steelResource: Object.freeze({ amount: 0, maximum: 100, rate: 10 }),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(targetAboveStorageCapacity.quantityRepresented, true);
+assert.equal(targetAboveStorageCapacity.quantityDeliverable, undefined);
+assert.equal(targetAboveStorageCapacity.proposedInput.steelTimeToRequired, 101);
+const noCapacityInput = Object.freeze({
+  ...noSteelIncumbentInput,
+  totalSmelters: 0,
+  ironCount: 0,
+  steelCount: 0,
+  fuels: Object.freeze(
+    noSteelIncumbentInput.fuels.map((fuel) =>
+      Object.freeze({ ...fuel, currentFuelCount: 0 }),
+    ),
+  ),
+});
+const noCapacitySnapshot = createCapturedSmelterIncumbentSnapshot(
+  noCapacityInput,
+  planSmelter(noCapacityInput),
+  { ...incumbentSnapshot.demand, requestedSteel: 0, isSteelDemanded: false },
+  {
+    root,
+    permissionEnabled: true,
+    controlGeneration: incumbentSnapshot.controlGeneration,
+    controlMethods: incumbentSnapshot.controlMethods,
+    plannedCommands: [],
+    progressionGeneration: incumbentSnapshot.progressionGeneration,
+    steelResource: incumbentSnapshot.steelResource,
+    demandAuthorityAvailable: incumbentSnapshot.demandAuthorityAvailable,
+  },
+);
+const noCapacityDemand = compareCapturedSmelterSteelDemand(noCapacitySnapshot, {
+  resourceId: "Steel",
+  pool: "city",
+  additionalSteel: 10,
+});
+assert.equal(noCapacityDemand.quantityRepresented, true);
+assert.equal(noCapacityDemand.proposedAllocation.Steel, 0);
+assert.equal(noCapacityDemand.nativeAllocationFeasible, true);
+const fuelLimitedInput = Object.freeze({
+  ...noSteelIncumbentInput,
+  fuels: Object.freeze(
+    noSteelIncumbentInput.fuels.map((fuel) =>
+      fuel.id === "Coal"
+        ? Object.freeze({
+            ...fuel,
+            cost: Object.freeze(
+              fuel.cost.map((cost) =>
+                Object.freeze({
+                  ...cost,
+                  currentQuantity: 0,
+                  rateOfChange: 0,
+                }),
+              ),
+            ),
+          })
+        : fuel,
+    ),
+  ),
+});
+const fuelLimitedSnapshot = createCapturedSmelterIncumbentSnapshot(
+  fuelLimitedInput,
+  planSmelter(fuelLimitedInput),
+  { ...incumbentSnapshot.demand, isSteelDemanded: false },
+  {
+    root,
+    permissionEnabled: true,
+    controlGeneration: incumbentSnapshot.controlGeneration,
+    controlMethods: incumbentSnapshot.controlMethods,
+    plannedCommands: [],
+    progressionGeneration: incumbentSnapshot.progressionGeneration,
+    steelResource: incumbentSnapshot.steelResource,
+    demandAuthorityAvailable: incumbentSnapshot.demandAuthorityAvailable,
+  },
+);
+const fuelLimitedDemand = compareCapturedSmelterSteelDemand(
+  fuelLimitedSnapshot,
+  { resourceId: "Steel", pool: "city", additionalSteel: 100 },
+);
+assert.equal(fuelLimitedDemand.quantityRepresented, true);
+assert.ok(
+  fuelLimitedDemand.proposedAllocation.Coal <
+    fuelLimitedSnapshot.input.fuels.find((fuel) => fuel.id === "Coal")
+      .currentFuelCount,
+);
+const noNativeControl = compareCapturedSmelterSteelDemand(
+  Object.freeze({
+    ...incumbentSnapshot,
+    controlGeneration: undefined,
+    controlMethods: Object.freeze([]),
+  }),
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+);
+assert.equal(noNativeControl.requestValid, true);
+assert.equal(noNativeControl.nativeAllocationFeasible, false);
+assert.ok(
+  noNativeControl.unavailableReasons.includes(
+    "native-control-or-allocation-feasibility-unavailable",
+  ),
 );
 const currentSmelterFacts = capturedAtPlanFacts;
 assert.equal(
@@ -292,6 +616,13 @@ for (const mutation of [
   { allocations: { ...currentSmelterFacts.allocations, Iron: 1 } },
   { capacity: 3 },
   { inputSignature: "changed-input-configuration" },
+  { demandAuthorityAvailable: false },
+  {
+    steelResource: {
+      ...currentSmelterFacts.steelResource,
+      rate: currentSmelterFacts.steelResource.rate + 1,
+    },
+  },
 ]) {
   assert.equal(
     isCapturedSmelterSnapshotCurrent(incumbentSnapshot, {

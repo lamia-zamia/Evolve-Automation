@@ -97,6 +97,9 @@ export interface CapturedSmelterDependencies {
       plannedCommands: readonly string[];
       expectedAllocations: Readonly<Record<string, number>>;
       progressionGeneration: number | undefined;
+      steelResource:
+        Readonly<{ amount: number; maximum: number; rate: number }> | undefined;
+      demandAuthorityAvailable: boolean;
     }>,
   ) => void;
   readonly shouldObservePlanForDiagnostics?: () => boolean;
@@ -130,6 +133,8 @@ interface SmelterSession {
   readonly demand: CapturedDemandSample;
   readonly permissionEnabled: boolean;
   readonly control: GameControlHandle | undefined;
+  readonly steelResource: ResourceView | undefined;
+  readonly demandAuthorityAvailable: boolean;
 }
 
 const FUEL_IDS = Object.freeze([
@@ -182,7 +187,10 @@ function readResource(
   });
 }
 
-function timeTo(resource: ResourceView, target: number): number {
+function timeTo(
+  resource: Pick<ResourceView, "amount" | "maximum" | "rate">,
+  target: number,
+): number {
   if (resource.maximum <= 0 || resource.amount / resource.maximum > 0.98) {
     return Number.MIN_SAFE_INTEGER;
   }
@@ -356,6 +364,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     isDemanded: () => false,
     storageRequired: () => 1,
   };
+  const demandAuthorityAvailable = dependencies.readDemand !== undefined;
   if (
     !isRecord(smelter) ||
     !isRecord(resources) ||
@@ -370,6 +379,8 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       demand,
       permissionEnabled: settings["autoSmelter"] === true,
       control,
+      steelResource: undefined,
+      demandAuthorityAvailable,
     });
   }
   const cap = readCount(smelter["cap"]);
@@ -391,6 +402,8 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       demand,
       permissionEnabled: settings["autoSmelter"] === true,
       control,
+      steelResource: undefined,
+      demandAuthorityAvailable,
     });
   }
   const iron = readResource(resources, "Iron");
@@ -409,6 +422,8 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       demand,
       permissionEnabled: settings["autoSmelter"] === true,
       control,
+      steelResource: undefined,
+      demandAuthorityAvailable,
     });
   }
   const fuels = FUEL_IDS.map((id) =>
@@ -421,6 +436,8 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       demand,
       permissionEnabled: settings["autoSmelter"] === true,
       control,
+      steelResource: steel,
+      demandAuthorityAvailable,
     });
   }
   const orderedFuels = [...fuels]
@@ -456,6 +473,8 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
       demand,
       permissionEnabled: settings["autoSmelter"] === true,
       control,
+      steelResource: undefined,
+      demandAuthorityAvailable,
     });
   }
   const miner = readProperty(readProperty(root, "civic"), "miner");
@@ -508,6 +527,8 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     demand,
     permissionEnabled: settings["autoSmelter"] === true,
     control,
+    steelResource: steel,
+    demandAuthorityAvailable,
   });
 }
 
@@ -565,11 +586,22 @@ export interface CapturedSmelterIncumbentSnapshot {
     steelTarget: number | undefined;
   }>;
   readonly input: Readonly<SmelterInput>;
+  /** Steel amount, storage and rate from the same ordinary owner input capture. */
+  readonly steelResource:
+    Readonly<{ amount: number; maximum: number; rate: number }> | undefined;
+  readonly demandAuthorityAvailable: boolean;
   readonly decision: ReturnType<typeof planSmelter>;
   readonly commands: readonly string[];
   readonly controlGeneration: number | undefined;
   readonly controlMethods: readonly string[];
   readonly unavailableAuthority: readonly string[];
+}
+
+/** Additional city Steel quantity on top of the observed incumbent target. */
+export interface CapturedSmelterSteelDemandRequest {
+  readonly resourceId: "Steel";
+  readonly pool: "city";
+  readonly additionalSteel: number;
 }
 
 export function createCapturedSmelterIncumbentSnapshot(
@@ -587,6 +619,9 @@ export function createCapturedSmelterIncumbentSnapshot(
     controlMethods: readonly string[];
     plannedCommands: readonly string[];
     progressionGeneration: number | undefined;
+    steelResource:
+      Readonly<{ amount: number; maximum: number; rate: number }> | undefined;
+    demandAuthorityAvailable: boolean;
   }>,
 ): CapturedSmelterIncumbentSnapshot {
   const unavailableAuthority = [
@@ -623,6 +658,8 @@ export function createCapturedSmelterIncumbentSnapshot(
       steelTarget: savingTarget?.cost["Steel"],
     }),
     input,
+    steelResource: observation.steelResource,
+    demandAuthorityAvailable: observation.demandAuthorityAvailable,
     decision,
     commands: Object.freeze([...observation.plannedCommands]),
     controlGeneration: observation.controlGeneration,
@@ -647,6 +684,9 @@ export function isCapturedSmelterSnapshotCurrent(
     allocations: Readonly<Record<string, number>>;
     capacity: number;
     inputSignature: string;
+    steelResource:
+      Readonly<{ amount: number; maximum: number; rate: number }> | undefined;
+    demandAuthorityAvailable: boolean;
   }>,
 ): boolean {
   const allocations = {
@@ -678,6 +718,9 @@ export function isCapturedSmelterSnapshotCurrent(
     JSON.stringify([...snapshot.controlMethods].sort()) ===
       JSON.stringify([...current.controlMethods].sort()) &&
     snapshot.input.totalSmelters === current.capacity &&
+    JSON.stringify(snapshot.steelResource) ===
+      JSON.stringify(current.steelResource) &&
+    snapshot.demandAuthorityAvailable === current.demandAuthorityAvailable &&
     JSON.stringify(snapshot.input) === current.inputSignature &&
     Object.entries(allocations).every(
       ([id, value]) => current.allocations[id] === value,
@@ -687,23 +730,35 @@ export function isCapturedSmelterSnapshotCurrent(
 
 export function compareCapturedSmelterSteelDemand(
   snapshot: CapturedSmelterIncumbentSnapshot,
-  additionalSteel: number,
+  request: unknown,
 ): Readonly<{
+  requestValid: boolean;
+  requestUnavailableReasons: readonly string[];
+  quantityRepresented: boolean;
+  quantitativeComparison: "available" | "unavailable";
+  proposedInput: Readonly<SmelterInput> | undefined;
+  policyPermitted: boolean | undefined;
+  nativeAllocationFeasible: boolean | undefined;
+  commandsChanged: boolean | undefined;
   incumbentAllocation: Readonly<Record<string, number>>;
-  proposedAllocation: Readonly<Record<string, number>>;
+  proposedAllocation: Readonly<Record<string, number>> | undefined;
   changedCommands:
     | Readonly<{
         incumbent: readonly string[];
         proposed: readonly string[];
       }>
     | undefined;
-  availableSmelters: number;
-  displacedAllocation: Readonly<Record<string, number>>;
-  physicallyRepresentable: boolean;
-  policyPermitted: boolean;
+  availableSmelters: number | undefined;
+  displacedAllocation: Readonly<Record<string, number>> | undefined;
+  quantityDeliverable: boolean | undefined;
+  incrementalProductionKnown: boolean;
+  economicBenefitKnown: boolean;
   redundant: boolean | undefined;
-  productionEffectKnown: false;
-  limitation: string | undefined;
+  classification:
+    | "quantity-represented-but-native-policy-insensitive"
+    | "commands-changed"
+    | "unavailable";
+  unavailableReasons: readonly string[];
 }> {
   const preCommandAllocation = {
     Iron: snapshot.input.ironCount,
@@ -723,69 +778,195 @@ export function compareCapturedSmelterSteelDemand(
     incumbentAllocation[item.productionId] =
       item.expectedCurrentCount + item.delta;
   const incumbent = snapshot.commands;
-  const policyPermitted = snapshot.permissionEnabled && additionalSteel > 0;
-  const canRepresent =
-    Number.isFinite(additionalSteel) &&
+  const requestRecord = isRecord(request) ? request : {};
+  const additionalSteel = requestRecord["additionalSteel"];
+  const requestUnavailableReasons: string[] = [];
+  if (requestRecord["resourceId"] !== "Steel")
+    requestUnavailableReasons.push("unsupported-resource");
+  if (requestRecord["pool"] !== "city")
+    requestUnavailableReasons.push("unsupported-resource-pool");
+  if (typeof additionalSteel !== "number" || !Number.isFinite(additionalSteel))
+    requestUnavailableReasons.push("additional-quantity-must-be-finite-number");
+  else if (additionalSteel <= 0)
+    requestUnavailableReasons.push("additional-quantity-must-be-positive");
+  const requestedSteel = snapshot.demand.requestedSteel;
+  const incumbentDemandValid =
+    Number.isFinite(requestedSteel) && requestedSteel >= 0;
+  const combinedTarget =
+    typeof additionalSteel === "number" && incumbentDemandValid
+      ? requestedSteel + additionalSteel
+      : NaN;
+  if (
+    typeof additionalSteel === "number" &&
     additionalSteel > 0 &&
-    snapshot.input.initialised &&
-    snapshot.input.productionSmelting.length > 0;
+    incumbentDemandValid &&
+    !Number.isFinite(combinedTarget)
+  )
+    requestUnavailableReasons.push("combined-demand-quantity-overflow");
+  const requestValid = requestUnavailableReasons.length === 0;
+  const representationUnavailableReasons: string[] = [];
+  if (!snapshot.demandAuthorityAvailable)
+    representationUnavailableReasons.push(
+      "incumbent-demand-authority-unavailable",
+    );
+  if (!incumbentDemandValid)
+    representationUnavailableReasons.push(
+      "incumbent-demand-quantity-unavailable",
+    );
+  if (typeof snapshot.demand.steelDemanded !== "boolean")
+    representationUnavailableReasons.push(
+      "incumbent-demand-presence-unavailable",
+    );
+  if (
+    snapshot.demand.savingTargetName !== undefined &&
+    (snapshot.demand.savingTargetPool !== "city" ||
+      !Number.isFinite(snapshot.demand.steelTarget) ||
+      snapshot.demand.steelTarget! < 0)
+  )
+    representationUnavailableReasons.push(
+      "incumbent-demand-pool-or-target-unsupported",
+    );
+  if (!snapshot.steelResource)
+    representationUnavailableReasons.push("steel-quantity-input-unavailable");
+  if (!snapshot.input.initialised)
+    representationUnavailableReasons.push("smelter-input-unavailable");
+  if (!snapshot.input.productionSmelting)
+    representationUnavailableReasons.push("required-target-policy-unavailable");
+  const steel = snapshot.steelResource;
+  let proposedSteelTimeToRequired: number | undefined;
+  if (
+    requestValid &&
+    typeof additionalSteel === "number" &&
+    incumbentDemandValid &&
+    steel
+  ) {
+    if (combinedTarget - requestedSteel !== additionalSteel)
+      representationUnavailableReasons.push(
+        "additional-quantity-below-representable-resolution",
+      );
+    const target = Math.max(steel.amount, combinedTarget);
+    proposedSteelTimeToRequired = timeTo(steel, target);
+    if (target > steel.amount && proposedSteelTimeToRequired === 0)
+      representationUnavailableReasons.push(
+        "additional-quantity-underflow-in-required-time",
+      );
+  }
+  const quantityRepresented =
+    requestValid && representationUnavailableReasons.length === 0;
   const proposedInput =
-    canRepresent && policyPermitted
-      ? Object.freeze({ ...snapshot.input, steelDemanded: true })
-      : snapshot.input;
+    quantityRepresented && proposedSteelTimeToRequired !== undefined
+      ? Object.freeze({
+          ...snapshot.input,
+          steelTimeToRequired: proposedSteelTimeToRequired,
+        })
+      : undefined;
+  const policyPermitted = quantityRepresented
+    ? snapshot.permissionEnabled
+    : undefined;
   const proposedDecision =
-    canRepresent && policyPermitted
-      ? planSmelter(proposedInput)
-      : snapshot.decision;
-  const proposedCommands = normalizedCommands(proposedDecision);
+    proposedInput && policyPermitted ? planSmelter(proposedInput) : undefined;
+  const proposedCommands = proposedDecision
+    ? normalizedCommands(proposedDecision)
+    : undefined;
+  const commandsChanged = proposedCommands
+    ? JSON.stringify(proposedCommands) !== JSON.stringify(incumbent)
+    : undefined;
   const changedCommands =
-    JSON.stringify(proposedCommands) === JSON.stringify(incumbent)
-      ? undefined
-      : Object.freeze({ incumbent, proposed: proposedCommands });
+    proposedCommands && commandsChanged
+      ? Object.freeze({ incumbent, proposed: proposedCommands })
+      : undefined;
   const proposedAllocation: Record<string, number> = {
     ...preCommandAllocation,
   };
-  for (const item of proposedDecision.fuelAdjustments)
+  for (const item of proposedDecision?.fuelAdjustments ?? [])
     proposedAllocation[item.fuelId] =
       item.expectedCurrentFuelCount + item.delta;
-  for (const item of proposedDecision.smeltAdjustments)
+  for (const item of proposedDecision?.smeltAdjustments ?? [])
     proposedAllocation[item.productionId] =
       item.expectedCurrentCount + item.delta;
-  const displacedAllocation = Object.freeze(
-    Object.fromEntries(
-      Object.entries(incumbentAllocation)
-        .map(([id, value]) => [id, value - (proposedAllocation[id] ?? value)])
-        .filter(([, delta]) => delta !== 0),
-    ),
-  );
-  const physicallyRepresentable =
-    canRepresent && (proposedAllocation.Steel ?? 0) > 0;
-  return Object.freeze({
-    incumbentAllocation,
-    proposedAllocation: Object.freeze(proposedAllocation),
-    changedCommands,
-    availableSmelters: Math.max(
-      0,
-      snapshot.input.totalSmelters +
-        snapshot.input.extraOperating -
-        incumbentAllocation.Iron! -
-        incumbentAllocation.Steel! -
-        incumbentAllocation.Iridium! -
-        SMELTER_FUEL_IDS.reduce(
-          (sum, id) => sum + (incumbentAllocation[id] ?? 0),
-          0,
+  const displacedAllocation = proposedDecision
+    ? Object.freeze(
+        Object.fromEntries(
+          Object.entries(incumbentAllocation)
+            .map(([id, value]) => [
+              id,
+              value - (proposedAllocation[id] ?? value),
+            ])
+            .filter(([, delta]) => delta !== 0),
         ),
-    ),
-    displacedAllocation,
-    physicallyRepresentable,
+      )
+    : undefined;
+  const proposedAllocationResult = proposedDecision
+    ? Object.freeze(proposedAllocation)
+    : undefined;
+  const commandsFeasible =
+    proposedDecision !== undefined &&
+    Number.isSafeInteger(snapshot.controlGeneration) &&
+    proposedCommands!.every((command) =>
+      snapshot.controlMethods.includes(command.slice(0, command.indexOf(":"))),
+    ) &&
+    Object.values(proposedAllocation).every(
+      (count) => Number.isSafeInteger(count) && count >= 0,
+    ) &&
+    proposedAllocation.Iron! +
+      proposedAllocation.Steel! +
+      proposedAllocation.Iridium! <=
+      snapshot.input.totalSmelters + snapshot.input.extraOperating &&
+    SMELTER_FUEL_IDS.reduce(
+      (sum, id) => sum + (proposedAllocation[id] ?? 0),
+      0,
+    ) <=
+      snapshot.input.totalSmelters + snapshot.input.extraOperating;
+  const stockCoversTarget =
+    quantityRepresented &&
+    steel !== undefined &&
+    steel.amount >= combinedTarget;
+  const unavailableReasons = !requestValid
+    ? [...requestUnavailableReasons, ...representationUnavailableReasons]
+    : !quantityRepresented
+      ? [...representationUnavailableReasons]
+      : policyPermitted
+        ? commandsFeasible
+          ? []
+          : ["native-control-or-allocation-feasibility-unavailable"]
+        : ["smelter-policy-disabled"];
+  return Object.freeze({
+    requestValid,
+    requestUnavailableReasons: Object.freeze(requestUnavailableReasons),
+    quantityRepresented,
+    quantitativeComparison: proposedDecision ? "available" : "unavailable",
+    proposedInput,
     policyPermitted,
-    redundant: physicallyRepresentable
-      ? changedCommands === undefined
+    nativeAllocationFeasible: proposedDecision ? commandsFeasible : undefined,
+    commandsChanged,
+    incumbentAllocation,
+    proposedAllocation: proposedAllocationResult,
+    changedCommands,
+    availableSmelters: proposedDecision
+      ? Math.max(
+          0,
+          snapshot.input.totalSmelters +
+            snapshot.input.extraOperating -
+            incumbentAllocation.Iron! -
+            incumbentAllocation.Steel! -
+            incumbentAllocation.Iridium! -
+            SMELTER_FUEL_IDS.reduce(
+              (sum, id) => sum + (incumbentAllocation[id] ?? 0),
+              0,
+            ),
+        )
       : undefined,
-    productionEffectKnown: false,
-    limitation: canRepresent
-      ? "production marginal requires measured resource trajectories"
-      : "incremental Steel demand is unavailable in the captured Smelter input",
+    displacedAllocation,
+    quantityDeliverable: undefined,
+    incrementalProductionKnown: false,
+    economicBenefitKnown: false,
+    redundant: stockCoversTarget ? true : undefined,
+    classification: !proposedDecision
+      ? "unavailable"
+      : commandsChanged
+        ? "commands-changed"
+        : "quantity-represented-but-native-policy-insensitive",
+    unavailableReasons: Object.freeze(unavailableReasons),
   });
 }
 
@@ -867,6 +1048,14 @@ export function createCapturedSmelterAutomation(
             plannedCommands,
             expectedAllocations,
             progressionGeneration: dependencies.readProgressionGeneration?.(),
+            steelResource: session.steelResource
+              ? Object.freeze({
+                  amount: session.steelResource.amount,
+                  maximum: session.steelResource.maximum,
+                  rate: session.steelResource.rate,
+                })
+              : undefined,
+            demandAuthorityAvailable: session.demandAuthorityAvailable,
           })
         : undefined;
       if (publishPlan)
