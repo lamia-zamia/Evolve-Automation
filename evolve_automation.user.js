@@ -35475,7 +35475,8 @@
     "Wood",
     "Inferno",
     "Super"
-  ]), SMELTER_FUEL_IDS = FUEL_IDS;
+  ]);
+  var SMELTER_FUEL_IDS = FUEL_IDS;
   function readCount(value) {
     let count2 = finite(value);
     return count2 !== void 0 && Number.isSafeInteger(count2) && count2 >= 0 ? count2 : void 0;

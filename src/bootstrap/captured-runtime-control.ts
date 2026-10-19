@@ -174,6 +174,7 @@ import {
   applyCapturedSmelterTestCandidate,
   capturedSmelterSkipReason,
   createCapturedSmelterIncumbentSnapshot,
+  createCapturedSmelterOwnerIncumbentSnapshot,
   compareCapturedSmelterSteelDemand,
   evaluateCapturedSmelterGoalDemandProposal,
   createCapturedSmelterAutomation,
@@ -196,6 +197,10 @@ import {
   createCapturedFactoryAutomation,
   FACTORY_CONTROL,
 } from "../adapters/evolve/economy/production/captured-factory.ts";
+import {
+  planSmelter,
+  proveSmelterSteelTimeInvariance,
+} from "../domain/economy/production/smelter.ts";
 import {
   createCapturedStoragePorts,
   STORAGE_CONSTRUCTION_CONTROL,
@@ -5626,7 +5631,7 @@ export function startCapturedRuntime({
                 ownerCycle,
               );
               if (proposal !== undefined) {
-                const snapshot = createCapturedSmelterIncumbentSnapshot(
+                const snapshot = createCapturedSmelterOwnerIncumbentSnapshot(
                   input,
                   decision,
                   {
@@ -5636,6 +5641,12 @@ export function startCapturedRuntime({
                   },
                   observation,
                 );
+                const captureSnapshot = readProperty(
+                  hooks,
+                  "observeSmelterComparisonSnapshotForTest",
+                );
+                if (typeof captureSnapshot === "function")
+                  captureSnapshot(snapshot, ownerCycle);
                 const comparisonClock = readProperty(
                   hooks,
                   "readSmelterComparisonClockForTest",
@@ -5648,6 +5659,9 @@ export function startCapturedRuntime({
                   snapshot,
                   proposal,
                   ownerCycle,
+                  readProperty(hooks, "smelterComparisonModeForTest") === "P"
+                    ? "P"
+                    : "I",
                 );
                 const comparisonElapsedMs =
                   typeof comparisonClock === "function" &&
@@ -5702,6 +5716,12 @@ export function startCapturedRuntime({
         hooks,
         "createSmelterSnapshotForTest",
         createCapturedSmelterIncumbentSnapshot,
+      );
+      Reflect.set(hooks, "planSmelterForTest", planSmelter);
+      Reflect.set(
+        hooks,
+        "proveSmelterSteelTimeInvarianceForTest",
+        proveSmelterSteelTimeInvariance,
       );
       Reflect.set(
         hooks,

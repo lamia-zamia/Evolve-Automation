@@ -591,6 +591,11 @@ const smallDemand = compareCapturedSmelterSteelDemand(incumbentSnapshot, {
   pool: "city",
   additionalSteel: 10,
 });
+const smallDemandReference = compareCapturedSmelterSteelDemand(
+  incumbentSnapshot,
+  { resourceId: "Steel", pool: "city", additionalSteel: 10 },
+  "P",
+);
 const largeDemand = compareCapturedSmelterSteelDemand(incumbentSnapshot, {
   resourceId: "Steel",
   pool: "city",
@@ -604,6 +609,19 @@ assert.equal(
   "steel-demand-overrides-required-time",
 );
 assert.equal(smallDemand.hypotheticalPlannerCalls, 0);
+assert.equal(smallDemandReference.hypotheticalPlannerCalls, 1);
+assert.deepEqual(
+  smallDemandReference.proposedDecision,
+  smallDemand.proposedDecision,
+);
+assert.deepEqual(
+  smallDemandReference.proposedCommands,
+  smallDemand.proposedCommands,
+);
+assert.deepEqual(
+  smallDemandReference.proposedAllocation,
+  smallDemand.proposedAllocation,
+);
 assert.equal(smallDemand.proposedInput.steelTimeToRequired, 101);
 assert.equal(largeDemand.proposedInput.steelTimeToRequired, 200);
 assert.equal(smallDemand.proposedInput.steelDemanded, true);
@@ -862,11 +880,24 @@ const changedHypothetical = compareCapturedSmelterSteelDemand(
   noSteelIncumbent,
   { resourceId: "Steel", pool: "city", additionalSteel: 100 },
 );
+const changedHypotheticalReference = compareCapturedSmelterSteelDemand(
+  noSteelIncumbent,
+  { resourceId: "Steel", pool: "city", additionalSteel: 100 },
+  "P",
+);
 assert.equal(changedHypothetical.requestValid, true);
 assert.equal(changedHypothetical.quantityRepresented, true);
 assert.equal(changedHypothetical.comparisonMethod, "planned");
 assert.equal(changedHypothetical.invarianceReason, undefined);
 assert.equal(changedHypothetical.hypotheticalPlannerCalls, 1);
+assert.deepEqual(
+  changedHypotheticalReference.proposedDecision,
+  changedHypothetical.proposedDecision,
+);
+assert.deepEqual(
+  changedHypotheticalReference.proposedCommands,
+  changedHypothetical.proposedCommands,
+);
 assert.equal(changedHypothetical.proposedInput.steelTimeToRequired, 110);
 assert.ok(changedHypothetical.commandsChanged);
 assert.equal(changedHypothetical.proposedAllocation.Steel, 1);

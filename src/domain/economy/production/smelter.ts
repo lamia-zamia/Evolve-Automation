@@ -86,6 +86,43 @@ export type SmelterSteelTimeInvarianceReason =
   | "steel-demand-overrides-required-time"
   | "no-miners-or-iron-ships-force-steel-weighting";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
+export interface SmelterComparisonProfiler {
+  readonly now: () => number;
+  readonly record: (phase: string, elapsedMs: number) => void;
+}
+
+/**
+ * Returns the policy predicate for a pair already established to differ only
+ * in `steelTimeToRequired`. This is not a shape, immutability, or provenance
+ * proof; callers must establish that exact-variant condition themselves.
+ */
+export function smelterSteelTimeInvarianceReasonForExactVariant(
+  incumbent: Readonly<SmelterInput>,
+  hypothetical: Readonly<SmelterInput>,
+): SmelterSteelTimeInvarianceReason | undefined {
+  if (
+    Object.is(incumbent.steelTimeToRequired, hypothetical.steelTimeToRequired)
+  )
+    return "steel-required-time-unchanged";
+  if (
+    incumbent.productionSmelting === "iron" ||
+    incumbent.productionSmelting === "steel" ||
+    incumbent.productionSmelting === "storage"
+  )
+    return "production-mode-does-not-use-required-time";
+  if (incumbent.productionSmelting === "required" && incumbent.steelDemanded)
+    return "steel-demand-overrides-required-time";
+  if (
+    incumbent.productionSmelting === "required" &&
+    incumbent.minerCount === 0 &&
+    incumbent.beltIronShipStateOnCount === 0
+  )
+    return "no-miners-or-iron-ships-force-steel-weighting";
+  return undefined;
+}
+
 function hasFrozenDataGraph(value: unknown, visited: Set<object>): boolean {
   if (value === null || typeof value !== "object") return true;
   if (visited.has(value)) return true;
@@ -117,7 +154,14 @@ function hasFrozenDataGraph(value: unknown, visited: Set<object>): boolean {
 export function proveSmelterSteelTimeInvariance(
   incumbent: Readonly<SmelterInput>,
   hypothetical: Readonly<SmelterInput>,
+  profiler?: SmelterComparisonProfiler,
 ): SmelterSteelTimeInvarianceReason | undefined {
+  const activeProfiler =
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? profiler
+      : undefined;
+  const validationStarted = activeProfiler?.now();
   try {
     const visited = new Set<object>();
     if (
@@ -151,27 +195,25 @@ export function proveSmelterSteelTimeInvariance(
       return undefined;
   } catch {
     return undefined;
+  } finally {
+    if (activeProfiler && validationStarted !== undefined)
+      activeProfiler.record(
+        "recursive-frozen-data-validation-and-shape-check",
+        activeProfiler.now() - validationStarted,
+      );
   }
 
-  if (
-    Object.is(incumbent.steelTimeToRequired, hypothetical.steelTimeToRequired)
-  )
-    return "steel-required-time-unchanged";
-  if (
-    incumbent.productionSmelting === "iron" ||
-    incumbent.productionSmelting === "steel" ||
-    incumbent.productionSmelting === "storage"
-  )
-    return "production-mode-does-not-use-required-time";
-  if (incumbent.productionSmelting === "required" && incumbent.steelDemanded)
-    return "steel-demand-overrides-required-time";
-  if (
-    incumbent.productionSmelting === "required" &&
-    incumbent.minerCount === 0 &&
-    incumbent.beltIronShipStateOnCount === 0
-  )
-    return "no-miners-or-iron-ships-force-steel-weighting";
-  return undefined;
+  const invarianceStarted = activeProfiler?.now();
+  const reason = smelterSteelTimeInvarianceReasonForExactVariant(
+    incumbent,
+    hypothetical,
+  );
+  if (activeProfiler && invarianceStarted !== undefined)
+    activeProfiler.record(
+      "invariance-predicate-evaluation",
+      activeProfiler.now() - invarianceStarted,
+    );
+  return reason;
 }
 
 const EMPTY_DECISION: SmelterDecision = Object.freeze({

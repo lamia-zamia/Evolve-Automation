@@ -6,6 +6,8 @@ import {
   type SmelterCostView,
   type SmelterFuelView,
   type SmelterInput,
+  type SmelterComparisonProfiler,
+  smelterSteelTimeInvarianceReasonForExactVariant,
   proveSmelterSteelTimeInvariance,
 } from "../../../../domain/economy/production/smelter.ts";
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
@@ -167,7 +169,16 @@ const FUEL_IDS = Object.freeze([
   "Inferno",
   "Super",
 ] as const);
+// The owner snapshot brands a graph only after a proposal has been observed.
+const OWNER_CREATED_IMMUTABLE_INPUT = Symbol("captured-smelter-input");
 type FuelId = (typeof FUEL_IDS)[number];
+
+function ownerSteelTimeVariant(
+  input: Readonly<SmelterInput>,
+  steelTimeToRequired: number,
+): Readonly<SmelterInput> {
+  return Object.freeze({ ...input, steelTimeToRequired });
+}
 
 /**
  * The smelter fuel identities in default-priority order, shared with the
@@ -669,6 +680,8 @@ export function evaluateCapturedSmelterGoalDemandProposal(
   snapshot: CapturedSmelterIncumbentSnapshot,
   proposal: unknown,
   ownerCycle: number,
+  comparisonModeForTest: "P" | "I" = "I",
+  profiler?: SmelterComparisonProfiler,
 ): Readonly<{
   proposalValidForEvaluation: boolean;
   structurallyValid: boolean;
@@ -788,11 +801,16 @@ export function evaluateCapturedSmelterGoalDemandProposal(
   const structurallyValid = structuralReasons.length === 0;
   const proposalValidForEvaluation = structurallyValid && reasons.length === 0;
   const comparison = proposalValidForEvaluation
-    ? compareCapturedSmelterSteelDemand(snapshot, {
-        resourceId: item["resourceId"],
-        pool: item["pool"],
-        additionalSteel: item["additionalQuantity"],
-      })
+    ? compareCapturedSmelterSteelDemand(
+        snapshot,
+        {
+          resourceId: item["resourceId"],
+          pool: item["pool"],
+          additionalSteel: item["additionalQuantity"],
+        },
+        comparisonModeForTest,
+        profiler,
+      )
     : undefined;
   if (comparison && !comparison.requestValid)
     reasons.push(...comparison.requestUnavailableReasons);
@@ -1007,6 +1025,29 @@ export function createCapturedSmelterIncumbentSnapshot(
   });
 }
 
+/** Use only for `input` returned directly by `readInput` in the owner callback. */
+export function createCapturedSmelterOwnerIncumbentSnapshot(
+  input: Readonly<SmelterInput>,
+  decision: ReturnType<typeof planSmelter>,
+  demand: Readonly<{
+    requestedSteel: number;
+    isSteelDemanded: boolean;
+    savingTarget: CapturedDemandSample["savingTarget"];
+  }>,
+  observation: Parameters<typeof createCapturedSmelterIncumbentSnapshot>[3],
+): CapturedSmelterIncumbentSnapshot {
+  const ownerInput = Object.freeze({
+    ...input,
+    [OWNER_CREATED_IMMUTABLE_INPUT]: true,
+  });
+  return createCapturedSmelterIncumbentSnapshot(
+    ownerInput,
+    decision,
+    demand,
+    observation,
+  );
+}
+
 export function isCapturedSmelterSnapshotCurrent(
   snapshot: CapturedSmelterIncumbentSnapshot,
   current: Readonly<{
@@ -1081,6 +1122,8 @@ export function isCapturedSmelterSnapshotCurrent(
 export function compareCapturedSmelterSteelDemand(
   snapshot: CapturedSmelterIncumbentSnapshot,
   request: unknown,
+  mode: "P" | "I" = "I",
+  profiler?: SmelterComparisonProfiler,
 ): Readonly<{
   requestValid: boolean;
   requestUnavailableReasons: readonly string[];
@@ -1093,6 +1136,7 @@ export function compareCapturedSmelterSteelDemand(
   currentSteel: CapturedSmelterIncumbentSnapshot["steelResource"];
   incumbentInput: CapturedSmelterIncumbentSnapshot["input"];
   incumbentDecision: CapturedSmelterIncumbentSnapshot["decision"];
+  proposedDecision: ReturnType<typeof planSmelter> | undefined;
   steelSupplyScope: CapturedSmelterIncumbentSnapshot["steelSupplyScope"];
   incumbentSteelTimeToRequired: number;
   requestedSteelBefore: number | undefined;
@@ -1126,6 +1170,11 @@ export function compareCapturedSmelterSteelDemand(
     | "unavailable";
   unavailableReasons: readonly string[];
 }> {
+  const activeProfiler =
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? profiler
+      : undefined;
   const preCommandAllocation = {
     Iron: snapshot.input.ironCount,
     Steel: snapshot.input.steelCount,
@@ -1146,6 +1195,7 @@ export function compareCapturedSmelterSteelDemand(
   const incumbent = snapshot.commands;
   const requestRecord = isRecord(request) ? request : {};
   const additionalSteel = requestRecord["additionalSteel"];
+  const quantitativeStarted = activeProfiler?.now();
   const requestUnavailableReasons: string[] = [];
   if (requestRecord["resourceId"] !== "Steel")
     requestUnavailableReasons.push("unsupported-resource");
@@ -1233,19 +1283,58 @@ export function compareCapturedSmelterSteelDemand(
   }
   const quantityRepresented =
     requestValid && representationUnavailableReasons.length === 0;
+  if (activeProfiler && quantitativeStarted !== undefined)
+    activeProfiler.record(
+      "quantitative-demand-calculation",
+      activeProfiler.now() - quantitativeStarted,
+    );
+  const hypotheticalStarted = activeProfiler?.now();
   const proposedInput =
     quantityRepresented && proposedSteelTimeToRequired !== undefined
-      ? Object.freeze({
-          ...snapshot.input,
-          steelTimeToRequired: proposedSteelTimeToRequired,
-        })
+      ? ownerSteelTimeVariant(snapshot.input, proposedSteelTimeToRequired)
       : undefined;
+  if (activeProfiler && hypotheticalStarted !== undefined)
+    activeProfiler.record(
+      "hypothetical-input-construction",
+      activeProfiler.now() - hypotheticalStarted,
+    );
   const policyPermitted = quantityRepresented
     ? snapshot.permissionEnabled
     : undefined;
-  const invarianceReason = proposedInput
-    ? proveSmelterSteelTimeInvariance(snapshot.input, proposedInput)
-    : undefined;
+  const hasOwnerConstructedExactVariant =
+    (
+      snapshot.input as SmelterInput & {
+        [OWNER_CREATED_IMMUTABLE_INPUT]?: boolean;
+      }
+    )[OWNER_CREATED_IMMUTABLE_INPUT] === true &&
+    proposedInput !== undefined &&
+    (
+      proposedInput as SmelterInput & {
+        [OWNER_CREATED_IMMUTABLE_INPUT]?: boolean;
+      }
+    )[OWNER_CREATED_IMMUTABLE_INPUT] === true;
+  const invarianceReason =
+    proposedInput && mode === "I"
+      ? hasOwnerConstructedExactVariant
+        ? (() => {
+            const started = activeProfiler?.now();
+            const reason = smelterSteelTimeInvarianceReasonForExactVariant(
+              snapshot.input,
+              proposedInput,
+            );
+            if (activeProfiler && started !== undefined)
+              activeProfiler.record(
+                "invariance-predicate-evaluation",
+                activeProfiler.now() - started,
+              );
+            return reason;
+          })()
+        : proveSmelterSteelTimeInvariance(
+            snapshot.input,
+            proposedInput,
+            activeProfiler,
+          )
+      : undefined;
   const comparisonMethod: "proven-invariant" | "planned" | "unavailable" =
     proposedInput && policyPermitted
       ? invarianceReason === undefined
@@ -1256,15 +1345,30 @@ export function compareCapturedSmelterSteelDemand(
     comparisonMethod === "proven-invariant"
       ? snapshot.decision
       : comparisonMethod === "planned" && proposedInput
-        ? planSmelter(proposedInput)
+        ? (() => {
+            const started = activeProfiler?.now();
+            const decision = planSmelter(proposedInput);
+            if (activeProfiler && started !== undefined)
+              activeProfiler.record(
+                "reference-pure-planner-execution",
+                activeProfiler.now() - started,
+              );
+            return decision;
+          })()
         : undefined;
   const hypotheticalPlannerCalls: 0 | 1 =
     comparisonMethod === "planned" ? 1 : 0;
+  const normalizationStarted = activeProfiler?.now();
   const proposedCommands = proposedDecision
     ? comparisonMethod === "proven-invariant"
       ? incumbent
       : normalizedCommands(proposedDecision)
     : undefined;
+  if (activeProfiler && normalizationStarted !== undefined)
+    activeProfiler.record(
+      "proposed-command-normalization",
+      activeProfiler.now() - normalizationStarted,
+    );
   const commandsChanged = proposedCommands
     ? JSON.stringify(proposedCommands) !== JSON.stringify(incumbent)
     : undefined;
@@ -1272,6 +1376,7 @@ export function compareCapturedSmelterSteelDemand(
     proposedCommands && commandsChanged
       ? Object.freeze({ incumbent, proposed: proposedCommands })
       : undefined;
+  const allocationStarted = activeProfiler?.now();
   const proposedAllocation: Record<string, number> = {
     ...preCommandAllocation,
   };
@@ -1314,6 +1419,11 @@ export function compareCapturedSmelterSteelDemand(
       0,
     ) <=
       snapshot.input.totalSmelters + snapshot.input.extraOperating;
+  if (activeProfiler && allocationStarted !== undefined)
+    activeProfiler.record(
+      "proposed-allocation-and-feasibility",
+      activeProfiler.now() - allocationStarted,
+    );
   const unavailableReasons = !requestValid
     ? [...requestUnavailableReasons, ...representationUnavailableReasons]
     : !quantityRepresented
@@ -1323,7 +1433,8 @@ export function compareCapturedSmelterSteelDemand(
           ? []
           : ["native-control-or-allocation-feasibility-unavailable"]
         : ["smelter-policy-disabled"];
-  return Object.freeze({
+  const diagnosticResultStarted = activeProfiler?.now();
+  const result = Object.freeze({
     requestValid,
     requestUnavailableReasons: Object.freeze(requestUnavailableReasons),
     quantityRepresented,
@@ -1334,6 +1445,7 @@ export function compareCapturedSmelterSteelDemand(
     currentSteel: snapshot.steelResource,
     incumbentInput: snapshot.input,
     incumbentDecision: snapshot.decision,
+    proposedDecision,
     steelSupplyScope: snapshot.demand.steelSupplyScope,
     incumbentSteelTimeToRequired: snapshot.input.steelTimeToRequired,
     requestedSteelBefore: incumbentDemandValid ? requestedSteel : undefined,
@@ -1387,6 +1499,12 @@ export function compareCapturedSmelterSteelDemand(
         : "quantity-represented-but-native-policy-insensitive",
     unavailableReasons: Object.freeze(unavailableReasons),
   });
+  if (activeProfiler && diagnosticResultStarted !== undefined)
+    activeProfiler.record(
+      "diagnostic-result-construction",
+      activeProfiler.now() - diagnosticResultStarted,
+    );
+  return result;
 }
 
 export function createCapturedSmelterAutomation(
