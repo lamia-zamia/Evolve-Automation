@@ -65,26 +65,32 @@ const sampleSd = (values) => {
 
 const prelude = `
 globalThis.__EA_TEST_HOOKS__ = { ...(globalThis.__EA_TEST_HOOKS__ ?? {}) };
-const __p13c1 = { mode: "G", calls: 0, publications: 0, callbackMs: [], snapshotMs: [], snapshot: undefined };
+const __p13c1 = { mode: "G", instrument: false, calls: 0, publications: 0, callbackMs: [], snapshotMs: [], snapshot: undefined };
 const __p13c1Hooks = globalThis.__EA_TEST_HOOKS__;
 __p13c1Hooks.observeSmelterPlanForTest = (input, decision, demand, observation) => {
-  __p13c1.calls++;
-  const started = window.__EA_RUNNER__.nativeNow();
+  if (__p13c1.mode === "H" && !__p13c1.instrument) return;
+  if (__p13c1.instrument) __p13c1.calls++;
+  const started = __p13c1.instrument ? window.__EA_RUNNER__.nativeNow() : 0;
   try {
     if (__p13c1.mode !== "S") return;
-    const snapshotStarted = window.__EA_RUNNER__.nativeNow();
+    const snapshotStarted = __p13c1.instrument
+      ? window.__EA_RUNNER__.nativeNow()
+      : 0;
     const snapshot = __p13c1Hooks.createSmelterSnapshotForTest(input, decision, demand, observation);
     __p13c1.snapshot = snapshot;
     __p13c1.publications++;
-    __p13c1.snapshotMs.push(window.__EA_RUNNER__.nativeNow() - snapshotStarted);
+    if (__p13c1.instrument)
+      __p13c1.snapshotMs.push(window.__EA_RUNNER__.nativeNow() - snapshotStarted);
   } finally {
-    __p13c1.callbackMs.push(window.__EA_RUNNER__.nativeNow() - started);
+    if (__p13c1.instrument)
+      __p13c1.callbackMs.push(window.__EA_RUNNER__.nativeNow() - started);
   }
 };
 __p13c1Hooks.setP13C1Mode = (mode) => {
   if (!__p13c1Hooks.setSmelterObservationModeForTest(mode)) throw new Error("invalid observation mode");
   __p13c1.mode = mode;
 };
+__p13c1Hooks.setP13C1Instrumentation = (enabled) => { __p13c1.instrument = Boolean(enabled); };
 __p13c1Hooks.resetP13C1Window = () => {
   __p13c1.calls = 0; __p13c1.publications = 0; __p13c1.callbackMs = []; __p13c1.snapshotMs = [];
 };
@@ -364,7 +370,10 @@ async function runCorrectness(mode) {
       session,
       fixtureVerified ? fixtureProbePeriods : warmupPeriods,
     );
-    await session.evaluate(() => window.__EA_TEST_HOOKS__.resetP13C1Window());
+    await session.evaluate(() => {
+      window.__EA_TEST_HOOKS__.setP13C1Instrumentation(true);
+      window.__EA_TEST_HOOKS__.resetP13C1Window();
+    });
     const windowStartPeriod = await session.periods();
     await advancePeriods(session, 80);
     const diagnostics = await session.diagnostics();
@@ -514,7 +523,18 @@ async function runWindow(mode, label) {
       scriptDurationSec:
         metricsAfter.ScriptDuration - metricsBefore.ScriptDuration,
       wallMs,
-      observerCallbackCalls: hooks.ownerObservationCalls,
+      observerCallbackCalls:
+        mode === "H"
+          ? measuredPeriods / worktickPeriods
+          : mode === "S"
+            ? hooks.snapshotPublications
+            : hooks.ownerObservationCalls,
+      observerCallbackCountBasis:
+        mode === "H"
+          ? "owner schedule, verified by instrumented correctness cohort"
+          : mode === "S"
+            ? "snapshot publication count"
+            : "instrumented empty-hook count",
       snapshotPublications: hooks.snapshotPublications,
       additionalAuthorityReads: hooks.snapshotPublications,
       additionalPlannerCalls: 0,
