@@ -35368,6 +35368,45 @@
   }
 
   // src/domain/economy/production/smelter.ts
+  function smelterSteelTimeInvarianceReasonForExactVariant(incumbent, hypothetical) {
+    if (Object.is(incumbent.steelTimeToRequired, hypothetical.steelTimeToRequired))
+      return "steel-required-time-unchanged";
+    if (incumbent.productionSmelting === "iron" || incumbent.productionSmelting === "steel" || incumbent.productionSmelting === "storage")
+      return "production-mode-does-not-use-required-time";
+    if (incumbent.productionSmelting === "required" && incumbent.steelDemanded)
+      return "steel-demand-overrides-required-time";
+    if (incumbent.productionSmelting === "required" && incumbent.minerCount === 0 && incumbent.beltIronShipStateOnCount === 0)
+      return "no-miners-or-iron-ships-force-steel-weighting";
+  }
+  function hasFrozenDataGraph(value, visited) {
+    if (value === null || typeof value != "object" || visited.has(value)) return !0;
+    if (!Object.isFrozen(value)) return !1;
+    let prototype = Object.getPrototypeOf(value);
+    return Array.isArray(value) && prototype !== Array.prototype || !Array.isArray(value) && prototype !== Object.prototype && prototype !== null ? !1 : (visited.add(value), Reflect.ownKeys(value).every((key) => {
+      let descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return descriptor !== void 0 && "value" in descriptor && hasFrozenDataGraph(descriptor.value, visited);
+    }));
+  }
+  function proveSmelterSteelTimeInvariance(incumbent, hypothetical, profiler) {
+    try {
+      let visited = /* @__PURE__ */ new Set();
+      if (!hasFrozenDataGraph(incumbent, visited) || !hasFrozenDataGraph(hypothetical, visited))
+        return;
+      let incumbentKeys = Reflect.ownKeys(incumbent), hypotheticalKeys = Reflect.ownKeys(hypothetical);
+      if (incumbentKeys.length !== hypotheticalKeys.length || Object.getPrototypeOf(incumbent) !== Object.getPrototypeOf(hypothetical) || incumbentKeys.some((key) => !hypotheticalKeys.includes(key)) || incumbentKeys.some((key) => {
+        let before = Object.getOwnPropertyDescriptor(incumbent, key), after = Object.getOwnPropertyDescriptor(hypothetical, key);
+        return before === void 0 || after === void 0 || !("value" in before) || !("value" in after) || key !== "steelTimeToRequired" && !Object.is(before.value, after.value);
+      }) || !Number.isFinite(incumbent.steelTimeToRequired) || !Number.isFinite(hypothetical.steelTimeToRequired) || typeof incumbent.steelDemanded != "boolean")
+        return;
+    } catch {
+      return;
+    }
+    let invarianceStarted = void 0;
+    return smelterSteelTimeInvarianceReasonForExactVariant(
+      incumbent,
+      hypothetical
+    );
+  }
   var EMPTY_DECISION = Object.freeze({
     fuelAdjustments: Object.freeze([]),
     smeltAdjustments: Object.freeze([]),
@@ -35475,7 +35514,10 @@
     "Wood",
     "Inferno",
     "Super"
-  ]);
+  ]), OWNER_CREATED_IMMUTABLE_INPUT = /* @__PURE__ */ Symbol("captured-smelter-input");
+  function ownerSteelTimeVariant(input, steelTimeToRequired) {
+    return Object.freeze({ ...input, steelTimeToRequired });
+  }
   var SMELTER_FUEL_IDS = FUEL_IDS;
   function readCount(value) {
     let count2 = finite(value);
@@ -35720,6 +35762,310 @@
       )
     );
   }
+  function evaluateCapturedSmelterGoalDemandProposal(snapshot2, proposal, ownerCycle, comparisonModeForTest = "I", profiler) {
+    let item = isRecord(proposal) ? proposal : {}, validity = isRecord(item.validity) ? item.validity : {}, nativeActionPrice = isRecord(item.nativeActionPrice) ? item.nativeActionPrice : void 0, reasons = [], requiredInvalidations = [
+      "root-replacement",
+      "progression-change",
+      "offer-price-change",
+      "goal-change-or-satisfaction",
+      "resource-stock-change",
+      "demand-change",
+      "native-control-generation-change",
+      "permission-change",
+      "construction-queue-change",
+      "conflicting-iron-demand",
+      "unknown-commitment-coverage",
+      "owner-disabled-or-uninitialized",
+      "incomplete-candidate-enumeration",
+      "newer-owner-cycle"
+    ], structuralReasons = [];
+    (typeof item.goalId != "string" || !item.goalId) && structuralReasons.push("goal-identity-unavailable"), (typeof item.requirementId != "string" || !item.requirementId) && structuralReasons.push("requirement-identity-unavailable"), item.provenance !== "verified-mandatory" && item.provenance !== "provisional-advisory" && structuralReasons.push("requirement-provenance-unavailable"), nativeActionPrice && (typeof nativeActionPrice.actionId != "string" || typeof nativeActionPrice.priceIdentity != "string") && structuralReasons.push("native-action-price-identity-unavailable"), typeof item.additionalQuantity != "number" || !Number.isFinite(item.additionalQuantity) ? structuralReasons.push("additional-quantity-must-be-finite") : item.additionalQuantity <= 0 && structuralReasons.push("additional-quantity-must-be-positive"), (item.resourceId !== "Steel" || item.pool !== "city") && structuralReasons.push("unsupported-resource-pool"), item.originatingOwner !== "smelter" && structuralReasons.push("originating-owner-mismatch"), validity.valid !== !0 && structuralReasons.push("request-invalid"), (!Number.isSafeInteger(validity.expiresAtOwnerCycle) || validity.expiresAtOwnerCycle < ownerCycle) && reasons.push("request-expired"), (!Array.isArray(validity.invalidatedBy) || !validity.invalidatedBy.every(
+      (condition) => typeof condition == "string"
+    )) && structuralReasons.push("invalidation-declaration-malformed"), Array.isArray(item.knownCompetingCommitments) || structuralReasons.push("competing-commitments-unavailable"), Array.isArray(item.knownCompetingCommitments) && !item.knownCompetingCommitments.every(
+      (commitment) => typeof commitment == "string"
+    ) && structuralReasons.push("competing-commitments-malformed"), typeof item.unknownCommitmentCoverage != "boolean" && structuralReasons.push("commitment-coverage-unavailable"), reasons.push(...structuralReasons), item.root !== snapshot2.root && reasons.push("root-replaced"), item.progressionGeneration !== snapshot2.progressionGeneration && reasons.push("progression-changed"), item.demandGeneration !== ownerCycle && reasons.push("demand-generation-stale"), item.permissionEnabled !== snapshot2.permissionEnabled && reasons.push("permission-changed");
+    let structurallyValid = structuralReasons.length === 0, proposalValidForEvaluation = structurallyValid && reasons.length === 0, comparison = proposalValidForEvaluation ? compareCapturedSmelterSteelDemand(
+      snapshot2,
+      {
+        resourceId: item.resourceId,
+        pool: item.pool,
+        additionalSteel: item.additionalQuantity
+      },
+      comparisonModeForTest,
+      profiler
+    ) : void 0;
+    comparison && !comparison.requestValid && reasons.push(...comparison.requestUnavailableReasons), comparison && !comparison.quantityRepresented && reasons.push(...comparison.unavailableReasons);
+    let knownCommitments = Array.isArray(item.knownCompetingCommitments) ? item.knownCompetingCommitments.filter(
+      (commitment) => typeof commitment == "string"
+    ) : [], sourceBackedClaims = Array.isArray(item.provenConflictingCommitments) ? item.provenConflictingCommitments.filter(
+      (claim) => isRecord(claim) && claim.sourceBacked === !0
+    ) : [], demonstratedConflicts = sourceBackedClaims.filter(
+      (claim) => claim.resourceId === "Steel" && claim.pool === "city" && typeof claim.reason == "string" && claim.reason.trim().length > 0
+    ), ownerLocalComparisonAvailable = proposalValidForEvaluation && comparison?.quantitativeComparison === "available", requestValid = proposalValidForEvaluation && comparison?.requestValid !== !1, status2 = requestValid ? demonstratedConflicts.length > 0 ? "request-blocked-by-competing-commitment" : comparison?.quantityRepresented ? comparison.commandsChanged ? comparison.nativeAllocationFeasible ? "commands-changed" : "native-allocation-infeasible" : "quantity-represented-but-native-policy-insensitive" : "unavailable-authority" : reasons.includes("request-expired") ? "request-expired" : reasons.some(
+      (reason) => [
+        "root-replaced",
+        "progression-changed",
+        "permission-changed",
+        "demand-generation-stale"
+      ].includes(reason)
+    ) ? "request-invalidated" : "invalid-request", diagnosticStates = [
+      ...requestValid ? [] : ["invalid-request"],
+      ...reasons.includes("request-expired") ? ["request-expired"] : [],
+      ...reasons.some(
+        (reason) => [
+          "root-replaced",
+          "progression-changed",
+          "permission-changed",
+          "demand-generation-stale"
+        ].includes(reason)
+      ) ? ["request-invalidated"] : [],
+      ...comparison && !comparison.quantityRepresented ? ["unavailable-authority"] : [],
+      ...comparison?.quantityRepresented ? ["quantity-represented"] : [],
+      ...comparison?.classification === "quantity-represented-but-native-policy-insensitive" ? ["quantity-represented-but-native-policy-insensitive"] : [],
+      ...comparison?.commandsChanged ? ["commands-changed"] : [],
+      ...comparison?.nativeAllocationFeasible === !1 ? ["native-allocation-infeasible"] : [],
+      "production-effect-unknown",
+      "economic-benefit-unknown",
+      ...demonstratedConflicts.length > 0 ? ["request-blocked-by-competing-commitment"] : [],
+      ...item.unknownCommitmentCoverage === !0 ? ["unknown-commitment-coverage"] : []
+    ];
+    return Object.freeze({
+      proposalValidForEvaluation: requestValid,
+      structurallyValid,
+      ownerLocalComparisonAvailable,
+      goalRequestAuthorized: !1,
+      status: status2,
+      diagnosticStates: Object.freeze([...new Set(diagnosticStates)]),
+      reasons: Object.freeze([...new Set(reasons)]),
+      requestBlockedByCompetingCommitment: demonstratedConflicts.length > 0,
+      unknownCommitmentCoverage: typeof item.unknownCommitmentCoverage == "boolean" ? item.unknownCommitmentCoverage : void 0,
+      freshness: Object.freeze({
+        sameCycleRoot: item.root === snapshot2.root,
+        sameCycleProgression: item.progressionGeneration === snapshot2.progressionGeneration,
+        sameCyclePermission: item.permissionEnabled === snapshot2.permissionEnabled,
+        demandGenerationTokenMatchesOwnerCycle: item.demandGeneration === ownerCycle,
+        demandIdentity: "unknown",
+        proposalDemandGeneration: typeof item.demandGeneration == "number" ? item.demandGeneration : void 0,
+        currentOwnerCycle: ownerCycle,
+        invalidationListIsDeclarationOnly: !0,
+        declaredInvalidations: Object.freeze(
+          Array.isArray(validity.invalidatedBy) ? validity.invalidatedBy.filter(
+            (condition) => typeof condition == "string"
+          ) : []
+        ),
+        missingInvalidationDeclarations: Object.freeze(
+          requiredInvalidations.filter(
+            (condition) => !Array.isArray(validity.invalidatedBy) || !validity.invalidatedBy.includes(condition)
+          )
+        ),
+        verifiedPriceIdentity: !1,
+        currentGoalIdentity: "unknown",
+        offerFreshness: "unknown",
+        goalFreshness: "unknown",
+        queueFreshness: "unknown",
+        authorizationToExecute: !1
+      }),
+      knownCommitments: Object.freeze([...knownCommitments]),
+      sourceBackedCompetingClaims: Object.freeze(sourceBackedClaims),
+      demonstratedConflicts: Object.freeze(demonstratedConflicts),
+      productionEffectKnown: !1,
+      economicBenefitKnown: !1,
+      comparison
+    });
+  }
+  function createCapturedSmelterIncumbentSnapshot(input, decision, demand, observation) {
+    let unavailableAuthority = [
+      ...Number.isSafeInteger(observation.progressionGeneration) ? [] : ["progression-generation"],
+      ...Number.isSafeInteger(observation.controlGeneration) ? [] : ["control-generation"],
+      ...observation.plannedCommands.some((command) => {
+        let method = command.slice(0, command.indexOf(":"));
+        return !observation.controlMethods.includes(method);
+      }) ? ["native-command-method"] : [],
+      ...input.initialised ? [] : ["smelter-input"],
+      "cross-owner-commitment-coverage",
+      "measured-production-marginals",
+      "post-execution-allocation-is-a-separate-observation"
+    ], savingTarget = demand.savingTarget;
+    return Object.freeze({
+      ownerId: "smelter",
+      capability: "smelter-allocation",
+      boundary: "after-plan-before-native-execution",
+      root: observation.root,
+      progressionGeneration: observation.progressionGeneration,
+      permissionEnabled: observation.permissionEnabled,
+      demand: Object.freeze({
+        requestedSteel: demand.requestedSteel,
+        steelDemanded: demand.isSteelDemanded,
+        savingTargetName: savingTarget?.name,
+        savingTargetPool: savingTarget?.pool,
+        savingTargetPoolWasPresent: savingTarget != null && Object.hasOwn(savingTarget, "pool"),
+        steelTarget: savingTarget?.cost.Steel,
+        savingTargetSteelCostWasPresent: savingTarget != null && Object.hasOwn(savingTarget.cost, "Steel"),
+        savingTargetCost: savingTarget?.cost,
+        steelSupplyScope: observation.steelSupplyScope
+      }),
+      input,
+      steelResource: observation.steelResource,
+      steelSupplyScope: observation.steelSupplyScope,
+      demandAuthorityAvailable: observation.demandAuthorityAvailable,
+      decision,
+      commands: Object.freeze([...observation.plannedCommands]),
+      controlGeneration: observation.controlGeneration,
+      controlMethods: Object.freeze([...observation.controlMethods]),
+      unavailableAuthority: Object.freeze([...new Set(unavailableAuthority)])
+    });
+  }
+  function isRecursivelyFrozenGraph(value, seen = /* @__PURE__ */ new WeakSet()) {
+    if (value === null || typeof value != "object" && typeof value != "function")
+      return !0;
+    let objectValue = value;
+    return seen.has(objectValue) ? !0 : Object.isFrozen(objectValue) ? (seen.add(objectValue), Reflect.ownKeys(objectValue).every((key) => {
+      let descriptor = Object.getOwnPropertyDescriptor(objectValue, key);
+      return descriptor !== void 0 && !("get" in descriptor) && !("set" in descriptor) && isRecursivelyFrozenGraph(descriptor.value, seen);
+    })) : !1;
+  }
+  function createCapturedSmelterOwnerIncumbentSnapshot(input, decision, demand, observation) {
+    let ownerInput = isRecursivelyFrozenGraph(input) ? Object.freeze({
+      ...input,
+      [OWNER_CREATED_IMMUTABLE_INPUT]: !0
+    }) : input;
+    return createCapturedSmelterIncumbentSnapshot(
+      ownerInput,
+      decision,
+      demand,
+      observation
+    );
+  }
+  function unbrandDiagnosticInput(input) {
+    if (input[OWNER_CREATED_IMMUTABLE_INPUT] !== !0)
+      return input;
+    let diagnosticInput = Object.fromEntries(
+      Reflect.ownKeys(input).filter((key) => key !== OWNER_CREATED_IMMUTABLE_INPUT).map((key) => [key, Reflect.get(input, key)])
+    );
+    return Object.freeze(diagnosticInput);
+  }
+  function unbrandDiagnosticResult(result) {
+    if (result.comparison === void 0) return result;
+    let comparison = Object.freeze({
+      ...result.comparison,
+      incumbentInput: unbrandDiagnosticInput(result.comparison.incumbentInput),
+      proposedInput: result.comparison.proposedInput === void 0 ? void 0 : unbrandDiagnosticInput(result.comparison.proposedInput)
+    });
+    return Object.freeze({ ...result, comparison });
+  }
+  function compareCapturedSmelterSteelDemand(snapshot2, request, mode = "I", profiler) {
+    let preCommandAllocation = {
+      Iron: snapshot2.input.ironCount,
+      Steel: snapshot2.input.steelCount,
+      Iridium: snapshot2.input.iridiumCount,
+      ...Object.fromEntries(
+        snapshot2.input.fuels.map((fuel) => [fuel.id, fuel.currentFuelCount])
+      )
+    }, incumbentAllocation = {
+      ...preCommandAllocation
+    };
+    for (let item of snapshot2.decision.fuelAdjustments)
+      incumbentAllocation[item.fuelId] = item.expectedCurrentFuelCount + item.delta;
+    for (let item of snapshot2.decision.smeltAdjustments)
+      incumbentAllocation[item.productionId] = item.expectedCurrentCount + item.delta;
+    let incumbent = snapshot2.commands, requestRecord = isRecord(request) ? request : {}, additionalSteel = requestRecord.additionalSteel, quantitativeStarted = void 0, requestUnavailableReasons = [];
+    requestRecord.resourceId !== "Steel" && requestUnavailableReasons.push("unsupported-resource"), requestRecord.pool !== "city" && requestUnavailableReasons.push("unsupported-resource-pool"), typeof additionalSteel != "number" || !Number.isFinite(additionalSteel) ? requestUnavailableReasons.push("additional-quantity-must-be-finite-number") : additionalSteel <= 0 && requestUnavailableReasons.push("additional-quantity-must-be-positive");
+    let requestedSteel = snapshot2.demand.requestedSteel, steel = snapshot2.steelResource, incumbentDemandValid = Number.isFinite(requestedSteel) && requestedSteel >= 0, unclampedTarget = typeof additionalSteel == "number" && incumbentDemandValid ? requestedSteel + additionalSteel : NaN;
+    typeof additionalSteel == "number" && additionalSteel > 0 && incumbentDemandValid && !Number.isFinite(unclampedTarget) && requestUnavailableReasons.push("combined-demand-quantity-overflow");
+    let storageCapacity = steel?.maximum, storageAuthorityValid = typeof storageCapacity == "number" && Number.isFinite(storageCapacity) && storageCapacity >= 0, combinedTarget = Number.isFinite(unclampedTarget) && storageAuthorityValid ? Math.min(unclampedTarget, storageCapacity) : NaN, requestValid = requestUnavailableReasons.length === 0, representationUnavailableReasons = [];
+    typeof additionalSteel == "number" && additionalSteel > 0 && incumbentDemandValid && unclampedTarget - requestedSteel !== additionalSteel && unclampedTarget < storageCapacity && representationUnavailableReasons.push(
+      "additional-quantity-below-representable-resolution"
+    ), snapshot2.demandAuthorityAvailable || representationUnavailableReasons.push(
+      "incumbent-demand-authority-unavailable"
+    ), incumbentDemandValid || representationUnavailableReasons.push(
+      "incumbent-demand-quantity-unavailable"
+    ), typeof snapshot2.demand.steelDemanded != "boolean" && representationUnavailableReasons.push(
+      "incumbent-demand-presence-unavailable"
+    ), snapshot2.steelResource || representationUnavailableReasons.push("steel-quantity-input-unavailable"), snapshot2.demand.steelSupplyScope === "regional" ? representationUnavailableReasons.push(
+      "regional-steel-request-scope-unavailable"
+    ) : snapshot2.demand.steelSupplyScope !== "civilization-wide" && representationUnavailableReasons.push("steel-payment-scope-unavailable"), storageAuthorityValid || representationUnavailableReasons.push("steel-storage-capacity-unavailable"), snapshot2.input.initialised || representationUnavailableReasons.push("smelter-input-unavailable"), snapshot2.input.productionSmelting || representationUnavailableReasons.push("required-target-policy-unavailable");
+    let proposedSteelTimeToRequired;
+    if (requestValid && typeof additionalSteel == "number" && incumbentDemandValid && steel) {
+      let target = Math.max(steel.amount, combinedTarget);
+      proposedSteelTimeToRequired = timeTo(steel, target), target > steel.amount && proposedSteelTimeToRequired === 0 && representationUnavailableReasons.push(
+        "additional-quantity-underflow-in-required-time"
+      );
+    }
+    let quantityRepresented = requestValid && representationUnavailableReasons.length === 0, hypotheticalStarted = void 0, proposedInput = quantityRepresented && proposedSteelTimeToRequired !== void 0 ? ownerSteelTimeVariant(snapshot2.input, proposedSteelTimeToRequired) : void 0, policyPermitted = quantityRepresented ? snapshot2.permissionEnabled : void 0, hasOwnerConstructedExactVariant = snapshot2.input[OWNER_CREATED_IMMUTABLE_INPUT] === !0 && proposedInput !== void 0 && proposedInput[OWNER_CREATED_IMMUTABLE_INPUT] === !0, invarianceReason = proposedInput && mode === "I" ? hasOwnerConstructedExactVariant ? smelterSteelTimeInvarianceReasonForExactVariant(
+      snapshot2.input,
+      proposedInput
+    ) : proveSmelterSteelTimeInvariance(
+      snapshot2.input,
+      proposedInput,
+      void 0
+    ) : void 0, comparisonMethod = proposedInput && policyPermitted ? invarianceReason === void 0 ? "planned" : "proven-invariant" : "unavailable", proposedDecision = comparisonMethod === "proven-invariant" ? snapshot2.decision : comparisonMethod === "planned" && proposedInput ? planSmelter(proposedInput) : void 0, hypotheticalPlannerCalls = comparisonMethod === "planned" ? 1 : 0, normalizationStarted = void 0, proposedCommands = proposedDecision ? comparisonMethod === "proven-invariant" ? incumbent : normalizedCommands(proposedDecision) : void 0, commandsChanged = proposedCommands ? JSON.stringify(proposedCommands) !== JSON.stringify(incumbent) : void 0, changedCommands = proposedCommands && commandsChanged ? Object.freeze({ incumbent, proposed: proposedCommands }) : void 0, allocationStarted = void 0, proposedAllocation = {
+      ...preCommandAllocation
+    };
+    for (let item of proposedDecision?.fuelAdjustments ?? [])
+      proposedAllocation[item.fuelId] = item.expectedCurrentFuelCount + item.delta;
+    for (let item of proposedDecision?.smeltAdjustments ?? [])
+      proposedAllocation[item.productionId] = item.expectedCurrentCount + item.delta;
+    let displacedAllocation = proposedDecision ? Object.freeze(
+      Object.fromEntries(
+        Object.entries(incumbentAllocation).map(([id, value]) => [
+          id,
+          value - (proposedAllocation[id] ?? value)
+        ]).filter(([, delta]) => delta !== 0)
+      )
+    ) : void 0, proposedAllocationResult = proposedDecision ? Object.freeze(proposedAllocation) : void 0, commandsFeasible = proposedDecision !== void 0 && Number.isSafeInteger(snapshot2.controlGeneration) && proposedCommands.every(
+      (command) => snapshot2.controlMethods.includes(command.slice(0, command.indexOf(":")))
+    ) && Object.values(proposedAllocation).every(
+      (count2) => Number.isSafeInteger(count2) && count2 >= 0
+    ) && proposedAllocation.Iron + proposedAllocation.Steel + proposedAllocation.Iridium <= snapshot2.input.totalSmelters + snapshot2.input.extraOperating && SMELTER_FUEL_IDS.reduce(
+      (sum, id) => sum + (proposedAllocation[id] ?? 0),
+      0
+    ) <= snapshot2.input.totalSmelters + snapshot2.input.extraOperating, unavailableReasons = requestValid ? quantityRepresented ? policyPermitted ? commandsFeasible ? [] : ["native-control-or-allocation-feasibility-unavailable"] : ["smelter-policy-disabled"] : [...representationUnavailableReasons] : [...requestUnavailableReasons, ...representationUnavailableReasons], diagnosticResultStarted = void 0;
+    return Object.freeze({
+      requestValid,
+      requestUnavailableReasons: Object.freeze(requestUnavailableReasons),
+      quantityRepresented,
+      hypotheticalPlannerCalls,
+      comparisonMethod,
+      invarianceReason,
+      incumbentDemand: snapshot2.demand,
+      currentSteel: snapshot2.steelResource,
+      incumbentInput: snapshot2.input,
+      incumbentDecision: snapshot2.decision,
+      proposedDecision,
+      steelSupplyScope: snapshot2.demand.steelSupplyScope,
+      incumbentSteelTimeToRequired: snapshot2.input.steelTimeToRequired,
+      requestedSteelBefore: incumbentDemandValid ? requestedSteel : void 0,
+      requestedSteelAfter: quantityRepresented && Number.isFinite(combinedTarget) ? combinedTarget : void 0,
+      effectiveAdditionalSteel: quantityRepresented && incumbentDemandValid ? Math.max(0, combinedTarget - requestedSteel) : void 0,
+      storageClamped: quantityRepresented && Number.isFinite(unclampedTarget) ? combinedTarget < unclampedTarget : void 0,
+      quantitativeComparison: proposedDecision ? "available" : "unavailable",
+      proposedInput,
+      policyPermitted,
+      nativeAllocationFeasible: proposedDecision ? commandsFeasible : void 0,
+      commandsChanged,
+      incumbentCommands: Object.freeze([...incumbent]),
+      proposedCommands,
+      incumbentAllocation,
+      proposedAllocation: proposedAllocationResult,
+      changedCommands,
+      availableSmelters: proposedDecision ? Math.max(
+        0,
+        snapshot2.input.totalSmelters + snapshot2.input.extraOperating - incumbentAllocation.Iron - incumbentAllocation.Steel - incumbentAllocation.Iridium - SMELTER_FUEL_IDS.reduce(
+          (sum, id) => sum + (incumbentAllocation[id] ?? 0),
+          0
+        )
+      ) : void 0,
+      displacedAllocation,
+      quantityDeliverable: void 0,
+      incrementalProductionKnown: !1,
+      economicBenefitKnown: !1,
+      // A current stock comparison is not an economic redundancy proof. The
+      // request remains a represented demand even when it leaves native policy unchanged.
+      redundant: void 0,
+      classification: proposedDecision ? commandsChanged ? "commands-changed" : "quantity-represented-but-native-policy-insensitive" : "unavailable",
+      unavailableReasons: Object.freeze(unavailableReasons)
+    });
+  }
   function createCapturedSmelterAutomation(dependencies) {
     return Object.freeze({
       readPlanForDiagnostics() {
@@ -35770,7 +36116,7 @@
           steelSupplyScope: capturedSupplyScope(session.root),
           demandAuthorityAvailable: session.demandAuthorityAvailable
         }) : void 0;
-        publishPlan && dependencies.observePlanForDiagnostics?.(
+        if (publishPlan && dependencies.observePlanForDiagnostics?.(
           input,
           decision,
           {
@@ -35779,7 +36125,38 @@
             savingTarget: session.demand.savingTarget
           },
           observation
-        );
+        ), publishPlan && observation !== void 0) {
+          let currentDemand = {
+            requestedSteel: session.demand.requestedQuantity("Steel"),
+            isSteelDemanded: session.demand.isDemanded("Steel"),
+            savingTarget: session.demand.savingTarget
+          }, request = dependencies.readGoalDemandProposalForDiagnostics?.(
+            input,
+            decision,
+            currentDemand,
+            observation
+          );
+          if (request !== void 0) {
+            let snapshot2 = createCapturedSmelterOwnerIncumbentSnapshot(
+              input,
+              decision,
+              currentDemand,
+              observation
+            ), started = dependencies.readComparisonClockForDiagnostics?.(), internalResult = evaluateCapturedSmelterGoalDemandProposal(
+              snapshot2,
+              request.proposal,
+              request.ownerCycle,
+              request.comparisonMode
+            ), result = unbrandDiagnosticResult(internalResult), elapsed = started === void 0 || !Number.isFinite(started) || dependencies.readComparisonClockForDiagnostics === void 0 ? void 0 : dependencies.readComparisonClockForDiagnostics() - started;
+            dependencies.observeGoalDemandComparisonForDiagnostics?.(
+              result,
+              elapsed,
+              request.ownerCycle,
+              observation,
+              currentDemand
+            );
+          }
+        }
         let finish = (outcome, postcondition = Object.freeze({
           status: "not-checked",
           allocations: Object.freeze({})

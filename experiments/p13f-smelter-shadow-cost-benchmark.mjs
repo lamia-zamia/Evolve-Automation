@@ -94,6 +94,10 @@ __p13fHooks.observeSmelterPlanForTest = (input, decision, demand, observation) =
   }
 };
 __p13fHooks.observeSmelterGoalDemandAdmissionForTest = (result) => {
+  for (const input of [result.comparison?.incumbentInput, result.comparison?.proposedInput]) {
+    if (input && Object.getOwnPropertySymbols(input).some((symbol) => symbol.description === "captured-smelter-input"))
+      throw new Error("owner trust marker escaped through the diagnostic result");
+  }
   if (!__p13f.instrument) return;
   __p13f.proposalChecks++;
   __p13f.valid += result.structurallyValid && result.proposalValidForEvaluation ? 1 : 0;
@@ -785,12 +789,15 @@ try {
     }
   };
   const endToEndControls = [];
-  for (let repeat = 0; repeat < 4; repeat++)
-    endToEndControls.push(await runCpuCell("G", "I", `GG-${repeat + 1}`));
+  if (!process.argv.includes("--correctness-only"))
+    for (let repeat = 0; repeat < 4; repeat++)
+      endToEndControls.push(await runCpuCell("G", "I", `GG-${repeat + 1}`));
   const gCpu = endToEndControls.map((row) => row.activeRendererCpuSec);
-  const controlVariationPercent =
-    ((Math.max(...gCpu) - Math.min(...gCpu)) / mean(gCpu)) * 100;
+  const controlVariationPercent = gCpu.length
+    ? ((Math.max(...gCpu) - Math.min(...gCpu)) / mean(gCpu)) * 100
+    : undefined;
   const endToEndCalibrationResolvesTwoPercent =
+    controlVariationPercent !== undefined &&
     controlVariationPercent < 2 &&
     endToEndControls.every((row) => row.taskDurationSec > 0);
   const endToEndCells = [];
@@ -876,7 +883,9 @@ try {
       cells: endToEndCells,
       decision: endToEndCalibrationResolvesTwoPercent
         ? "measured"
-        : "unresolved-control-variation-exceeded-2-percent",
+        : process.argv.includes("--correctness-only")
+          ? "skipped-correctness-only"
+          : "unresolved-control-variation-exceeded-2-percent",
     },
   };
   assertIdenticalBundleHashes([bundleSha256, session.bundle.sha256]);

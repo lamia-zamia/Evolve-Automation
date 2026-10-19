@@ -10,12 +10,18 @@ import {
   isCapturedSmelterSnapshotCurrent,
   setCapturedSmelterObservationModeForTest,
 } from "../../../src/adapters/evolve/economy/production/captured-smelter.ts";
+import * as capturedSmelterModule from "../../../src/adapters/evolve/economy/production/captured-smelter.ts";
 import {
   planSmelter,
   proveSmelterSteelTimeInvariance,
 } from "../../../src/domain/economy/production/smelter.ts";
 
 globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+assert.equal(
+  capturedSmelterModule.createCapturedSmelterOwnerIncumbentSnapshot,
+  undefined,
+  "caller-supplied graphs cannot be branded through an exported helper",
+);
 assert.equal(capturedSmelterSkipReason(false, true), "permission-disabled");
 assert.equal(
   capturedSmelterSkipReason(true, false),
@@ -165,6 +171,26 @@ assert.equal(
   }),
   undefined,
   "an operating Iron ship prevents the no-miner override proof",
+);
+const nestedMutableInput = Object.freeze({
+  ...sensitiveBase,
+  fuels: [
+    {
+      id: "Coal",
+      unlocked: true,
+      isInfernoBeforeOil: false,
+      currentFuelCount: 0,
+      cost: [],
+    },
+  ],
+});
+assert.equal(
+  proveSmelterSteelTimeInvariance(nestedMutableInput, {
+    ...nestedMutableInput,
+    steelTimeToRequired: 13,
+  }),
+  undefined,
+  "a shallow-frozen caller graph with nested mutable data cannot use the shortcut",
 );
 const unchangedTimeInput = Object.freeze({
   ...sensitiveBase,
@@ -333,9 +359,20 @@ const diagnosticReadAutomation = createCapturedSmelterAutomation({
     };
   },
   shouldObservePlanForDiagnostics: () => true,
-  observePlanForDiagnostics: (_input, _decision, _demand, observation) => {
+  observePlanForDiagnostics: (
+    _input,
+    _decision,
+    _demand,
+    observation,
+    ...extra
+  ) => {
     ordinaryReadCounts.observerCalls++;
     diagnosticSupplyScope = observation?.steelSupplyScope;
+    assert.equal(
+      extra.length,
+      0,
+      "owner snapshot capability is not exported through diagnostics",
+    );
   },
 });
 diagnosticReadAutomation.run();

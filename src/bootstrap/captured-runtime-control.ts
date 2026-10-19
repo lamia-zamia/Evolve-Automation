@@ -174,7 +174,6 @@ import {
   applyCapturedSmelterTestCandidate,
   capturedSmelterSkipReason,
   createCapturedSmelterIncumbentSnapshot,
-  createCapturedSmelterOwnerIncumbentSnapshot,
   compareCapturedSmelterSteelDemand,
   evaluateCapturedSmelterGoalDemandProposal,
   createCapturedSmelterAutomation,
@@ -5606,6 +5605,13 @@ export function startCapturedRuntime({
             );
             if (typeof observer === "function")
               observer(input, decision, demand, observation);
+          },
+          readGoalDemandProposalForDiagnostics: (
+            input,
+            decision,
+            demand,
+            observation,
+          ) => {
             const hooks = smelterTestHooks();
             const proposalProvider = readProperty(
               hooks,
@@ -5630,52 +5636,80 @@ export function startCapturedRuntime({
                 observation,
                 ownerCycle,
               );
-              if (proposal !== undefined) {
-                const snapshot = createCapturedSmelterOwnerIncumbentSnapshot(
-                  input,
-                  decision,
-                  {
-                    requestedSteel: demand.requestedSteel,
-                    isSteelDemanded: demand.isSteelDemanded,
-                    savingTarget: demand.savingTarget,
-                  },
-                  observation,
-                );
-                const captureSnapshot = readProperty(
-                  hooks,
-                  "observeSmelterComparisonSnapshotForTest",
-                );
-                if (typeof captureSnapshot === "function")
-                  captureSnapshot(snapshot, ownerCycle);
-                const comparisonClock = readProperty(
-                  hooks,
-                  "readSmelterComparisonClockForTest",
-                );
-                const comparisonStartedAt =
-                  typeof comparisonClock === "function"
-                    ? comparisonClock()
-                    : undefined;
-                const result = evaluateCapturedSmelterGoalDemandProposal(
-                  snapshot,
+              if (proposal !== undefined)
+                return Object.freeze({
                   proposal,
                   ownerCycle,
-                  readProperty(hooks, "smelterComparisonModeForTest") === "P"
-                    ? "P"
-                    : "I",
-                );
-                const comparisonElapsedMs =
-                  typeof comparisonClock === "function" &&
-                  typeof comparisonStartedAt === "number"
-                    ? comparisonClock() - comparisonStartedAt
-                    : undefined;
-                const report = readProperty(
-                  hooks,
-                  "observeSmelterGoalDemandAdmissionForTest",
-                );
-                if (typeof report === "function")
-                  report(result, comparisonElapsedMs);
-              }
+                  comparisonMode:
+                    readProperty(hooks, "smelterComparisonModeForTest") === "P"
+                      ? ("P" as const)
+                      : ("I" as const),
+                });
             }
+            return undefined;
+          },
+          readComparisonClockForDiagnostics: () => {
+            const clock = readProperty(
+              smelterTestHooks(),
+              "readSmelterComparisonClockForTest",
+            );
+            return typeof clock === "function" ? clock() : NaN;
+          },
+          observeGoalDemandComparisonForDiagnostics: (
+            result,
+            comparisonElapsedMs,
+            ownerCycle,
+            observation,
+            demand,
+          ) => {
+            const hooks = smelterTestHooks();
+            const captureSnapshot = readProperty(
+              hooks,
+              "observeSmelterComparisonSnapshotForTest",
+            );
+            if (typeof captureSnapshot === "function")
+              captureSnapshot(
+                Object.freeze({
+                  ownerId: "smelter",
+                  capability: "smelter-allocation",
+                  boundary: "after-plan-before-native-execution",
+                  root: observation.root,
+                  progressionGeneration: observation.progressionGeneration,
+                  permissionEnabled: observation.permissionEnabled,
+                  demand: Object.freeze({
+                    requestedSteel: demand.requestedSteel,
+                    steelDemanded: demand.isSteelDemanded,
+                    savingTargetName: demand.savingTarget?.name,
+                    savingTargetPool: demand.savingTarget?.pool,
+                    savingTargetPoolWasPresent:
+                      demand.savingTarget != null &&
+                      Object.hasOwn(demand.savingTarget, "pool"),
+                    steelTarget: demand.savingTarget?.cost["Steel"],
+                    savingTargetSteelCostWasPresent:
+                      demand.savingTarget != null &&
+                      Object.hasOwn(demand.savingTarget.cost, "Steel"),
+                    savingTargetCost: demand.savingTarget?.cost,
+                    steelSupplyScope: observation.steelSupplyScope,
+                  }),
+                  input: result.comparison?.incumbentInput,
+                  steelResource: result.comparison?.currentSteel,
+                  steelSupplyScope: result.comparison?.steelSupplyScope,
+                  demandAuthorityAvailable:
+                    observation.demandAuthorityAvailable,
+                  decision: result.comparison?.incumbentDecision,
+                  commands: result.comparison?.incumbentCommands,
+                  controlGeneration: observation.controlGeneration,
+                  controlMethods: observation.controlMethods,
+                  unavailableAuthority: Object.freeze([]),
+                }),
+                ownerCycle,
+              );
+            const report = readProperty(
+              hooks,
+              "observeSmelterGoalDemandAdmissionForTest",
+            );
+            if (typeof report === "function")
+              report(result, comparisonElapsedMs);
           },
           observeOutcomeForTest: (outcome, observation, postcondition) => {
             const observer = readProperty(

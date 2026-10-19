@@ -126,6 +126,43 @@ export interface CapturedSmelterDependencies {
       demandAuthorityAvailable: boolean;
     }>,
   ) => void;
+  /** Test-only untrusted proposal input. Trusted snapshots stay inside this owner boundary. */
+  readonly readGoalDemandProposalForDiagnostics?: (
+    input: Readonly<SmelterInput>,
+    decision: ReturnType<typeof planSmelter>,
+    demand: Readonly<{
+      requestedSteel: number;
+      isSteelDemanded: boolean;
+      savingTarget: CapturedDemandSample["savingTarget"];
+    }>,
+    observation: NonNullable<
+      Parameters<
+        NonNullable<CapturedSmelterDependencies["observePlanForDiagnostics"]>
+      >[3]
+    >,
+  ) =>
+    | Readonly<{
+        proposal: unknown;
+        ownerCycle: number;
+        comparisonMode: "P" | "I";
+      }>
+    | undefined;
+  readonly readComparisonClockForDiagnostics?: () => number;
+  readonly observeGoalDemandComparisonForDiagnostics?: (
+    result: ReturnType<typeof evaluateCapturedSmelterGoalDemandProposal>,
+    comparisonElapsedMs: number | undefined,
+    ownerCycle: number,
+    observation: NonNullable<
+      Parameters<
+        NonNullable<CapturedSmelterDependencies["observePlanForDiagnostics"]>
+      >[3]
+    >,
+    demand: Readonly<{
+      requestedSteel: number;
+      isSteelDemanded: boolean;
+      savingTarget: CapturedDemandSample["savingTarget"];
+    }>,
+  ) => void;
   readonly shouldObservePlanForDiagnostics?: () => boolean;
   readonly observeOutcomeForTest?: (
     outcome: CommandExecutionOutcome,
@@ -1025,8 +1062,32 @@ export function createCapturedSmelterIncumbentSnapshot(
   });
 }
 
+function isRecursivelyFrozenGraph(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): boolean {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  )
+    return true;
+  const objectValue = value as object;
+  if (seen.has(objectValue)) return true;
+  if (!Object.isFrozen(objectValue)) return false;
+  seen.add(objectValue);
+  return Reflect.ownKeys(objectValue).every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(objectValue, key);
+    return (
+      descriptor !== undefined &&
+      !("get" in descriptor) &&
+      !("set" in descriptor) &&
+      isRecursivelyFrozenGraph(descriptor.value, seen)
+    );
+  });
+}
+
 /** Use only for `input` returned directly by `readInput` in the owner callback. */
-export function createCapturedSmelterOwnerIncumbentSnapshot(
+function createCapturedSmelterOwnerIncumbentSnapshot(
   input: Readonly<SmelterInput>,
   decision: ReturnType<typeof planSmelter>,
   demand: Readonly<{
@@ -1036,16 +1097,50 @@ export function createCapturedSmelterOwnerIncumbentSnapshot(
   }>,
   observation: Parameters<typeof createCapturedSmelterIncumbentSnapshot>[3],
 ): CapturedSmelterIncumbentSnapshot {
-  const ownerInput = Object.freeze({
-    ...input,
-    [OWNER_CREATED_IMMUTABLE_INPUT]: true,
-  });
+  const ownerInput = isRecursivelyFrozenGraph(input)
+    ? Object.freeze({
+        ...input,
+        [OWNER_CREATED_IMMUTABLE_INPUT]: true,
+      })
+    : input;
   return createCapturedSmelterIncumbentSnapshot(
     ownerInput,
     decision,
     demand,
     observation,
   );
+}
+
+function unbrandDiagnosticInput(
+  input: Readonly<SmelterInput>,
+): Readonly<SmelterInput> {
+  if (
+    (input as SmelterInput & { [OWNER_CREATED_IMMUTABLE_INPUT]?: boolean })[
+      OWNER_CREATED_IMMUTABLE_INPUT
+    ] !== true
+  )
+    return input;
+  const diagnosticInput = Object.fromEntries(
+    Reflect.ownKeys(input)
+      .filter((key) => key !== OWNER_CREATED_IMMUTABLE_INPUT)
+      .map((key) => [key, Reflect.get(input, key)]),
+  ) as SmelterInput;
+  return Object.freeze(diagnosticInput);
+}
+
+function unbrandDiagnosticResult(
+  result: ReturnType<typeof evaluateCapturedSmelterGoalDemandProposal>,
+): ReturnType<typeof evaluateCapturedSmelterGoalDemandProposal> {
+  if (result.comparison === undefined) return result;
+  const comparison = Object.freeze({
+    ...result.comparison,
+    incumbentInput: unbrandDiagnosticInput(result.comparison.incumbentInput),
+    proposedInput:
+      result.comparison.proposedInput === undefined
+        ? undefined
+        : unbrandDiagnosticInput(result.comparison.proposedInput),
+  });
+  return Object.freeze({ ...result, comparison });
 }
 
 export function isCapturedSmelterSnapshotCurrent(
@@ -1607,6 +1702,48 @@ export function createCapturedSmelterAutomation(
           },
           observation,
         );
+      if (publishPlan && observation !== undefined) {
+        const currentDemand = {
+          requestedSteel: session.demand.requestedQuantity("Steel"),
+          isSteelDemanded: session.demand.isDemanded("Steel"),
+          savingTarget: session.demand.savingTarget,
+        };
+        const request = dependencies.readGoalDemandProposalForDiagnostics?.(
+          input,
+          decision,
+          currentDemand,
+          observation,
+        );
+        if (request !== undefined) {
+          const snapshot = createCapturedSmelterOwnerIncumbentSnapshot(
+            input,
+            decision,
+            currentDemand,
+            observation,
+          );
+          const started = dependencies.readComparisonClockForDiagnostics?.();
+          const internalResult = evaluateCapturedSmelterGoalDemandProposal(
+            snapshot,
+            request.proposal,
+            request.ownerCycle,
+            request.comparisonMode,
+          );
+          const result = unbrandDiagnosticResult(internalResult);
+          const elapsed =
+            started === undefined ||
+            !Number.isFinite(started) ||
+            dependencies.readComparisonClockForDiagnostics === undefined
+              ? undefined
+              : dependencies.readComparisonClockForDiagnostics() - started;
+          dependencies.observeGoalDemandComparisonForDiagnostics?.(
+            result,
+            elapsed,
+            request.ownerCycle,
+            observation,
+            currentDemand,
+          );
+        }
+      }
       const finish = (
         outcome: CommandExecutionOutcome,
         postcondition: Readonly<{
