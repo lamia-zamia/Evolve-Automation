@@ -33,7 +33,7 @@ The test-only mode control is applied after page startup and changes neither sav
 
 ## Separate comparison and owner timing
 
-Each of the eight S windows ran one pure source-backed comparison after its CPU window. Elapsed time was 0.3–0.5 ms; renderer CPU deltas were 0.00–0.10 s and `TaskDuration` deltas were 0.00–0.01 s at the counter’s reported precision. The comparison frequency was one per worktick (once every 8 periods, or 0.125 per period). These post-window samples are recorded separately and are not charged to recurring S CPU.
+Each of the eight S windows ran exactly one pure source-backed comparison after the 800-period CPU window. Elapsed time was 0.3–0.5 ms; renderer CPU deltas were 0.00–0.10 s and `TaskDuration` deltas were 0.00–0.01 s at the counter’s reported precision. This was one off-window sample per S window; P13C.1 did not measure one comparison per owner worktick. Those post-window samples are not charged to recurring S CPU.
 
 The correctness-cohort clock has 0.1 ms resolution: snapshot construction and callback elapsed samples were 0–0.1 ms. In measured windows, owner calls were 100 per cell; G had 0 callbacks, H had 100 callback entries inferred from the enabled owner schedule and separately verified H correctness cohort, and S had 100 publications. S made 100 additional progression-generation reads. No mode added a second input read, demand read, owner planner call, native planner call, native control call, Research draw or catalog scan. These snapshot-only measurements do not estimate a future complete allocator.
 
@@ -153,3 +153,7 @@ owner-local path below 2%. No production allocator, request port, cross-owner
 reservation, recurring planner or opt-in was added. `quantitativeComparison`,
 native feasibility, command changes, production marginals and economic
 benefit remain separate claims.
+
+## Regression rerun (2026-10-19)
+
+The verification rerun used bundle `c5643925edfb395f49e1f4b09404d2372fbf5fd1ac9070984194c7f83a070dd3`. Its repeated G/G and S/S controls varied by as much as 10.09%, so the factorial was withheld and the rerun decision was **C — Measurement insufficient**. The calibrated P13C.1 result above remains the characterization result; this sensitivity-gated regression check is not a replacement estimate. Raw data is in `test-artifacts/benchmark/tmp/p13c1-owner-observation-benchmark.json`.

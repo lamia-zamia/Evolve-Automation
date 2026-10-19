@@ -826,10 +826,11 @@ const result = {
     mode,
     callbackLatencyMs,
   })),
-  comparisonFrequency: {
-    perWorktick: 1,
-    everyPeriods: worktickPeriods,
-    perPeriod: 1 / worktickPeriods,
+  comparisonSampling: {
+    perCpuWindow: 0,
+    postWindowSamplesPerSWindow: 1,
+    perOwnerWorktick: 0,
+    note: "The pure comparison is sampled once after each timed S window; it is not called per worktick.",
   },
   decision,
 };
