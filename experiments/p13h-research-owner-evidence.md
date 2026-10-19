@@ -26,7 +26,7 @@ The evidence categories remain separate:
 - **Ordinary owner intent:** existing reader affordability/exclusion result and the affordable-first `planResearch()` selection.
 - **Autonomous goal authority:** unavailable unless an explicit player queue or independently verified mandatory prerequisite provides the action identity. An advisory prerequisite does not qualify.
 
-The Research cost schema does not independently establish a supply-pool identity for each named resource. P13H reports price/resource names and amounts, with pool authority unavailable.
+The Research cost schema does not independently establish a supply-pool identity for each named resource. P13H reports price/resource names and amounts, with pool authority unavailable. The pure goal-resource evaluator rejects generation `0` as well as missing native binding/control generations; the captured Research catalog uses zero to represent a missing binding.
 
 ## Captured progression window
 
