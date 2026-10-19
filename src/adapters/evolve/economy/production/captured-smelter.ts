@@ -10,6 +10,7 @@ import {
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
 import type { CapturedDemandSample } from "../resources/captured-resource-demand.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameControlHandle } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
@@ -17,6 +18,15 @@ import { finite, isRecord, readProperty } from "../../../validation.ts";
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 export const SMELTER_CONTROL = "iSmelter";
+
+export function capturedSmelterSkipReason(
+  enabled: boolean,
+  prerequisiteDemandReady: boolean,
+): "permission-disabled" | "construction-demand-unavailable" | undefined {
+  if (!prerequisiteDemandReady) return "construction-demand-unavailable";
+  if (!enabled) return "permission-disabled";
+  return undefined;
+}
 
 /** Applies one validated test-surface strategy choice to its matching native planner input. */
 export function applyCapturedSmelterTestCandidate(
@@ -70,6 +80,7 @@ export interface CapturedSmelterDependencies {
     input: Readonly<SmelterInput>,
     demand: CapturedDemandSample,
   ) => Readonly<SmelterInput>;
+  readonly shouldPrepareInputForTest?: () => boolean;
   readonly observePlanForDiagnostics?: (
     input: Readonly<SmelterInput>,
     decision: ReturnType<typeof planSmelter>,
@@ -78,7 +89,31 @@ export interface CapturedSmelterDependencies {
       isSteelDemanded: boolean;
       savingTarget: CapturedDemandSample["savingTarget"];
     }>,
+    observation?: Readonly<{
+      root: unknown;
+      permissionEnabled: boolean;
+      controlGeneration: number | undefined;
+      controlMethods: readonly string[];
+      plannedCommands: readonly string[];
+      expectedAllocations: Readonly<Record<string, number>>;
+      progressionGeneration: number | undefined;
+    }>,
   ) => void;
+  readonly shouldObservePlanForDiagnostics?: () => boolean;
+  readonly observeOutcomeForTest?: (
+    outcome: CommandExecutionOutcome,
+    observation: Readonly<{
+      root: unknown;
+      plannedCommands: readonly string[];
+      expectedAllocations: Readonly<Record<string, number>>;
+      controlGeneration: number | undefined;
+    }>,
+    postcondition: Readonly<{
+      status: "verified" | "failed" | "no-op" | "not-checked";
+      allocations: Readonly<Record<string, number | undefined>>;
+    }>,
+  ) => void;
+  readonly readProgressionGeneration?: () => number | undefined;
 }
 
 interface ResourceView {
@@ -93,6 +128,8 @@ interface SmelterSession {
   readonly root: unknown;
   readonly input: Readonly<SmelterInput>;
   readonly demand: CapturedDemandSample;
+  readonly permissionEnabled: boolean;
+  readonly control: GameControlHandle | undefined;
 }
 
 const FUEL_IDS = Object.freeze([
@@ -310,6 +347,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
   const settings = readSettingRecord(dependencies.readSettings());
+  const control = dependencies.controls.resolve(SMELTER_CONTROL);
   const demand = dependencies.readDemand?.() ?? {
     savingTarget: null,
     requestedQuantity: () => 0,
@@ -324,9 +362,15 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     !isRecord(race) ||
     !isRecord(tech) ||
     Boolean(race["steelen"]) ||
-    dependencies.controls.resolve(SMELTER_CONTROL) === undefined
+    control === undefined
   ) {
-    return Object.freeze({ root, input: emptyInput(), demand });
+    return Object.freeze({
+      root,
+      input: emptyInput(),
+      demand,
+      permissionEnabled: settings["autoSmelter"] === true,
+      control,
+    });
   }
   const cap = readCount(smelter["cap"]);
   const star = readCount(smelter["Star"]);
@@ -341,7 +385,13 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     iridiumCount === undefined ||
     star > cap
   ) {
-    return Object.freeze({ root, input: emptyInput(), demand });
+    return Object.freeze({
+      root,
+      input: emptyInput(),
+      demand,
+      permissionEnabled: settings["autoSmelter"] === true,
+      control,
+    });
   }
   const iron = readResource(resources, "Iron");
   const steel = readResource(resources, "Steel");
@@ -353,13 +403,25 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     coal === undefined ||
     titanium === undefined
   ) {
-    return Object.freeze({ root, input: emptyInput(), demand });
+    return Object.freeze({
+      root,
+      input: emptyInput(),
+      demand,
+      permissionEnabled: settings["autoSmelter"] === true,
+      control,
+    });
   }
   const fuels = FUEL_IDS.map((id) =>
     readFuel(id, resources, race, tech, settings, demand),
   );
   if (fuels.some((fuel) => fuel === undefined)) {
-    return Object.freeze({ root, input: emptyInput(), demand });
+    return Object.freeze({
+      root,
+      input: emptyInput(),
+      demand,
+      permissionEnabled: settings["autoSmelter"] === true,
+      control,
+    });
   }
   const orderedFuels = [...fuels]
     .filter((fuel): fuel is SmelterFuelView => fuel !== undefined)
@@ -388,7 +450,13 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
   const productionSmeltingIridium =
     finite(settings["productionSmeltingIridium"]) ?? 0.5;
   if (productionSmeltingIridium < 0) {
-    return Object.freeze({ root, input: emptyInput(), demand });
+    return Object.freeze({
+      root,
+      input: emptyInput(),
+      demand,
+      permissionEnabled: settings["autoSmelter"] === true,
+      control,
+    });
   }
   const miner = readProperty(readProperty(root, "civic"), "miner");
   const ironShip = readProperty(readProperty(root, "space"), "iron_ship");
@@ -434,7 +502,13 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     titaniumStorageRatio: titaniumRatio,
     haveTitaniumTech: (finite(tech["titanium"]) ?? 0) > 0,
   });
-  return Object.freeze({ root, input, demand });
+  return Object.freeze({
+    root,
+    input,
+    demand,
+    permissionEnabled: settings["autoSmelter"] === true,
+    control,
+  });
 }
 
 function currentValue(root: unknown, id: string): number | undefined {
@@ -445,6 +519,274 @@ function currentValue(root: unknown, id: string): number | undefined {
 function methodFor(kind: "fuel" | "metal", delta: number): string {
   if (kind === "fuel") return delta > 0 ? "addFuel" : "subFuel";
   return delta > 0 ? "addMetal" : "subMetal";
+}
+
+function normalizedCommands(
+  decision: ReturnType<typeof planSmelter>,
+): readonly string[] {
+  return Object.freeze(
+    (["fuel", "metal"] as const).flatMap((kind) =>
+      ([-1, 1] as const).flatMap((sign) => {
+        const adjustments =
+          kind === "fuel"
+            ? decision.fuelAdjustments.map((item) => ({
+                id: item.fuelId,
+                delta: item.delta,
+              }))
+            : decision.smeltAdjustments.map((item) => ({
+                id: item.productionId,
+                delta: item.delta,
+              }));
+        return adjustments.flatMap((item) =>
+          item.delta !== 0 && Math.sign(item.delta) === sign
+            ? Array.from(
+                { length: Math.abs(item.delta) },
+                () => `${methodFor(kind, item.delta)}:${item.id}`,
+              )
+            : [],
+        );
+      }),
+    ),
+  );
+}
+
+export interface CapturedSmelterIncumbentSnapshot {
+  readonly ownerId: "smelter";
+  readonly capability: "smelter-allocation";
+  readonly boundary: "after-plan-before-native-execution";
+  readonly root: unknown;
+  readonly progressionGeneration: number | undefined;
+  readonly permissionEnabled: boolean;
+  readonly demand: Readonly<{
+    requestedSteel: number;
+    steelDemanded: boolean;
+    savingTargetName: string | undefined;
+    savingTargetPool: string | undefined;
+    steelTarget: number | undefined;
+  }>;
+  readonly input: Readonly<SmelterInput>;
+  readonly decision: ReturnType<typeof planSmelter>;
+  readonly commands: readonly string[];
+  readonly controlGeneration: number | undefined;
+  readonly controlMethods: readonly string[];
+  readonly unavailableAuthority: readonly string[];
+}
+
+export function createCapturedSmelterIncumbentSnapshot(
+  input: Readonly<SmelterInput>,
+  decision: ReturnType<typeof planSmelter>,
+  demand: Readonly<{
+    requestedSteel: number;
+    isSteelDemanded: boolean;
+    savingTarget: CapturedDemandSample["savingTarget"];
+  }>,
+  observation: Readonly<{
+    root: unknown;
+    permissionEnabled: boolean;
+    controlGeneration: number | undefined;
+    controlMethods: readonly string[];
+    plannedCommands: readonly string[];
+    progressionGeneration: number | undefined;
+  }>,
+): CapturedSmelterIncumbentSnapshot {
+  const unavailableAuthority = [
+    ...(!Number.isSafeInteger(observation.progressionGeneration)
+      ? ["progression-generation"]
+      : []),
+    ...(!Number.isSafeInteger(observation.controlGeneration)
+      ? ["control-generation"]
+      : []),
+    ...(observation.plannedCommands.some((command) => {
+      const method = command.slice(0, command.indexOf(":"));
+      return !observation.controlMethods.includes(method);
+    })
+      ? ["native-command-method"]
+      : []),
+    ...(!input.initialised ? ["smelter-input"] : []),
+    "cross-owner-commitment-coverage",
+    "measured-production-marginals",
+    "post-execution-allocation-is-a-separate-observation",
+  ];
+  const savingTarget = demand.savingTarget;
+  return Object.freeze({
+    ownerId: "smelter",
+    capability: "smelter-allocation",
+    boundary: "after-plan-before-native-execution",
+    root: observation.root,
+    progressionGeneration: observation.progressionGeneration,
+    permissionEnabled: observation.permissionEnabled,
+    demand: Object.freeze({
+      requestedSteel: demand.requestedSteel,
+      steelDemanded: demand.isSteelDemanded,
+      savingTargetName: savingTarget?.name,
+      savingTargetPool: savingTarget?.pool,
+      steelTarget: savingTarget?.cost["Steel"],
+    }),
+    input,
+    decision,
+    commands: Object.freeze([...observation.plannedCommands]),
+    controlGeneration: observation.controlGeneration,
+    controlMethods: Object.freeze([...observation.controlMethods]),
+    unavailableAuthority: Object.freeze([...new Set(unavailableAuthority)]),
+  });
+}
+
+export function isCapturedSmelterSnapshotCurrent(
+  snapshot: CapturedSmelterIncumbentSnapshot,
+  current: Readonly<{
+    root: unknown;
+    progressionGeneration: number | undefined;
+    permissionEnabled: boolean;
+    requestedSteel: number;
+    steelDemanded: boolean;
+    savingTargetName: string | undefined;
+    savingTargetPool: string | undefined;
+    steelTarget: number | undefined;
+    controlGeneration: number | undefined;
+    controlMethods: readonly string[];
+    allocations: Readonly<Record<string, number>>;
+    capacity: number;
+    inputSignature: string;
+  }>,
+): boolean {
+  const allocations = {
+    Iron: snapshot.input.ironCount,
+    Steel: snapshot.input.steelCount,
+    Iridium: snapshot.input.iridiumCount,
+    ...Object.fromEntries(
+      snapshot.input.fuels.map((fuel) => [fuel.id, fuel.currentFuelCount]),
+    ),
+  };
+  return (
+    !snapshot.unavailableAuthority.some((authority) =>
+      [
+        "progression-generation",
+        "control-generation",
+        "native-command-method",
+        "smelter-input",
+      ].includes(authority),
+    ) &&
+    snapshot.root === current.root &&
+    snapshot.progressionGeneration === current.progressionGeneration &&
+    snapshot.permissionEnabled === current.permissionEnabled &&
+    snapshot.demand.requestedSteel === current.requestedSteel &&
+    snapshot.demand.steelDemanded === current.steelDemanded &&
+    snapshot.demand.savingTargetName === current.savingTargetName &&
+    snapshot.demand.savingTargetPool === current.savingTargetPool &&
+    snapshot.demand.steelTarget === current.steelTarget &&
+    snapshot.controlGeneration === current.controlGeneration &&
+    JSON.stringify([...snapshot.controlMethods].sort()) ===
+      JSON.stringify([...current.controlMethods].sort()) &&
+    snapshot.input.totalSmelters === current.capacity &&
+    JSON.stringify(snapshot.input) === current.inputSignature &&
+    Object.entries(allocations).every(
+      ([id, value]) => current.allocations[id] === value,
+    )
+  );
+}
+
+export function compareCapturedSmelterSteelDemand(
+  snapshot: CapturedSmelterIncumbentSnapshot,
+  additionalSteel: number,
+): Readonly<{
+  incumbentAllocation: Readonly<Record<string, number>>;
+  proposedAllocation: Readonly<Record<string, number>>;
+  changedCommands:
+    | Readonly<{
+        incumbent: readonly string[];
+        proposed: readonly string[];
+      }>
+    | undefined;
+  availableSmelters: number;
+  displacedAllocation: Readonly<Record<string, number>>;
+  physicallyRepresentable: boolean;
+  policyPermitted: boolean;
+  redundant: boolean | undefined;
+  productionEffectKnown: false;
+  limitation: string | undefined;
+}> {
+  const preCommandAllocation = {
+    Iron: snapshot.input.ironCount,
+    Steel: snapshot.input.steelCount,
+    Iridium: snapshot.input.iridiumCount,
+    ...Object.fromEntries(
+      snapshot.input.fuels.map((fuel) => [fuel.id, fuel.currentFuelCount]),
+    ),
+  };
+  const incumbentAllocation: Record<string, number> = {
+    ...preCommandAllocation,
+  };
+  for (const item of snapshot.decision.fuelAdjustments)
+    incumbentAllocation[item.fuelId] =
+      item.expectedCurrentFuelCount + item.delta;
+  for (const item of snapshot.decision.smeltAdjustments)
+    incumbentAllocation[item.productionId] =
+      item.expectedCurrentCount + item.delta;
+  const incumbent = snapshot.commands;
+  const policyPermitted = snapshot.permissionEnabled && additionalSteel > 0;
+  const canRepresent =
+    Number.isFinite(additionalSteel) &&
+    additionalSteel > 0 &&
+    snapshot.input.initialised &&
+    snapshot.input.productionSmelting.length > 0;
+  const proposedInput =
+    canRepresent && policyPermitted
+      ? Object.freeze({ ...snapshot.input, steelDemanded: true })
+      : snapshot.input;
+  const proposedDecision =
+    canRepresent && policyPermitted
+      ? planSmelter(proposedInput)
+      : snapshot.decision;
+  const proposedCommands = normalizedCommands(proposedDecision);
+  const changedCommands =
+    JSON.stringify(proposedCommands) === JSON.stringify(incumbent)
+      ? undefined
+      : Object.freeze({ incumbent, proposed: proposedCommands });
+  const proposedAllocation: Record<string, number> = {
+    ...preCommandAllocation,
+  };
+  for (const item of proposedDecision.fuelAdjustments)
+    proposedAllocation[item.fuelId] =
+      item.expectedCurrentFuelCount + item.delta;
+  for (const item of proposedDecision.smeltAdjustments)
+    proposedAllocation[item.productionId] =
+      item.expectedCurrentCount + item.delta;
+  const displacedAllocation = Object.freeze(
+    Object.fromEntries(
+      Object.entries(incumbentAllocation)
+        .map(([id, value]) => [id, value - (proposedAllocation[id] ?? value)])
+        .filter(([, delta]) => delta !== 0),
+    ),
+  );
+  const physicallyRepresentable =
+    canRepresent && (proposedAllocation.Steel ?? 0) > 0;
+  return Object.freeze({
+    incumbentAllocation,
+    proposedAllocation: Object.freeze(proposedAllocation),
+    changedCommands,
+    availableSmelters: Math.max(
+      0,
+      snapshot.input.totalSmelters +
+        snapshot.input.extraOperating -
+        incumbentAllocation.Iron! -
+        incumbentAllocation.Steel! -
+        incumbentAllocation.Iridium! -
+        SMELTER_FUEL_IDS.reduce(
+          (sum, id) => sum + (incumbentAllocation[id] ?? 0),
+          0,
+        ),
+    ),
+    displacedAllocation,
+    physicallyRepresentable,
+    policyPermitted,
+    redundant: physicallyRepresentable
+      ? changedCommands === undefined
+      : undefined,
+    productionEffectKnown: false,
+    limitation: canRepresent
+      ? "production marginal requires measured resource trajectories"
+      : "incremental Steel demand is unavailable in the captured Smelter input",
+  });
 }
 
 export function createCapturedSmelterAutomation(
@@ -471,37 +813,112 @@ export function createCapturedSmelterAutomation(
     },
     run(): CommandExecutionOutcome {
       const session = readInput(dependencies);
+      const prepareForTest =
+        dependencies.prepareInputForTest !== undefined &&
+        (dependencies.shouldPrepareInputForTest?.() ?? true);
       const input =
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-        __EA_TEST_SURFACE_ENABLED__ === true
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        prepareForTest
           ? (dependencies.prepareInputForTest?.(
               session.input,
               session.demand,
             ) ?? session.input)
           : session.input;
       const decision = planSmelter(input);
-      dependencies.observePlanForDiagnostics?.(input, decision, {
-        requestedSteel: session.demand.requestedQuantity("Steel"),
-        isSteelDemanded: session.demand.isDemanded("Steel"),
-        savingTarget: session.demand.savingTarget,
-      });
-      if (!session.input.initialised) return SUCCEEDED;
-      const adjustments = [
+      const publishPlan =
+        dependencies.observePlanForDiagnostics !== undefined &&
+        (dependencies.shouldObservePlanForDiagnostics?.() ?? true);
+      const commandGroups = [
         ...decision.fuelAdjustments.map((adjustment) => ({
           kind: "fuel" as const,
           id: adjustment.fuelId,
-          expected: adjustment.expectedCurrentFuelCount,
           delta: adjustment.delta,
+          expected: adjustment.expectedCurrentFuelCount,
         })),
         ...decision.smeltAdjustments.map((adjustment) => ({
           kind: "metal" as const,
           id: adjustment.productionId,
-          expected: adjustment.expectedCurrentCount,
           delta: adjustment.delta,
+          expected: adjustment.expectedCurrentCount,
         })),
       ].filter((adjustment) => adjustment.delta !== 0);
-      if (adjustments.length === 0) return SUCCEEDED;
+      const plannedCommands = publishPlan
+        ? normalizedCommands(decision)
+        : Object.freeze([] as string[]);
+      const expectedAllocations = publishPlan
+        ? Object.freeze({
+            Iron: input.ironCount,
+            Steel: input.steelCount,
+            Iridium: input.iridiumCount,
+            ...Object.fromEntries(
+              input.fuels.map((fuel) => [fuel.id, fuel.currentFuelCount]),
+            ),
+          })
+        : Object.freeze({});
+      const observation = publishPlan
+        ? Object.freeze({
+            root: session.root,
+            permissionEnabled: session.permissionEnabled,
+            controlGeneration: session.control?.generation,
+            controlMethods: Object.freeze([
+              ...(session.control?.methods ?? []),
+            ]),
+            plannedCommands,
+            expectedAllocations,
+            progressionGeneration: dependencies.readProgressionGeneration?.(),
+          })
+        : undefined;
+      if (publishPlan)
+        dependencies.observePlanForDiagnostics?.(
+          input,
+          decision,
+          {
+            requestedSteel: session.demand.requestedQuantity("Steel"),
+            isSteelDemanded: session.demand.isDemanded("Steel"),
+            savingTarget: session.demand.savingTarget,
+          },
+          observation,
+        );
+      const finish = (
+        outcome: CommandExecutionOutcome,
+        postcondition: Readonly<{
+          status: "verified" | "failed" | "no-op" | "not-checked";
+          allocations: Readonly<Record<string, number | undefined>>;
+        }> = Object.freeze({
+          status: "not-checked",
+          allocations: Object.freeze({}),
+        }),
+      ) => {
+        if (observation !== undefined)
+          dependencies.observeOutcomeForTest?.(
+            outcome,
+            observation,
+            postcondition,
+          );
+        return outcome;
+      };
+      if (!session.input.initialised) return finish(SUCCEEDED);
+      const adjustments = commandGroups;
+      if (adjustments.length === 0)
+        return finish(
+          SUCCEEDED,
+          Object.freeze({ status: "no-op", allocations: expectedAllocations }),
+        );
       const handle = dependencies.controls.resolve(SMELTER_CONTROL);
+      if (
+        observation !== undefined &&
+        handle !== undefined &&
+        (handle.generation !== observation.controlGeneration ||
+          handle.elementId !== SMELTER_CONTROL)
+      ) {
+        return finish(
+          stale(
+            "captured-smelter-control-replaced",
+            "captured iSmelter control changed after the plan was observed",
+          ),
+        );
+      }
       if (
         handle === undefined ||
         adjustments.some(
@@ -511,16 +928,25 @@ export function createCapturedSmelterAutomation(
             ),
         )
       ) {
-        return rejected(
-          "captured-smelter-control-missing",
-          "captured iSmelter control lacks the required allocation method",
+        return finish(
+          rejected(
+            "captured-smelter-control-missing",
+            "captured iSmelter control lacks the required allocation method",
+          ),
         );
       }
       for (const adjustment of adjustments) {
-        if (currentValue(session.root, adjustment.id) !== adjustment.expected) {
-          return stale(
-            "captured-smelter-allocation-changed",
-            `${adjustment.id}: sampled allocation changed`,
+        const actual = currentValue(session.root, adjustment.id);
+        if (actual !== adjustment.expected) {
+          return finish(
+            stale(
+              "captured-smelter-allocation-changed",
+              `${adjustment.id}: sampled allocation changed`,
+            ),
+            Object.freeze({
+              status: "failed",
+              allocations: Object.freeze({ [adjustment.id]: actual }),
+            }),
           );
         }
       }
@@ -539,36 +965,71 @@ export function createCapturedSmelterAutomation(
               index += 1
             ) {
               if (dependencies.rootState.readRoot() !== session.root) {
-                return stale(
-                  "captured-smelter-root-changed",
-                  "captured game root changed",
+                return finish(
+                  stale(
+                    "captured-smelter-root-changed",
+                    "captured game root changed",
+                  ),
+                  Object.freeze({
+                    status: "failed",
+                    allocations: Object.freeze({}),
+                  }),
                 );
               }
               const result = dependencies.controls.invoke(handle, method, [
                 adjustment.id,
               ]);
               if (!result.ok) {
-                return rejected(
-                  "captured-smelter-control-failed",
-                  result.detail ?? result.reason,
+                const actualAllocations =
+                  observation === undefined
+                    ? Object.freeze({})
+                    : Object.freeze(
+                        Object.fromEntries(
+                          adjustments.map((item) => [
+                            item.id,
+                            currentValue(session.root, item.id),
+                          ]),
+                        ),
+                      );
+                return finish(
+                  rejected(
+                    "captured-smelter-control-failed",
+                    result.detail ?? result.reason,
+                  ),
+                  Object.freeze({
+                    status: "failed",
+                    allocations: actualAllocations,
+                  }),
                 );
               }
             }
           }
         }
       }
+      const postAllocations: Record<string, number | undefined> = {};
       for (const adjustment of adjustments) {
-        if (
-          currentValue(session.root, adjustment.id) !==
-          adjustment.expected + adjustment.delta
-        ) {
-          return stale(
-            "captured-smelter-allocation-unchanged",
-            `${adjustment.id}: expected ${adjustment.expected + adjustment.delta}, actual ${currentValue(session.root, adjustment.id)}`,
+        const actual = currentValue(session.root, adjustment.id);
+        postAllocations[adjustment.id] = actual;
+        if (actual !== adjustment.expected + adjustment.delta) {
+          return finish(
+            stale(
+              "captured-smelter-allocation-unchanged",
+              `${adjustment.id}: expected ${adjustment.expected + adjustment.delta}, actual ${actual}`,
+            ),
+            Object.freeze({
+              status: "failed",
+              allocations: Object.freeze(postAllocations),
+            }),
           );
         }
       }
-      return SUCCEEDED;
+      return finish(
+        SUCCEEDED,
+        Object.freeze({
+          status: "verified",
+          allocations: Object.freeze(postAllocations),
+        }),
+      );
     },
   });
 }

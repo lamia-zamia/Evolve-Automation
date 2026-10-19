@@ -172,6 +172,7 @@ import {
 import { CONSUMPTION_BALANCE_MIN } from "../config.ts";
 import {
   applyCapturedSmelterTestCandidate,
+  capturedSmelterSkipReason,
   createCapturedSmelterAutomation,
   SMELTER_CONTROL,
 } from "../adapters/evolve/economy/production/captured-smelter.ts";
@@ -5523,6 +5524,8 @@ export function startCapturedRuntime({
     getDocument: () => document,
     readSettings: settingsLifecycle.readEffective,
   });
+  const smelterTestHooks = () =>
+    readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
   const smelter = createCapturedSmelterAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -5531,9 +5534,14 @@ export function startCapturedRuntime({
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
+          shouldPrepareInputForTest: () =>
+            typeof readProperty(
+              smelterTestHooks(),
+              "prepareSmelterGoalDemandForTest",
+            ) === "function",
           prepareInputForTest: (input, _sample) => {
             const settings = settingsStore.readRaw();
-            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const hooks = smelterTestHooks();
             const prepare = readProperty(
               hooks,
               "prepareSmelterGoalDemandForTest",
@@ -5575,14 +5583,28 @@ export function startCapturedRuntime({
               progression.readRootGeneration(),
             );
           },
-          observePlanForDiagnostics: (input, decision, demand) => {
+          shouldObservePlanForDiagnostics: () =>
+            typeof readProperty(
+              smelterTestHooks(),
+              "observeSmelterPlanForTest",
+            ) === "function",
+          observePlanForDiagnostics: (input, decision, demand, observation) => {
             const observer = readProperty(
-              readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+              smelterTestHooks(),
               "observeSmelterPlanForTest",
             );
             if (typeof observer === "function")
-              observer(input, decision, demand);
+              observer(input, decision, demand, observation);
           },
+          observeOutcomeForTest: (outcome, observation, postcondition) => {
+            const observer = readProperty(
+              smelterTestHooks(),
+              "observeSmelterOutcomeForTest",
+            );
+            if (typeof observer === "function")
+              observer(outcome, observation, postcondition);
+          },
+          readProgressionGeneration: progression.readRootGeneration,
         }
       : {}),
   });
@@ -6177,7 +6199,22 @@ export function startCapturedRuntime({
           ratios.miningShip();
         });
       }
-      if (constructionDemandReady && isEnabled(settings, "autoSmelter")) {
+      const smelterSkipReason = capturedSmelterSkipReason(
+        isEnabled(settings, "autoSmelter"),
+        constructionDemandReady,
+      );
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        smelterSkipReason !== undefined
+      ) {
+        const observer = readProperty(
+          readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+          "observeSmelterSkippedForTest",
+        );
+        if (typeof observer === "function") observer(smelterSkipReason);
+      }
+      if (smelterSkipReason === undefined) {
         runPhase("autoSmelter", () => {
           ensureSmelterControls();
           refreshDiscoveredSettings();

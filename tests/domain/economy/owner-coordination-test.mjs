@@ -4,7 +4,11 @@ import {
   compareOwnerCoordination,
 } from "../../../src/domain/economy/owner-coordination.ts";
 
+let sourceGeneration = 0;
 function evidence(overrides = {}) {
+  const rootIdentity = {};
+  const progressionGeneration = ++sourceGeneration;
+  const controlGeneration = ++sourceGeneration;
   return {
     goalId: "goal-1",
     requirementId: "need-1",
@@ -23,22 +27,29 @@ function evidence(overrides = {}) {
     requestPortAvailable: true,
     nativeControlAvailable: true,
     nativeCapAvailable: true,
-    safeWorkerSourceAvailable: true,
-    rootId: "root-1",
-    currentRootId: "root-1",
-    progressionId: "progress-1",
-    currentProgressionId: "progress-1",
+    capacityAuthority: {
+      ownerType: "smelter",
+      availableCapacityKnown: true,
+      sourceTargetAllocationKnown: true,
+      fuelAllocationKnown: true,
+      supportedDisplacementKnown: true,
+    },
+    rootIdentity,
+    currentRootIdentity: rootIdentity,
+    progressionGeneration,
+    currentProgressionGeneration: progressionGeneration,
     priceIdentity: "price-1",
     currentPriceIdentity: "price-1",
-    controlGeneration: "control-1",
-    currentControlGeneration: "control-1",
-    snapshotGeneration: "snapshot-1",
-    currentSnapshotGeneration: "snapshot-1",
-    permissionGeneration: "permission-1",
-    currentPermissionGeneration: "permission-1",
-    snapshotCurrent: true,
-    incumbentPlanId: "incumbent-1",
-    proposedPlanId: "proposed-1",
+    controlGeneration,
+    currentControlGeneration: controlGeneration,
+    permissionEnabled: true,
+    currentPermissionEnabled: true,
+    incumbentCommandIntention: ["addMetal:Steel", "subMetal:Iron"],
+    proposedCommandIntention: [
+      "addMetal:Steel",
+      "subMetal:Iron",
+      "addFuel:Coal",
+    ],
     incumbentEffects: [
       { resourceId: "Steel", poolId: "city", amount: 2 },
       { resourceId: "Iron", poolId: "city", amount: 8 },
@@ -56,8 +67,17 @@ function evidence(overrides = {}) {
     supportedConstraintId: "research-steel-containers",
     incumbentConstraintProgress: 0,
     proposedConstraintProgress: 0,
-    valueBasis: "periods-to-current-purchase",
+    objectiveIdentity: "purchase-tech-steel-containers",
+    immediateConstraintIdentity: "steel-containers-affordability",
+    metricIdentity: "time-to-purchase",
+    metricUnit: "periods",
+    betterDirection: "smaller",
+    observationScope: "same-save-window",
+    observationFreshness: "same-cycle",
     supportedValue: 0,
+    collateralSupported: true,
+    opportunityCostSupported: true,
+    effectEvidence: "measured-production-marginals",
     effectsComplete: true,
     budgetExhausted: false,
     ...overrides,
@@ -88,6 +108,11 @@ assert.ok(
 const usefulIncrement = assessOwnerCoordination(
   evidence({
     proposedConstraintProgress: 2,
+    proposedCommandIntention: [
+      "addMetal:Steel",
+      "subMetal:Iron",
+      "addMetal:Iridium",
+    ],
     proposedEffects: [
       { resourceId: "Steel", poolId: "city", amount: 4 },
       { resourceId: "Iron", poolId: "city", amount: 6 },
@@ -176,7 +201,7 @@ const owners = compareOwnerCoordination([
     proposedConstraintProgress: 2,
   }),
 ]);
-assert.deepEqual(owners.preferredIds, ["smelter-steel", "factory-steel"]);
+assert.deepEqual(owners.preferredIds, ["smelter-steel"]);
 
 const redundantAlternative = compareOwnerCoordination([
   evidence({
@@ -200,13 +225,15 @@ const incomparable = compareOwnerCoordination([
     requirementId: "a",
     proposedConstraintProgress: 2,
     supportedValue: 3,
-    valueBasis: "periods",
+    metricIdentity: "time-to-purchase",
+    metricUnit: "periods",
   }),
   evidence({
     requirementId: "b",
     proposedConstraintProgress: 2,
     supportedValue: 8,
-    valueBasis: "steel-units",
+    metricIdentity: "steel-production",
+    metricUnit: "steel/period",
   }),
 ]);
 assert.deepEqual(incomparable.preferredIds, []);
@@ -225,6 +252,107 @@ const genuineTie = compareOwnerCoordination([
 ]);
 assert.deepEqual(genuineTie.preferredIds, ["z", "a"]);
 
+const shorterTimeWins = compareOwnerCoordination([
+  evidence({
+    requirementId: "short",
+    proposedConstraintProgress: 2,
+    supportedValue: 4,
+  }),
+  evidence({
+    requirementId: "long",
+    proposedConstraintProgress: 2,
+    supportedValue: 9,
+  }),
+]);
+assert.deepEqual(shorterTimeWins.preferredIds, ["short"]);
+const unknownCollateral = compareOwnerCoordination([
+  evidence({
+    requirementId: "known",
+    proposedConstraintProgress: 2,
+    supportedValue: 4,
+  }),
+  evidence({
+    requirementId: "unknown",
+    proposedConstraintProgress: 2,
+    supportedValue: 1,
+    collateralSupported: false,
+  }),
+]);
+assert.deepEqual(unknownCollateral.preferredIds, ["known"]);
+assert.equal(
+  unknownCollateral.assessments.find(({ id }) => id === "unknown").preferred,
+  false,
+);
+
+const identicalCommands = assessOwnerCoordination(
+  evidence({
+    incumbentCommandIntention: ["addMetal:Steel", "subMetal:Iron"],
+    proposedCommandIntention: ["addMetal:Steel", "subMetal:Iron"],
+  }),
+);
+assert.equal(identicalCommands.commandChanges, false);
+const commandOrderChanges = assessOwnerCoordination(
+  evidence({
+    incumbentCommandIntention: ["subMetal:Iron", "addMetal:Steel"],
+    proposedCommandIntention: ["addMetal:Steel", "subMetal:Iron"],
+  }),
+);
+assert.equal(commandOrderChanges.commandChanges, true);
+const identicalCommandCannotClaimIntervention = assessOwnerCoordination(
+  evidence({
+    proposedConstraintProgress: 2,
+    incumbentCommandIntention: ["addMetal:Steel"],
+    proposedCommandIntention: ["addMetal:Steel"],
+  }),
+);
+assert.equal(identicalCommandCannotClaimIntervention.incrementalEffect, "none");
+assert.equal(identicalCommandCannotClaimIntervention.mayRequestOwner, false);
+const unknownCommands = assessOwnerCoordination(
+  evidence({ proposedCommandIntention: undefined }),
+);
+assert.equal(unknownCommands.commandChanges, undefined);
+assert.equal(unknownCommands.incrementalEffect, "unknown");
+assert.equal(unknownCommands.classification, "unavailable");
+assert.ok(unknownCommands.reasons.includes("native-command-intention-unknown"));
+const plannedCommandsAreNotMarginals = assessOwnerCoordination(
+  evidence({
+    effectEvidence: "planned-commands",
+    proposedConstraintProgress: 2,
+  }),
+);
+assert.equal(plannedCommandsAreNotMarginals.incrementalEffect, "unknown");
+assert.equal(plannedCommandsAreNotMarginals.effectChanges, undefined);
+const unknownOwnerCapacity = assessOwnerCoordination(
+  evidence({
+    capacityAuthority: { ownerType: "other" },
+  }),
+);
+assert.equal(unknownOwnerCapacity.executable, false);
+assert.equal(unknownOwnerCapacity.physicalFeasibility, "unknown");
+assert.ok(
+  unknownOwnerCapacity.reasons.includes("owner-capacity-authority-unavailable"),
+);
+assert.equal(
+  assessOwnerCoordination(evidence({ capacityAuthority: undefined }))
+    .executable,
+  false,
+);
+const characterizedJobsCapacity = assessOwnerCoordination(
+  evidence({
+    ownerId: "jobs",
+    targetOwner: "jobs",
+    capacityAuthority: {
+      ownerType: "jobs",
+      sourceAssignmentKnown: true,
+      protectedMinimumKnown: true,
+      defaultPoolKnown: true,
+      workerCapacityKnown: true,
+      foundryCouplingKnown: true,
+    },
+  }),
+);
+assert.equal(characterizedJobsCapacity.physicalFeasibility, "supported");
+
 for (const [override, reason] of [
   [{ explicitQueueActive: true }, "explicit-user-queue-precedence"],
   [{ playerPermitted: false }, "player-permission-denied"],
@@ -234,17 +362,25 @@ for (const [override, reason] of [
   [{ requestPortAvailable: false }, "owner-request-port-unavailable"],
   [{ nativeControlAvailable: false }, "native-control-unavailable"],
   [{ nativeCapAvailable: false }, "native-cap-unavailable"],
-  [{ safeWorkerSourceAvailable: false }, "safe-worker-source-unavailable"],
-  [{ safeWorkerSourceAvailable: undefined }, "safe-worker-source-unknown"],
+  [
+    {
+      capacityAuthority: {
+        ownerType: "smelter",
+        availableCapacityKnown: false,
+        sourceTargetAllocationKnown: true,
+        fuelAllocationKnown: true,
+        supportedDisplacementKnown: true,
+      },
+    },
+    "owner-capacity-authority-unavailable",
+  ],
   [{ ownerWillReverse: true }, "owner-will-reverse"],
   [{ ownerWillReverse: undefined }, "owner-reversal-unknown"],
-  [{ snapshotCurrent: false }, "stale-owner-snapshot"],
-  [{ currentRootId: "root-2" }, "stale-owner-snapshot"],
-  [{ currentProgressionId: "progress-2" }, "stale-owner-snapshot"],
+  [{ currentRootIdentity: {} }, "stale-owner-snapshot"],
+  [{ currentProgressionGeneration: 999 }, "stale-owner-snapshot"],
   [{ currentPriceIdentity: "price-2" }, "stale-owner-snapshot"],
-  [{ currentControlGeneration: "control-2" }, "stale-owner-snapshot"],
-  [{ currentPermissionGeneration: "permission-2" }, "stale-owner-snapshot"],
-  [{ currentSnapshotGeneration: "snapshot-2" }, "stale-owner-snapshot"],
+  [{ currentControlGeneration: 999 }, "stale-owner-snapshot"],
+  [{ currentPermissionEnabled: false }, "stale-owner-snapshot"],
 ]) {
   const result = assessOwnerCoordination(
     evidence({ ...override, proposedConstraintProgress: 2 }),
@@ -268,6 +404,9 @@ const incompleteCoverage = assessOwnerCoordination(
   evidence({ coverageComplete: false, proposedConstraintProgress: 2 }),
 );
 assert.equal(incompleteCoverage.mayRequestOwner, false);
+assert.equal(incompleteCoverage.executable, false);
+assert.equal(incompleteCoverage.physicalFeasibility, "supported");
+assert.ok(incompleteCoverage.reasons.length > 0);
 assert.ok(incompleteCoverage.reasons.includes("demand-coverage-unknown"));
 
 const noGoalSignal = compareOwnerCoordination([]);

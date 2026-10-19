@@ -29,22 +29,35 @@ export interface OwnerCoordinationEvidence {
   readonly requestPortAvailable: boolean;
   readonly nativeControlAvailable: boolean;
   readonly nativeCapAvailable: boolean;
-  readonly safeWorkerSourceAvailable: boolean | undefined;
-  readonly rootId: string;
-  readonly currentRootId: string;
-  readonly progressionId: string;
-  readonly currentProgressionId: string;
+  readonly capacityAuthority?:
+    | Readonly<{
+        ownerType: "jobs";
+        sourceAssignmentKnown: boolean;
+        protectedMinimumKnown: boolean;
+        defaultPoolKnown: boolean;
+        workerCapacityKnown: boolean;
+        foundryCouplingKnown: boolean;
+      }>
+    | Readonly<{
+        ownerType: "smelter";
+        availableCapacityKnown: boolean;
+        sourceTargetAllocationKnown: boolean;
+        fuelAllocationKnown: boolean;
+        supportedDisplacementKnown: boolean;
+      }>
+    | Readonly<{ ownerType: "other" }>;
+  readonly rootIdentity: object;
+  readonly currentRootIdentity: object;
+  readonly progressionGeneration: number;
+  readonly currentProgressionGeneration: number;
   readonly priceIdentity: string;
   readonly currentPriceIdentity: string;
-  readonly controlGeneration: string;
-  readonly currentControlGeneration: string;
-  readonly snapshotGeneration: string;
-  readonly currentSnapshotGeneration: string;
-  readonly permissionGeneration: string;
-  readonly currentPermissionGeneration: string;
-  readonly snapshotCurrent: boolean;
-  readonly incumbentPlanId: string;
-  readonly proposedPlanId: string;
+  readonly controlGeneration: number;
+  readonly currentControlGeneration: number;
+  readonly permissionEnabled: boolean;
+  readonly currentPermissionEnabled: boolean;
+  readonly incumbentCommandIntention?: readonly string[];
+  readonly proposedCommandIntention?: readonly string[];
   readonly incumbentEffects?: readonly OwnerPlanEffect[];
   readonly proposedEffects?: readonly OwnerPlanEffect[];
   readonly commitmentClaimsComplete: boolean;
@@ -54,8 +67,18 @@ export interface OwnerCoordinationEvidence {
   readonly supportedConstraintId?: string;
   readonly incumbentConstraintProgress?: number;
   readonly proposedConstraintProgress?: number;
-  readonly valueBasis?: string;
+  readonly objectiveIdentity?: string;
+  readonly immediateConstraintIdentity?: string;
+  readonly metricIdentity?: string;
+  readonly metricUnit?: string;
+  readonly betterDirection?: "smaller" | "larger";
+  readonly observationScope?: string;
+  readonly observationFreshness?: string;
   readonly supportedValue?: number;
+  readonly collateralSupported: boolean;
+  readonly opportunityCostSupported: boolean;
+  readonly effectEvidence:
+    "planned-commands" | "measured-production-marginals" | "unknown";
   readonly effectsComplete: boolean;
   readonly budgetExhausted: boolean;
 }
@@ -63,9 +86,10 @@ export interface OwnerCoordinationEvidence {
 export interface OwnerCoordinationAssessment {
   readonly id: string;
   readonly structurallyValid: boolean;
+  readonly physicalFeasibility: "supported" | "blocked" | "unknown";
   readonly executable: boolean;
   readonly incrementalEffect: "supported" | "none" | "unknown";
-  readonly commandChanges: boolean;
+  readonly commandChanges: boolean | undefined;
   readonly effectChanges:
     | readonly Readonly<{
         resourceId: string;
@@ -200,32 +224,27 @@ export function assessOwnerCoordination(
     evidence.ownerId,
     evidence.capability,
     evidence.targetOwner,
-    evidence.rootId,
-    evidence.currentRootId,
-    evidence.progressionId,
-    evidence.currentProgressionId,
     evidence.priceIdentity,
     evidence.currentPriceIdentity,
-    evidence.controlGeneration,
-    evidence.currentControlGeneration,
-    evidence.snapshotGeneration,
-    evidence.currentSnapshotGeneration,
-    evidence.permissionGeneration,
-    evidence.currentPermissionGeneration,
-    evidence.incumbentPlanId,
-    evidence.proposedPlanId,
   ].every((value) => typeof value === "string" && value.length > 0);
-  if (!identityValid) reasons.push("missing-identity");
+  const generationValid =
+    evidence.rootIdentity !== null &&
+    typeof evidence.rootIdentity === "object" &&
+    evidence.currentRootIdentity !== null &&
+    typeof evidence.currentRootIdentity === "object" &&
+    Number.isSafeInteger(evidence.progressionGeneration) &&
+    Number.isSafeInteger(evidence.currentProgressionGeneration) &&
+    Number.isSafeInteger(evidence.controlGeneration) &&
+    Number.isSafeInteger(evidence.currentControlGeneration);
+  if (!identityValid || !generationValid) reasons.push("missing-identity");
   if (evidence.targetOwner !== evidence.ownerId)
     reasons.push("owner-capability-mismatch");
   if (
-    !evidence.snapshotCurrent ||
-    evidence.rootId !== evidence.currentRootId ||
-    evidence.progressionId !== evidence.currentProgressionId ||
+    evidence.rootIdentity !== evidence.currentRootIdentity ||
+    evidence.progressionGeneration !== evidence.currentProgressionGeneration ||
     evidence.priceIdentity !== evidence.currentPriceIdentity ||
     evidence.controlGeneration !== evidence.currentControlGeneration ||
-    evidence.snapshotGeneration !== evidence.currentSnapshotGeneration ||
-    evidence.permissionGeneration !== evidence.currentPermissionGeneration
+    evidence.permissionEnabled !== evidence.currentPermissionEnabled
   )
     reasons.push("stale-owner-snapshot");
   if (evidence.budgetExhausted) reasons.push("budget-exhausted");
@@ -241,10 +260,21 @@ export function assessOwnerCoordination(
   if (!evidence.nativeControlAvailable)
     reasons.push("native-control-unavailable");
   if (!evidence.nativeCapAvailable) reasons.push("native-cap-unavailable");
-  if (evidence.safeWorkerSourceAvailable === false)
-    reasons.push("safe-worker-source-unavailable");
-  else if (evidence.safeWorkerSourceAvailable !== true)
-    reasons.push("safe-worker-source-unknown");
+  const capacityAuthority = evidence.capacityAuthority;
+  const capacityKnown =
+    evidence.ownerId === "smelter" && capacityAuthority?.ownerType === "smelter"
+      ? capacityAuthority.availableCapacityKnown &&
+        capacityAuthority.sourceTargetAllocationKnown &&
+        capacityAuthority.fuelAllocationKnown &&
+        capacityAuthority.supportedDisplacementKnown
+      : evidence.ownerId === "jobs" && capacityAuthority?.ownerType === "jobs"
+        ? capacityAuthority.sourceAssignmentKnown &&
+          capacityAuthority.protectedMinimumKnown &&
+          capacityAuthority.defaultPoolKnown &&
+          capacityAuthority.workerCapacityKnown &&
+          capacityAuthority.foundryCouplingKnown
+        : false;
+  if (!capacityKnown) reasons.push("owner-capacity-authority-unavailable");
   if (evidence.explicitQueueActive)
     reasons.push("explicit-user-queue-precedence");
   if (!evidence.playerPermitted) reasons.push("player-permission-denied");
@@ -263,14 +293,15 @@ export function assessOwnerCoordination(
 
   const structurallyValid =
     identityValid && evidence.targetOwner === evidence.ownerId;
-  const executable = structurallyValid && reasons.length === 0;
   const improvement = constraintKnown
     ? evidence.proposedConstraintProgress! -
       evidence.incumbentConstraintProgress!
     : undefined;
-  const targetDelta = planDeltaKnown(evidence)
-    ? targetProductionDelta(evidence)
-    : undefined;
+  const targetDelta =
+    evidence.effectEvidence === "measured-production-marginals" &&
+    planDeltaKnown(evidence)
+      ? targetProductionDelta(evidence)
+      : undefined;
   const coverageKnown =
     evidence.coverageComplete &&
     finite(evidence.targetAmount) &&
@@ -303,24 +334,66 @@ export function assessOwnerCoordination(
   if (improvement !== undefined && improvement < 0)
     reasons.push("supported-constraint-regression");
 
+  const commandsKnown =
+    evidence.incumbentCommandIntention !== undefined &&
+    evidence.proposedCommandIntention !== undefined;
+  const commandChanges = commandsKnown
+    ? JSON.stringify(evidence.incumbentCommandIntention) !==
+      JSON.stringify(evidence.proposedCommandIntention)
+    : undefined;
+  if (!commandsKnown) reasons.push("native-command-intention-unknown");
+  else if (!commandChanges) reasons.push("native-command-intention-unchanged");
+  const supportedIncrementalEffect = !commandsKnown
+    ? "unknown"
+    : !commandChanges
+      ? "none"
+      : incrementalEffect;
+  const supportedUseful = !commandsKnown
+    ? undefined
+    : !commandChanges
+      ? false
+      : useful;
+  const supportedClassification = !commandsKnown
+    ? "unavailable"
+    : !commandChanges
+      ? "redundant"
+      : classification;
+  const informationalReasons = new Set([
+    "incumbent-already-covers-demand",
+    "no-increment-over-incumbent",
+    "native-command-intention-unchanged",
+  ]);
+  const executable =
+    structurallyValid &&
+    !reasons.some((reason) => !informationalReasons.has(reason));
+
   return Object.freeze({
     id: evidence.requirementId,
     structurallyValid,
+    physicalFeasibility: !evidence.nativeCapAvailable
+      ? "blocked"
+      : capacityKnown && commandsKnown
+        ? "supported"
+        : "unknown",
     executable,
-    incrementalEffect,
-    commandChanges: evidence.incumbentPlanId !== evidence.proposedPlanId,
-    effectChanges: comparePlanEffects(evidence),
+    incrementalEffect: supportedIncrementalEffect,
+    commandChanges,
+    effectChanges:
+      evidence.effectEvidence === "measured-production-marginals"
+        ? comparePlanEffects(evidence)
+        : undefined,
     affectedCommitmentIds: Object.freeze([...evidence.affectedCommitmentIds]),
-    useful,
+    useful: supportedUseful,
     preferred: false,
     mayRequestOwner:
       executable &&
       coverageKnown &&
       !demandMet &&
-      classification === "incremental" &&
-      useful === true,
+      supportedClassification === "incremental" &&
+      supportedUseful === true &&
+      commandChanges === true,
     authorizedToExecute: false,
-    classification,
+    classification: supportedClassification,
     reasons: Object.freeze([...new Set(reasons)].sort()),
   });
 }
@@ -358,20 +431,38 @@ export function compareOwnerCoordination(
       ({ item, assessment }) =>
         assessment.mayRequestOwner &&
         finite(item.supportedValue) &&
-        typeof item.valueBasis === "string" &&
-        item.valueBasis.length > 0,
+        typeof item.objectiveIdentity === "string" &&
+        typeof item.immediateConstraintIdentity === "string" &&
+        typeof item.metricIdentity === "string" &&
+        typeof item.metricUnit === "string" &&
+        (item.betterDirection === "smaller" ||
+          item.betterDirection === "larger") &&
+        typeof item.observationScope === "string" &&
+        typeof item.observationFreshness === "string" &&
+        item.collateralSupported &&
+        item.opportunityCostSupported,
     );
   let preferredIds: string[] = [];
   if (
     !budgetExhausted &&
     candidates.length > 0 &&
     candidates.every(
-      ({ item }) => item.valueBasis === candidates[0]!.item.valueBasis,
+      ({ item }) =>
+        item.objectiveIdentity === candidates[0]!.item.objectiveIdentity &&
+        item.immediateConstraintIdentity ===
+          candidates[0]!.item.immediateConstraintIdentity &&
+        item.metricIdentity === candidates[0]!.item.metricIdentity &&
+        item.metricUnit === candidates[0]!.item.metricUnit &&
+        item.betterDirection === candidates[0]!.item.betterDirection &&
+        item.observationScope === candidates[0]!.item.observationScope &&
+        item.observationFreshness === candidates[0]!.item.observationFreshness,
     )
   ) {
-    const bestValue = Math.max(
-      ...candidates.map(({ item }) => item.supportedValue!),
-    );
+    const values = candidates.map(({ item }) => item.supportedValue!);
+    const bestValue =
+      candidates[0]!.item.betterDirection === "smaller"
+        ? Math.min(...values)
+        : Math.max(...values);
     preferredIds = candidates
       .filter(({ item }) => item.supportedValue === bestValue)
       .map(({ assessment }) => assessment.id);
