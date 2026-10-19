@@ -22,10 +22,13 @@ function evidence(overrides = {}) {
     owner: {
       effectResourceIds: ["r1"],
       demandSatisfied: false,
+      alreadyResponding: false,
       controlAvailable: true,
       permission: true,
       expectedReversion: false,
+      currentPlanKnown: true,
     },
+    ownerKind: "jobs",
     target: {
       nativeMaximum: 5,
       assigned: 2,
@@ -47,6 +50,95 @@ const executable = assessAllocationOpportunity(evidence());
 assert.equal(executable.actionable, true);
 assert.deepEqual(executable.reasons, []);
 
+const p12iObservedJobsBoundary = assessAllocationOpportunity({
+  ...evidence(),
+  id: "p12i-scientist-boundary",
+  action: {
+    ...evidence().action,
+    shortfalls: [
+      { resourceId: "Knowledge", amount: 6849.337465725465 },
+      { resourceId: "Steel", amount: 240 },
+    ],
+  },
+  owner: {
+    ...evidence().owner,
+    currentPlanKnown: false,
+    expectedReversion: undefined,
+    demandSatisfied: undefined,
+    alreadyResponding: undefined,
+  },
+  evidenceComplete: false,
+  target: {
+    ...evidence().target,
+    nativeMaximum: 1,
+    assigned: 1,
+    smartMaximumKnown: false,
+    smartMaximum: null,
+    idleWorkers: 0,
+    defaultPoolWorkers: 0,
+    controlAvailable: undefined,
+  },
+});
+assert.equal(p12iObservedJobsBoundary.actionable, false);
+assert.ok(p12iObservedJobsBoundary.reasons.includes("native-job-cap-reached"));
+assert.ok(
+  p12iObservedJobsBoundary.reasons.includes("unknown-effective-smart-maximum"),
+);
+assert.ok(
+  p12iObservedJobsBoundary.reasons.includes("no-idle-or-default-pool-worker"),
+);
+assert.ok(
+  p12iObservedJobsBoundary.reasons.includes(
+    "native-target-control-availability-unknown",
+  ),
+);
+assert.ok(
+  p12iObservedJobsBoundary.reasons.includes("ordinary-owner-reversion-unknown"),
+);
+
+const p12gObservedSmelterBoundary = assessAllocationOpportunity({
+  ...evidence(),
+  id: "p12g-smelter-boundary",
+  ownerKind: "smelter",
+  action: {
+    ...evidence().action,
+    shortfalls: [{ resourceId: "Steel", amount: 240 }],
+  },
+  owner: {
+    ...evidence().owner,
+    effectResourceIds: ["Steel", "Iron", "Coal"],
+    alreadyResponding: true,
+    capacity: {
+      nativeMaximum: 15,
+      totalAssigned: 15,
+      targetAssigned: 0,
+      targetMaximum: 15,
+      requestedDelta: 1,
+      sourceAvailable: 1,
+      sourceId: "Iron",
+      sourceControlAvailable: true,
+      sourceProvenance: "captured native Smelter plan",
+    },
+  },
+  target: undefined,
+});
+assert.equal(p12gObservedSmelterBoundary.actionable, false);
+assert.ok(
+  p12gObservedSmelterBoundary.reasons.includes(
+    "production-owner-already-responding",
+  ),
+);
+
+const unknownSmelterCapacity = assessAllocationOpportunity({
+  ...evidence(),
+  ownerKind: "smelter",
+  owner: { ...evidence().owner, capacity: undefined },
+  target: undefined,
+});
+assert.ok(
+  unknownSmelterCapacity.reasons.includes("native-allocation-capacity-unknown"),
+);
+
 const nativeCap = assessAllocationOpportunity(
   evidence({
     target: { ...evidence().target, assigned: 5 },
@@ -61,6 +153,29 @@ const smartCap = assessAllocationOpportunity(
 );
 assert.ok(smartCap.reasons.includes("smart-maximum-reached"));
 
+const missingSmartCap = assessAllocationOpportunity(
+  evidence({
+    target: {
+      ...evidence().target,
+      smartMaximumKnown: true,
+      smartMaximum: undefined,
+    },
+  }),
+);
+assert.ok(missingSmartCap.reasons.includes("unknown-effective-smart-maximum"));
+
+const malformedIdlePool = assessAllocationOpportunity(
+  evidence({
+    target: { ...evidence().target, idleWorkers: Number.NaN },
+  }),
+);
+assert.ok(malformedIdlePool.reasons.includes("idle-worker-count-unknown"));
+
+const missingJobTarget = assessAllocationOpportunity(
+  evidence({ target: undefined }),
+);
+assert.ok(missingJobTarget.reasons.includes("missing-job-target-evidence"));
+
 const noIdle = assessAllocationOpportunity(
   evidence({
     target: { ...evidence().target, idleWorkers: 0, defaultPoolWorkers: 0 },
@@ -74,6 +189,14 @@ const defaultPool = assessAllocationOpportunity(
   }),
 );
 assert.equal(defaultPool.actionable, true);
+
+const unknownOwnerPlan = assessAllocationOpportunity(
+  evidence({
+    owner: { ...evidence().owner, currentPlanKnown: false },
+    target: { ...evidence().target, idleWorkers: 0, defaultPoolWorkers: 1 },
+  }),
+);
+assert.ok(unknownOwnerPlan.reasons.includes("ordinary-owner-plan-unknown"));
 
 const protectedSource = assessAllocationOpportunity(
   evidence({
@@ -115,6 +238,13 @@ const missingControl = assessAllocationOpportunity(
 );
 assert.ok(missingControl.reasons.includes("native-control-unavailable"));
 
+const unknownControl = assessAllocationOpportunity(
+  evidence({ owner: { ...evidence().owner, controlAvailable: undefined } }),
+);
+assert.ok(
+  unknownControl.reasons.includes("native-control-availability-unknown"),
+);
+
 const reversal = assessAllocationOpportunity(
   evidence({
     owner: { ...evidence().owner, expectedReversion: true },
@@ -128,6 +258,15 @@ const sufficient = assessAllocationOpportunity(
   }),
 );
 assert.ok(sufficient.reasons.includes("resource-already-sufficient"));
+
+const unknownAffordability = assessAllocationOpportunity(
+  evidence({
+    action: { ...evidence().action, affordable: undefined },
+  }),
+);
+assert.ok(
+  unknownAffordability.reasons.includes("native-affordability-unknown"),
+);
 
 const ownerSatisfied = assessAllocationOpportunity(
   evidence({
@@ -155,6 +294,23 @@ for (const changed of [
   assert.ok(assessment.reasons.some((reason) => reason.startsWith("changed-")));
 }
 
+for (const incomplete of [
+  evidence({ ownerKind: undefined }),
+  evidence({ ownerKind: "jobz", target: undefined }),
+  evidence({
+    rootId: undefined,
+    action: { ...evidence().action, rootId: undefined },
+  }),
+  evidence({
+    priceIdentity: undefined,
+    action: { ...evidence().action, priceIdentity: undefined },
+  }),
+  evidence({ action: { ...evidence().action, current: 1 } }),
+  evidence({ action: { ...evidence().action, progressionCurrent: "true" } }),
+]) {
+  assert.equal(assessAllocationOpportunity(incomplete).actionable, false);
+}
+
 const tied = selectAllocationOpportunity([
   evidence({ id: "zeta" }),
   evidence({ id: "alpha" }),
@@ -167,7 +323,9 @@ const exhausted = selectAllocationOpportunity(
   { maxCandidates: 1 },
 );
 assert.equal(exhausted.budgetExhausted, true);
-assert.equal(exhausted.selectedId, "one");
+assert.equal(exhausted.selectedId, undefined);
+assert.deepEqual(exhausted.tiedIds, []);
+assert.deepEqual(exhausted.potentialIds, ["one"]);
 
 const none = selectAllocationOpportunity([
   evidence({ owner: { ...evidence().owner, demandSatisfied: true } }),
