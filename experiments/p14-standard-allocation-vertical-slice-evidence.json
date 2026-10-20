@@ -1,0 +1,254 @@
+{
+  "experiment": "P14",
+  "outcome": "C_fixture_or_authority_insufficient",
+  "repository": {
+    "branch": "deadspace",
+    "startingHead": "1c0b741209b2fbce03ccbd56637ce13d78139df0",
+    "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    "gameSnapshotSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "automationBundleSha256": "84a029d822fcca7b576736ee4c5558ac799a25bea0322b4bd64b0c3eedb9a3b6",
+    "settingsPath": "test-artifacts/benchmark/slice0/settings/current-full.json",
+    "settingsSha256": "f7fd9286607695d8716359f20f1a5f680264832de36879f84a7a67c4bd970042",
+    "exactRunnerAggregateSha256": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+    "runnerModuleSha256": "0525816731735c804247b88cbc2fb47cdc344e50a55cf6376189c94b0acbc1f5",
+    "seed": 42,
+    "epoch": "2026-09-21T00:00:00.000Z"
+  },
+  "fixtureSearch": {
+    "scope": "pre-existing test-artifacts native save/export/checkpoint JSON and text files, excluding P14-generated probes",
+    "parsedNativeExportCount": 19,
+    "genuineStandardProgressedFixtureCount": 0,
+    "findings": [
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/reports/native-prerequisite-early-candidate-export.txt",
+          "test-artifacts/benchmark/slice0/reports/native-prerequisite-early-candidate-final-export.txt",
+          "test-artifacts/benchmark/slice0/reports/native-prerequisite-early-final-export.txt",
+          "test-artifacts/benchmark/slice0/reports/native-prerequisite-final-export.txt"
+        ],
+        "sha256": "82797a033f81dd5596c16199650fcdfeb5572e0b515491f68e16071379f5694f",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 74,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/deadspace-early-day14.json"
+        ],
+        "sha256": "701d69f9fb3e8a92d5dd84f1a4f6fe7070609a1f2ee236333666274400861744",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 14,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/deadspace-late-2026-10-12.txt"
+        ],
+        "sha256": "e2c9d1d4bb5656e9808a68df68455a7edc8fbe4d5b24933efd71520ffbbaefc3",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 502447,
+        "reset": 848
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/mad-tech-offered-blocked.json"
+        ],
+        "sha256": "7eb43bc6cd1e7267561ceb21aaaa7b8c5eee9a4aa7c700ef9d579063a26cf090",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 470601,
+        "reset": 848
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/stage2d-pre-library-checkpoint.json"
+        ],
+        "sha256": "f416e9407dae457865a49b63684c588785cdcf5aad5ba6be069cf5dd6f8416a6",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 16,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/stage2e-baseline-2000-export.json"
+        ],
+        "sha256": "9b78f6fe738ebe6eb71a4b5bd497a3a5ef179f7ce8f91e6b9bf31e177e390cf2",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 114,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/stage2e-baseline-final-export.json",
+          "test-artifacts/benchmark/slice0/saves/stage2e-baseline-intervals-export.json",
+          "test-artifacts/benchmark/slice0/saves/stage2e-baseline-with-trigger-queue-export.json"
+        ],
+        "sha256": "10ce2c547694fad65f5a393847ab45db1e9bbe26da144b743a34a5ccd23dddde",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 1014,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/stage2e-baseline-no-triggers-export.json"
+        ],
+        "sha256": "a781f8f781ded6e2208494d900371b223d52b0134a3a572d5971933d3b78ab32",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 264,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/stage2f-candidate-progression-export.json"
+        ],
+        "sha256": "b7c51be0710fc04c795c557fb4704776d5acc1162f50db425b68fa7daba2ee79",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 1014,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/stage2f-fixed-progression-export.json"
+        ],
+        "sha256": "b1f22205b78d043a98f914924d965a1ab04af791f1f3d7ce6e0179849892662e",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 1014,
+        "reset": 846
+      },
+      {
+        "paths": [
+          "test-artifacts/benchmark/slice0/saves/stage2f-through-7600-export.json"
+        ],
+        "sha256": "7c25f5cec06c88316675665d521bfc368d60c0c4a72ea0a2bde35bcc7d3069a3",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 394,
+        "reset": 846
+      },
+      {
+        "paths": ["test-artifacts/benchmark/tmp/stage3e-baseline-export.json"],
+        "sha256": "11f0adde7366825fdc91709efb4357cab5fbb8fcff487c25fca414da01d8f583",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 1024,
+        "reset": 846
+      },
+      {
+        "paths": ["test-artifacts/benchmark/tmp/stage3e-claim-export.json"],
+        "sha256": "2b94339560e2d377503d67c7cc866ef7c3a043914754336dd650ae31329efbee",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 1024,
+        "reset": 846
+      },
+      {
+        "paths": ["test-artifacts/benchmark/tmp/stage4f3-p9000-save.json"],
+        "sha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "raceUniverse": "magic",
+        "species": "human",
+        "day": 1464,
+        "reset": 846
+      }
+    ]
+  },
+  "nativeInitializationAttempts": [
+    {
+      "mechanism": "exact Chromium runner --save none, pinned game, default game new-game initialization",
+      "runnerReportSha256": "8e12e56e4dd96e764bc4be4e3bc39a223c676d495d426471394b6d0a17f2aa83",
+      "exportSha256": "b74efb48ac12ac3f527fecf159609ea994777c8f37c389e823e1a776ebb3146b",
+      "periods": 0,
+      "raceUniverse": "standard",
+      "species": "protoplasm",
+      "day": 0,
+      "totalDays": 0,
+      "reset": 0,
+      "researchTechCount": 0,
+      "result": "genuine fresh Standard state; not an ordinary MAD-compatible allocation fixture"
+    },
+    {
+      "mechanism": "same fresh native initialization with current-full settings, normal automation, 50000 periods",
+      "runnerReportSha256": "93cc881fcdba7b8ebbbc749694a910089bdef279e7c51fae42ca1b5124aa9ddf",
+      "exportSha256": "9209158c7be7ef27d9fabdaa1e8bfa27140e9b8209646fb88c63ab9a3c45ac95",
+      "periods": 50000,
+      "endDay": 0,
+      "reset": 0,
+      "controlCalls": 6485,
+      "raceUniverse": "standard",
+      "species": "protoplasm",
+      "techKeys": ["evo"],
+      "ordinaryResearchTechKeys": [],
+      "resourceAmounts": {
+        "RNA": 100,
+        "DNA": 0,
+        "Knowledge": 0,
+        "Food": 0,
+        "Lumber": 0,
+        "Stone": 0,
+        "Iron": 0,
+        "Steel": 0,
+        "Titanium": 0
+      },
+      "result": "no ordinary Research/economy progression; no eligible fixture emerged"
+    },
+    {
+      "mechanism": "fresh native initialization, one ordinary native RNA action, current-full settings, 20000 periods",
+      "exportSha256": "409d3080fb0ce88f49ffdb1933ac1722b0ebd669f4cfac8ddd605f2f30550670",
+      "periods": 20000,
+      "raceUniverse": "standard",
+      "species": "protoplasm",
+      "endDay": 0,
+      "reset": 0,
+      "tech": {},
+      "evolution": {
+        "membraneCount": 0
+      },
+      "resourceAmounts": {
+        "RNA": 100,
+        "DNA": 0,
+        "Knowledge": 0,
+        "Food": 0,
+        "Lumber": 0,
+        "Stone": 0,
+        "Iron": 0,
+        "Steel": 0,
+        "Titanium": 0,
+        "Money": 0
+      },
+      "nativeControlUsage": {
+        "evolution-rna.action": {
+          "returned": 81,
+          "threw": 0
+        }
+      },
+      "result": "native action and bounded automation did not produce an ordinary MAD-compatible state"
+    }
+  ],
+  "comparison": {
+    "baselineAndInterventionArmsRun": false,
+    "nativeResearchOfferSelected": false,
+    "interventionImplemented": false,
+    "interventionApplied": false,
+    "progressionImprovementClaimed": false,
+    "rngIntegrityAssessment": "not applicable; no matched allocation replay was run",
+    "cpuGate": "not run; P13O less-than-2-percent gate remains unresolved"
+  },
+  "requiredInput": {
+    "kind": "unmodified native Evolve export/save",
+    "mustHave": {
+      "race.universe": "standard",
+      "race.species": "ordinary MAD-compatible race (for example human)",
+      "progression": "valid progressed native state with ordinary Research and Market/production owners available"
+    },
+    "preferredState": "a regular, unchallenged Standard run with a current meaningful Research offer and sufficient progression for the native ordinary owners to be active",
+    "forbiddenWorkaround": "changing race.universe on any Magic save"
+  }
+}
