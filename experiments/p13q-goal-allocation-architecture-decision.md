@@ -93,3 +93,12 @@ This report changes no production code and does not authorize production integra
 ## Documentation checks
 
 The report-only slice was checked with the repository Markdown formatter and `git diff --check`. No production diagnostic contract changed, so no focused implementation test was affected.
+
+## P13R repository closure
+
+- P13Q retires the experimental Stage 4A per-Market-tick selector from further optimization and production consideration. No additional goal-aware Market selector, prefilter, prerequisite graph cache, or CPU benchmark is part of this line of work.
+- Historical Stage 4A–4F tests, harnesses, and reports remain available for regression and research reproducibility.
+- Production native Market and Research owners are unchanged.
+- P13O's renderer CPU measurement limitations remain unresolved. The less-than-2% CPU gate remains unpassed; P13O does not establish CPU readiness.
+- If autonomous allocation resumes, it proceeds through a distinct native-owner coordination design with explicit observation ownership across Research, Market, production, construction, storage, and imports.
+- The preserved P13O benchmark correction and measurement evidence were finalized separately in commit `2830a29dd4ee90ab1b99f6fbd7fc35c64836312c`.
