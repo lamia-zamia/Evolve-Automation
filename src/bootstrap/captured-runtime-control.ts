@@ -2870,6 +2870,26 @@ export function startCapturedRuntime({
                 "eligible" &&
                 readCapturedMadTargetCondition(root).status === "eligible",
             );
+        if (conjunctiveMode && isRecord(testHooks)) {
+          const previousWork = readProperty(
+            testHooks,
+            "p13mMandatoryClassifierWorkEvents",
+          );
+          const workEvents = Array.isArray(previousWork) ? previousWork : [];
+          workEvents.push(
+            Object.freeze({
+              cycle: automationCycle,
+              status: mandatoryPlan.status,
+              mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
+              work: mandatoryPlan.work,
+            }),
+          );
+          Reflect.set(
+            testHooks,
+            "p13mMandatoryClassifierWorkEvents",
+            workEvents,
+          );
+        }
         const mandatoryOfferEvidence = mandatoryPlan.mandatoryActionIds.map(
           (actionId) => {
             const offer = offers.find((entry) => entry.elementId === actionId);
@@ -3508,6 +3528,147 @@ export function startCapturedRuntime({
           );
           return;
         }
+        const previousPriorityEvents = readProperty(
+          testHooks,
+          "p13mPriorityProtectionEvents",
+        );
+        const priorPriorityEvents = Array.isArray(previousPriorityEvents)
+          ? previousPriorityEvents
+          : [];
+        const mandatoryActionIds = mandatoryPlan.mandatoryActionIds;
+        const bothObligationsAdmitted =
+          (claims.some(
+            (entry) => entry.nativeActionId === "tech-black_powder",
+          ) &&
+            claims.some(
+              (entry) => entry.nativeActionId === "tech-mad_science",
+            )) ||
+          priorPriorityEvents.some((event: unknown) => {
+            const admittedActionIds = readProperty(event, "admittedActionIds");
+            return (
+              Array.isArray(admittedActionIds) &&
+              admittedActionIds.includes("tech-black_powder") &&
+              admittedActionIds.includes("tech-mad_science")
+            );
+          });
+        const priorityPolicy = readProperty(intervention, "priorityPolicy");
+        let activeClaims = claims;
+        let priorityReason = "concurrent protection";
+        if (priorityPolicy === "ordinary") {
+          activeClaims = [];
+          priorityReason = "ordinary baseline has no goal-directed protection";
+        } else if (
+          priorityPolicy === "mad-science-first" ||
+          priorityPolicy === "black-powder-first"
+        ) {
+          const firstActionId =
+            priorityPolicy === "mad-science-first"
+              ? "tech-mad_science"
+              : "tech-black_powder";
+          const secondActionId =
+            firstActionId === "tech-mad_science"
+              ? "tech-black_powder"
+              : "tech-mad_science";
+          const firstDefinition = definitions.find(
+            (entry) => entry.actionId === firstActionId,
+          );
+          const firstGrantLevel = firstDefinition
+            ? grantLevels?.get(firstDefinition.grantTechnology)
+            : undefined;
+          const firstGrantComplete =
+            firstDefinition !== undefined &&
+            firstGrantLevel !== undefined &&
+            firstGrantLevel >= firstDefinition.grantLevel;
+          const prioritizedActionId = firstGrantComplete
+            ? secondActionId
+            : firstActionId;
+          if (!bothObligationsAdmitted) {
+            activeClaims = [];
+            priorityReason = "both mandatory claims have not been admitted";
+          } else {
+            activeClaims = claims.filter(
+              (entry) => entry.nativeActionId === prioritizedActionId,
+            );
+            priorityReason = firstGrantComplete
+              ? `verified ${firstActionId} grant; now protecting ${secondActionId}`
+              : activeClaims.length > 0
+                ? `awaiting verified ${firstActionId} grant`
+                : `priority claim ${prioritizedActionId} is not currently admitted`;
+          }
+        }
+        const admissionEvents = readProperty(
+          testHooks,
+          "p13mPriorityProtectionEvents",
+        );
+        const admissionHistory = Array.isArray(admissionEvents)
+          ? admissionEvents
+          : [];
+        const allObservedActionIds = new Set([
+          ...admissionHistory.flatMap((event: unknown) => {
+            const actionIds = readProperty(event, "mandatoryActionIds");
+            return Array.isArray(actionIds)
+              ? actionIds.filter(
+                  (actionId): actionId is string =>
+                    typeof actionId === "string",
+                )
+              : [];
+          }),
+          ...mandatoryActionIds,
+        ]);
+        const lifecycle = [...allObservedActionIds].map((actionId) => {
+          const definition = definitions.find(
+            (entry) => entry.actionId === actionId,
+          );
+          const level = definition
+            ? grantLevels?.get(definition.grantTechnology)
+            : undefined;
+          const completed =
+            definition !== undefined &&
+            level !== undefined &&
+            level >= definition.grantLevel;
+          const currentlyMandatory = mandatoryActionIds.includes(actionId);
+          return {
+            actionId,
+            state: completed
+              ? "completed"
+              : currentlyMandatory &&
+                  activeClaims.some(
+                    (entry) => entry.nativeActionId === actionId,
+                  )
+                ? "protected"
+                : currentlyMandatory &&
+                    claims.some((entry) => entry.nativeActionId === actionId)
+                  ? "deferred-protection"
+                  : currentlyMandatory
+                    ? "not-admitted"
+                    : "not-currently-mandatory",
+            grantLevel: level,
+            targetGrantLevel: definition?.grantLevel,
+          };
+        });
+        admissionHistory.push(
+          Object.freeze({
+            cycle: automationCycle,
+            policy: priorityPolicy ?? "concurrent",
+            mandatoryActionIds: [...mandatoryActionIds],
+            admittedActionIds: claims.map((entry) => entry.nativeActionId),
+            activeProtectionActionIds: activeClaims.map(
+              (entry) => entry.nativeActionId,
+            ),
+            activeProtectedMana: activeClaims.reduce(
+              (total, entry) => total + entry.requiredQuantity,
+              0,
+            ),
+            bothObligationsAdmitted,
+            reason: priorityReason,
+            lifecycle,
+          }),
+        );
+        Reflect.set(
+          testHooks,
+          "p13mPriorityProtectionEvents",
+          admissionHistory,
+        );
         selectionRecord(
           "selected",
           "independent current verified native prerequisite obligations",
@@ -3530,6 +3691,18 @@ export function startCapturedRuntime({
               offerBindingGeneration: entry.offerBindingGeneration,
               allocationAuthority: entry.allocationAuthority,
             })),
+            nativeOfferControlIdentities: mandatoryOfferEvidence.map(
+              (entry) => ({
+                actionId: entry.actionId,
+                cost: entry.cost,
+                offerObservationId: entry.offerObservationId,
+                offerSetIdentity: entry.offerSetIdentity,
+                offerGeneration: entry.offerGeneration,
+                controlGeneration: entry.controlGeneration,
+                ownerEligibility: entry.ownerEligibility,
+                nonManaAffordable: entry.nonManaAffordable,
+              }),
+            ),
             mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
             alternativeGroups: mandatoryPlan.alternativeGroups,
             prerequisiteReasons: mandatoryPlan.reasons,
@@ -3561,11 +3734,14 @@ export function startCapturedRuntime({
         );
         Reflect.set(testHooks, "gatherIntervention", {
           ...intervention,
-          resourceClaim: claim,
-          resourceClaims: claims,
+          resourceClaim: activeClaims[0],
+          resourceClaims: activeClaims,
         });
         setTestClaimStatus("active", "goal-derived-native-prerequisite", {
           nativeActionIds: claims.map((entry) => entry.nativeActionId),
+          activeProtectionActionIds: activeClaims.map(
+            (entry) => entry.nativeActionId,
+          ),
           completedActionIds: completedPriorClaimIds,
           releasedActionIds: releasedPriorClaims.map((entry) => entry.actionId),
           blockedActionIds: releasedPriorClaims
