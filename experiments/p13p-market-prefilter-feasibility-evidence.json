@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "decision": "stop-without-implementation",
+  "branch": "deadspace",
+  "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+  "upstream": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "inputs": {
+    "gameSnapshotSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "runnerArtifactSha256": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+    "p13nSaveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+    "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+    "seed": 42,
+    "epoch": "2026-09-21T00:00:00.000Z",
+    "periods": 1000
+  },
+  "sourceSha256": {
+    "experiments/stage4a-goal-aware-acquisition.ts": "78d7f4491b4a49e6fc65f27cd142555f4480de9085ebd4339af307a397f76248",
+    "experiments/stage4a-goal-aware-acquisition.mjs": "2fbd1f8fa56823cd56e0dc4afde33f53c18a00e3559ab32b2049e86adb93ba22",
+    "src/bootstrap/captured-runtime-control.ts": "0e107ef96e75012dc4d8e9cce3a3822e96dc70c268b28eeaecf6b0773da25894",
+    "src/adapters/evolve/economy/market/captured-trade-routes.ts": "da1534354a891126b457f41240bd2111749880f20b08e716c9217f4c9f24331a",
+    "src/domain/economy/market/trade-routes.ts": "f39ff471f976e8b08fa7dd7ed5a5f1d1e49571369bc633ce3a29a653d1e0d33a"
+  },
+  "probe": {
+    "mode": "shadow-only; original selector always ran",
+    "temporaryBundleSha256": "6f0b242b88a12ec97ecd2da868501028d2957fc176656607c3ccc508560f6604",
+    "rawOutput": "test-artifacts/benchmark/tmp/p13p-shadow-p13n.json",
+    "rawOutputSha256": "a3f79417722b968d7ccc2acc04ffe6c8dffc579eb93f8372dd8953541bc3aec3",
+    "calls": 125,
+    "outcomes": {
+      "possible": 0,
+      "definitelyNone": 0,
+      "unknown": 125
+    },
+    "unknownReasons": {
+      "missing-market-observation:Knowledge": 4,
+      "missing-market-observation:Mana": 121
+    },
+    "costEntriesInspected": 125,
+    "marketResourcesInspected": 1750,
+    "falseNegatives": 0,
+    "originalSelectorStatusCounts": {
+      "candidate-not-marketable": 124,
+      "candidate-affordable": 1
+    },
+    "originalSignals": 0,
+    "acceptedSignals": 0,
+    "graphConstructionsAvoided": 0,
+    "candidateEvaluatorCallsAvoided": 0,
+    "additionalRecordChecks": 1875
+  },
+  "shadowParity": {
+    "appliedMarketRouteOperations": 422,
+    "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+    "sameAsP13nNoSignalResult": true
+  },
+  "syntheticClassificationCases": {
+    "possible": 1,
+    "definitelyNone": 2,
+    "unknown": 3,
+    "cases": [
+      "under-stocked with current importable route",
+      "stock covers native cost",
+      "route is locked",
+      "missing matching current control",
+      "Research and Market stock disagree",
+      "malformed native offer cost"
+    ],
+    "fullSelectorDifferentialRun": false
+  },
+  "validationHeavyReference": {
+    "report": "experiments/stage4f3-performance-measurement-authority.md",
+    "reportSha256": "a1402d3b5c3e080bb3a44aed616f3472c9e7b0e91ebaaa6bf52db2d9ab738144",
+    "acceptedSignalsInP8000ToP9000Window": 122,
+    "prefilterReplayRun": false,
+    "reason": "P13P selectivity stop condition fired on the P13N window"
+  },
+  "cpuVerdict": "not measured; P13O less-than-2-percent gate remains unresolved"
+}
