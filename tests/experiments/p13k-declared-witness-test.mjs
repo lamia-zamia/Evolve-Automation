@@ -160,8 +160,27 @@ const steelPathDefinitions = [
         bindingGeneration: 251,
       },
       currentEvidence: "partial",
+      currentAuthority: true,
     }),
     "indirect-declared-path-candidate",
+  );
+  assert.equal(
+    classifyDeclaredRelationship({
+      goalActionId: "tech-mad",
+      definition: steelPathDefinitions[2],
+      witness,
+      mandatoryActionIds: [],
+      alternativeGroups: [],
+      inputConsistency: "consistent",
+      currentOffer: {
+        actionId: "tech-steel_containers",
+        bindingGeneration: 1,
+      },
+      currentEvidence: "complete",
+      currentAuthority: false,
+    }),
+    "unknown-current-authority",
+    "a retained path cannot make a stale owner offer current",
   );
   assert.ok(witness.work.nodesExamined <= witness.work.maxNodes);
   assert.ok(witness.work.edgesExamined <= witness.work.maxEdges);
@@ -191,6 +210,7 @@ const steelPathDefinitions = [
       inputConsistency: "consistent",
       currentOffer: { actionId: "tech-steel_containers", bindingGeneration: 1 },
       currentEvidence: "complete",
+      currentAuthority: true,
     }),
     "mandatory",
   );
@@ -204,6 +224,7 @@ const steelPathDefinitions = [
       inputConsistency: "incomplete",
       currentOffer: { actionId: "tech-steel_containers", bindingGeneration: 1 },
       currentEvidence: "partial",
+      currentAuthority: true,
     }),
     "indirect-declared-path-candidate",
     "scoped mandatory output does not become a complete mandatory certificate",
@@ -228,6 +249,7 @@ const steelPathDefinitions = [
       inputConsistency: "incomplete",
       currentOffer: { actionId: "tech-steel_containers", bindingGeneration: 1 },
       currentEvidence: "partial",
+      currentAuthority: true,
     }),
     "unknown-path-applicability",
   );
@@ -271,6 +293,7 @@ const steelPathDefinitions = [
       inputConsistency: "consistent",
       currentOffer: { actionId: "tech-steel_containers", bindingGeneration: 1 },
       currentEvidence: "complete",
+      currentAuthority: true,
     }),
     "indirect-declared-path-candidate",
   );
@@ -305,6 +328,7 @@ const steelPathDefinitions = [
       inputConsistency: "consistent",
       currentOffer: { actionId: "tech-steel_containers", bindingGeneration: 1 },
       currentEvidence: "complete",
+      currentAuthority: true,
     }),
     "one-of-several-mandatory-alternatives",
   );
@@ -321,6 +345,7 @@ const steelPathDefinitions = [
       inputConsistency: "consistent",
       currentOffer: { actionId: "tech-missing", bindingGeneration: 1 },
       currentEvidence: "complete",
+      currentAuthority: true,
     }),
     "unknown-definition-unavailable",
   );
@@ -334,6 +359,7 @@ const steelPathDefinitions = [
       inputConsistency: "consistent",
       currentOffer: { actionId: "tech-steel_containers", bindingGeneration: 0 },
       currentEvidence: "complete",
+      currentAuthority: true,
     }),
     "unknown-current-binding-invalid",
   );
@@ -347,6 +373,7 @@ const steelPathDefinitions = [
       inputConsistency: "consistent",
       currentOffer: { actionId: "tech-barns", bindingGeneration: 1 },
       currentEvidence: "complete",
+      currentAuthority: true,
     }),
     "proven-unrelated",
   );
@@ -373,8 +400,40 @@ const steelPathDefinitions = [
       inputConsistency: "consistent",
       currentOffer: { actionId: "tech-barns", bindingGeneration: 1 },
       currentEvidence: "complete",
+      currentAuthority: true,
     }),
     "proven-unrelated",
+  );
+
+  const missingIntermediate = {
+    ...unrelated.graph,
+    actions: unrelated.graph.actions.filter(
+      ({ actionId }) => actionId !== "tech-industrialization",
+    ),
+  };
+  const missingIntermediateWitness = reconstructDeclaredResearchWitness(
+    missingIntermediate,
+    definitions,
+    unrelated.applicability,
+    unrelated.levels,
+    "tech-mad",
+    "tech-barns",
+  );
+  assert.equal(missingIntermediateWitness.status, "unknown");
+  assert.equal(
+    classifyDeclaredRelationship({
+      goalActionId: "tech-mad",
+      definition: unrelatedDefinition,
+      witness: missingIntermediateWitness,
+      mandatoryActionIds: [],
+      alternativeGroups: [],
+      inputConsistency: "consistent",
+      currentOffer: { actionId: "tech-barns", bindingGeneration: 1 },
+      currentEvidence: "complete",
+      currentAuthority: true,
+    }),
+    "unknown-witness-incomplete",
+    "a missing intermediate graph action cannot prove non-ancestry",
   );
   assert.equal(
     classifyP13KOutcome({

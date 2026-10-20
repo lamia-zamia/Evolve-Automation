@@ -39,6 +39,7 @@ export function reconstructDeclaredResearchWitness(
   const actionMemo = new Map();
   const requirementMemo = new Map();
   const active = new Set();
+  const unknownReasons = new Set();
   let truncated = false;
 
   const examineNode = (key) => {
@@ -77,13 +78,20 @@ export function reconstructDeclaredResearchWitness(
       return requirementMemo.get(requirementId);
     const requirement = requirements.get(requirementId);
     const key = `requirement:${requirementId}`;
-    if (requirement === undefined || !examineNode(key)) return undefined;
+    if (requirement === undefined) {
+      unknownReasons.add(`retained requirement ${requirementId} is missing`);
+      return undefined;
+    }
+    if (!examineNode(key)) return undefined;
     if (
       requirement.id !==
         `research:${requirement.technologyId}:${requirement.requiredLevel}` ||
       (grantLevels !== undefined &&
         requirement.observedLevel !== grantLevels.get(requirement.technologyId))
     ) {
+      unknownReasons.add(
+        `retained requirement ${requirementId} does not match native identity or current grant level`,
+      );
       active.delete(key);
       requirementMemo.set(requirementId, undefined);
       return undefined;
@@ -101,6 +109,9 @@ export function reconstructDeclaredResearchWitness(
       JSON.stringify([...expectedCandidates].sort()) !==
       JSON.stringify([...requirement.candidateActionIds].sort())
     ) {
+      unknownReasons.add(
+        `retained candidates for ${requirementId} do not match effective definitions`,
+      );
       active.delete(key);
       requirementMemo.set(requirementId, undefined);
       return undefined;
@@ -153,9 +164,19 @@ export function reconstructDeclaredResearchWitness(
     const action = actions.get(actionId);
     const definition = byActionId.get(actionId);
     const key = `action:${actionId}`;
-    if (action === undefined || definition === undefined || !examineNode(key))
+    if (action === undefined || definition === undefined) {
+      unknownReasons.add(
+        action === undefined
+          ? `retained action ${actionId} is missing`
+          : `effective definition for ${actionId} is missing`,
+      );
       return undefined;
+    }
+    if (!examineNode(key)) return undefined;
     if (definition.prerequisites.kind !== "declared") {
+      unknownReasons.add(
+        `prerequisite declaration for ${actionId} is not fully declared`,
+      );
       active.delete(key);
       actionMemo.set(actionId, undefined);
       return undefined;
@@ -170,6 +191,9 @@ export function reconstructDeclaredResearchWitness(
       JSON.stringify([...action.prerequisiteIds].sort()) !==
         JSON.stringify([...declared].sort())
     ) {
+      unknownReasons.add(
+        `retained action ${actionId} does not match its effective definition`,
+      );
       active.delete(key);
       actionMemo.set(actionId, undefined);
       return undefined;
@@ -210,7 +234,13 @@ export function reconstructDeclaredResearchWitness(
   const result = visitAction(targetActionId);
   return Object.freeze({
     status:
-      result === undefined ? (truncated ? "truncated" : "not-found") : "found",
+      result !== undefined
+        ? "found"
+        : truncated
+          ? "truncated"
+          : unknownReasons.size > 0
+            ? "unknown"
+            : "not-found",
     targetActionId,
     ancestorActionId,
     witness: result,
@@ -222,6 +252,7 @@ export function reconstructDeclaredResearchWitness(
     truncationReasons: Object.freeze(
       truncated ? ["retained graph examination budget exhausted"] : [],
     ),
+    unknownReasons: Object.freeze([...unknownReasons]),
   });
 }
 
@@ -234,6 +265,7 @@ export function classifyDeclaredRelationship({
   inputConsistency,
   currentOffer,
   currentEvidence,
+  currentAuthority,
 }) {
   if (definition === undefined) return "unknown-definition-unavailable";
   if (currentOffer === undefined) return "unknown-current-offer-unavailable";
@@ -241,6 +273,7 @@ export function classifyDeclaredRelationship({
     return "unknown-current-offer-mismatch";
   if (currentOffer.bindingGeneration < 1)
     return "unknown-current-binding-invalid";
+  if (currentAuthority !== true) return "unknown-current-authority";
   const completeAuthority =
     inputConsistency === "consistent" && currentEvidence === "complete";
   if (mandatoryActionIds.includes(currentOffer.actionId) && completeAuthority)
@@ -273,6 +306,8 @@ export function classifyDeclaredRelationship({
   )
     return "unknown-incomplete-mandatory-authority";
   if (witness?.status === "truncated") return "unknown-witness-truncated";
+  if (witness?.status === "unknown" || witness?.status === "unavailable")
+    return "unknown-witness-incomplete";
   if (inputConsistency !== "consistent" || currentEvidence !== "complete")
     return "unknown-incomplete-evidence";
   return "proven-unrelated";

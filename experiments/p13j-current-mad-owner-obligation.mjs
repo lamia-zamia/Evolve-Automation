@@ -170,10 +170,33 @@ const declaredWitness =
         "tech-steel_containers",
       )
     : undefined;
-const currentSteelOffer =
-  steelOffer !== undefined &&
-  observation.offerMembership === "complete" &&
+const currentAuthorityValid =
+  authority?.selectedPrestige === "mad" &&
+  authority?.cycle === observation.cycle &&
+  authority?.researchPermission === true &&
+  authority?.queueEvidence === "empty" &&
+  authority?.catalogCurrent === true &&
   authority?.offerBindingsCurrent === true &&
+  Number.isSafeInteger(authority?.rootGeneration) &&
+  authority.rootGeneration >= 0 &&
+  typeof authority?.progressionEpoch === "string" &&
+  observation.offerMembership === "complete" &&
+  typeof observation.offerSetIdentitySha256 === "string" &&
+  observation.offers.every(
+    ({ bindingGeneration }) =>
+      Number.isSafeInteger(bindingGeneration) && bindingGeneration > 0,
+  ) &&
+  effectiveDefinitionIdentity !== undefined &&
+  grantLevelIdentity !== undefined &&
+  applicability !== undefined &&
+  grantLevels !== undefined &&
+  targetEligibility?.status === "eligible";
+if (!currentAuthorityValid)
+  issues.push("current same-cycle relationship authority is incomplete");
+const currentSteelOffer =
+  currentAuthorityValid &&
+  steelOffer !== undefined &&
+  Number.isSafeInteger(steelOffer.bindingGeneration) &&
   steelOffer.bindingGeneration > 0
     ? steelOffer
     : undefined;
@@ -186,6 +209,7 @@ const steelRelationship = classifyDeclaredRelationship({
   inputConsistency: obligations?.inputConsistency,
   currentOffer: currentSteelOffer,
   currentEvidence,
+  currentAuthority: currentAuthorityValid,
 });
 
 const certificateComplete =
@@ -262,6 +286,9 @@ const report = {
     rootGeneration: authority?.rootGeneration,
     progressionEpoch: authority?.progressionEpoch,
     currentOwnerCycle: authority?.cycle,
+    currentRelationshipAuthority: currentAuthorityValid
+      ? "verified for this Research-owner cycle only"
+      : "unavailable",
     catalogCurrent: authority?.catalogCurrent,
     offerBindingsCurrent: authority?.offerBindingsCurrent,
     madControl: authority?.madControl ?? "unavailable at this observation",
@@ -376,6 +403,7 @@ const report = {
             : undefined,
           work: declaredWitness.work,
           truncationReasons: declaredWitness.truncationReasons,
+          unknownReasons: declaredWitness.unknownReasons,
           frontierActionDefinition:
             steelDefinition === undefined
               ? { status: "unavailable" }
