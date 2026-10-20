@@ -60840,8 +60840,8 @@ Only continue if you trust the source. Injected code:
       onActivity
     });
     researchOwnerSelectionObserver = (selection) => {
-      let hooks = readProperty(settingsHostWindow2, "__EA_TEST_HOOKS__");
-      if (!!1 && phaseDiagnostics?.readPerformanceEnabled() !== !0)
+      let hooks = readProperty(settingsHostWindow2, "__EA_TEST_HOOKS__"), captureEnabled = !1;
+      if (!captureEnabled && phaseDiagnostics?.readPerformanceEnabled() !== !0)
         return;
       let diagnosticClock = phaseDiagnostics;
       if (settingsStore.readRaw().prestigeType !== "mad" || diagnosticClock === void 0 || diagnosticClock.readPerformanceEnabled() !== !0)
@@ -61026,8 +61026,8 @@ Only continue if you trust the source. Injected code:
         diagnosticClock.nowMs() - diagnosticStartedAtMs
       );
     }, researchOwnerSelectionResultObserver = (result) => {
-      let hooks = readProperty(settingsHostWindow2, "__EA_TEST_HOOKS__");
-      if (!!1 && phaseDiagnostics?.readPerformanceEnabled() !== !0)
+      let hooks = readProperty(settingsHostWindow2, "__EA_TEST_HOOKS__"), captureEnabled = !1;
+      if (!captureEnabled && phaseDiagnostics?.readPerformanceEnabled() !== !0)
         return;
       if (result.disposition === "candidate-rejected") {
         pendingResearchOwnerSelectionSummary = void 0, pendingResearchOwnerSelectionDetails = [], pendingResearchOwnerSelectionDiagnosticMs = 0;

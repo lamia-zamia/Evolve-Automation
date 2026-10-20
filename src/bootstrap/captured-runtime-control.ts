@@ -1585,6 +1585,7 @@ export function startCapturedRuntime({
     if (!captureEnabled && phaseDiagnostics?.readPerformanceEnabled() !== true)
       return;
     if (
+      captureEnabled &&
       typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
       __EA_TEST_SURFACE_ENABLED__ === true
     ) {
@@ -2060,6 +2061,7 @@ export function startCapturedRuntime({
     if (!captureEnabled && phaseDiagnostics?.readPerformanceEnabled() !== true)
       return;
     if (
+      captureEnabled &&
       typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
       __EA_TEST_SURFACE_ENABLED__ === true
     ) {
