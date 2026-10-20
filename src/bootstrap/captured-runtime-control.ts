@@ -58,6 +58,7 @@ import {
   classifyMandatoryNativeResearchObligations,
   classifyMandatoryResearchPrerequisiteObligations,
   planIndependentResearchResourceClaims,
+  researchPrerequisiteSnapshotIdentity,
 } from "../domain/progression/research-prerequisite-obligations.ts";
 import {
   admitResourceClaim,
@@ -2843,18 +2844,21 @@ export function startCapturedRuntime({
         });
         const conjunctiveMode =
           resourceClaimMode === "goal-derived-conjunctive";
+        const terminalEligibility = conjunctiveMode
+          ? bindNativeResearchEligibilityEvidence(graph, {
+              actionId: CAPTURED_MAD_RESEARCH_TECH,
+              ...combineCapturedTechEligibility([
+                applicability?.get(CAPTURED_MAD_RESEARCH_TECH) ?? {
+                  status: "unknown",
+                  reasons: ["current Research applicability is unavailable"],
+                },
+                readCapturedMadTargetCondition(root),
+              ]),
+            })
+          : undefined;
         const mandatoryPlan = conjunctiveMode
           ? classifyMandatoryNativeResearchObligations(graph, {
-              targetEligibility: bindNativeResearchEligibilityEvidence(graph, {
-                actionId: CAPTURED_MAD_RESEARCH_TECH,
-                ...combineCapturedTechEligibility([
-                  applicability?.get(CAPTURED_MAD_RESEARCH_TECH) ?? {
-                    status: "unknown",
-                    reasons: ["current Research applicability is unavailable"],
-                  },
-                  readCapturedMadTargetCondition(root),
-                ]),
-              }),
+              targetEligibility: terminalEligibility,
               definitions: prerequisiteDefinitions,
               grantLevels,
               applicabilityByActionId: applicability,
@@ -3310,6 +3314,30 @@ export function startCapturedRuntime({
               mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
               alternativeGroups: mandatoryPlan.alternativeGroups,
               prerequisiteReasons: mandatoryPlan.reasons,
+              ...(automationCycle === 1
+                ? {
+                    prerequisiteGraph: graph,
+                    prerequisiteSnapshotIdentity:
+                      researchPrerequisiteSnapshotIdentity(graph),
+                    terminalEligibility,
+                    grantLevels: grantLevels
+                      ? [...grantLevels.entries()]
+                      : undefined,
+                    applicability: applicability
+                      ? [...applicability.entries()]
+                      : undefined,
+                    mandatoryPlan: {
+                      status: mandatoryPlan.status,
+                      inputConsistency: mandatoryPlan.inputConsistency,
+                      inputConsistencyReasons:
+                        mandatoryPlan.inputConsistencyReasons,
+                      mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
+                      alternativeGroups: mandatoryPlan.alternativeGroups,
+                      reasons: mandatoryPlan.reasons,
+                      work: mandatoryPlan.work,
+                    },
+                  }
+                : {}),
               rootGeneration,
               progressionGeneration,
               evaluatedCandidates: evaluation.candidates
@@ -3505,6 +3533,30 @@ export function startCapturedRuntime({
             mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
             alternativeGroups: mandatoryPlan.alternativeGroups,
             prerequisiteReasons: mandatoryPlan.reasons,
+            ...(automationCycle === 1
+              ? {
+                  prerequisiteGraph: graph,
+                  prerequisiteSnapshotIdentity:
+                    researchPrerequisiteSnapshotIdentity(graph),
+                  terminalEligibility,
+                  grantLevels: grantLevels
+                    ? [...grantLevels.entries()]
+                    : undefined,
+                  applicability: applicability
+                    ? [...applicability.entries()]
+                    : undefined,
+                  mandatoryPlan: {
+                    status: mandatoryPlan.status,
+                    inputConsistency: mandatoryPlan.inputConsistency,
+                    inputConsistencyReasons:
+                      mandatoryPlan.inputConsistencyReasons,
+                    mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
+                    alternativeGroups: mandatoryPlan.alternativeGroups,
+                    reasons: mandatoryPlan.reasons,
+                    work: mandatoryPlan.work,
+                  },
+                }
+              : {}),
           },
         );
         Reflect.set(testHooks, "gatherIntervention", {

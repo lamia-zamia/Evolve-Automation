@@ -556,6 +556,12 @@ async function runVariant(
   periodLimit = 200,
 ) {
   const parsedSave = typeof save === "string" ? parseSave(save) : save;
+  const initialMode =
+    variant === "C"
+      ? "goal-derived-single"
+      : variant === "D" || variant.startsWith("D-")
+        ? "goal-derived-conjunctive"
+        : undefined;
   const session = await runner.openSession({
     bundle: bundlePath,
     save: parsedSave,
@@ -566,20 +572,15 @@ async function runVariant(
     forwardPerfSummary: true,
     nativeTrace: true,
     manaTrace: true,
+    ...(initialMode === undefined
+      ? {}
+      : {
+          initialTestInterventions: {
+            gatherIntervention: { resourceClaimMode: initialMode },
+          },
+        }),
   });
   try {
-    if (variant === "C")
-      await session.evaluate(() => {
-        window.__EA_TEST_HOOKS__.gatherIntervention = {
-          resourceClaimMode: "goal-derived-single",
-        };
-      });
-    if (variant === "D" || variant.startsWith("D-"))
-      await session.evaluate(() => {
-        window.__EA_TEST_HOOKS__.gatherIntervention = {
-          resourceClaimMode: "goal-derived-conjunctive",
-        };
-      });
     let seededClaim;
     if (variant === "B") {
       while (
