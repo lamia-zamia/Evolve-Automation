@@ -270,6 +270,24 @@ assert.deepEqual(evolution.reader.sampleCosts("human"), {
   dnaMax: 2,
   dnaDisplay: true,
 });
+// Native protoplasm bootstrap: once DNA is displayed, Evolve creates organelles at 4 DNA,
+// before the organelles action (and its costs) can appear in the drawn action list.
+const savedRows = actionRows.splice(
+  0,
+  actionRows.length,
+  ...actionRows.filter((row) =>
+    ["evolution-rna", "evolution-dna", "evolution-membrane"].includes(row.id),
+  ),
+);
+const savedOrganelles = root.evolution.organelles;
+const savedDnaUnlock = root.evolution.dna;
+root.evolution.dna = 1;
+delete root.evolution.organelles;
+assert.equal(evolution.reader.sampleCosts("human").maxDna, 4);
+root.evolution.organelles = savedOrganelles;
+if (savedDnaUnlock === undefined) delete root.evolution.dna;
+else root.evolution.dna = savedDnaUnlock;
+actionRows.splice(0, actionRows.length, ...savedRows);
 assert.deepEqual(
   evolution.reader.sampleEvolutionTree("human").map((action) => action.id),
   ["bunker"],
@@ -466,6 +484,46 @@ assert.deepEqual(trace, [
   ["invoke", "evolution-nucleus"],
   ["invoke", "evolution-organelles"],
 ]);
+
+// Fresh protoplasm does not have later cell nodes or their native controls yet. Those unavailable
+// early actions must not prevent a subsequently offered organelles action from running.
+trace.length = 0;
+root.evolution.mitochondria = { count: 0 };
+root.evolution.eukaryotic_cell = { count: 0 };
+root.evolution.nucleus = { count: 0 };
+root.evolution.organelles = { count: 0 };
+delete root.evolution.mitochondria;
+delete root.evolution.eukaryotic_cell;
+delete root.evolution.nucleus;
+assert.equal(evolution.reader.sampleCells().mitochondriaCount, 0);
+const organellesRow = { id: "evolution-organelles", cost: {} };
+actionRows.push(organellesRow);
+for (const id of [
+  "evolution-mitochondria",
+  "evolution-eukaryotic_cell",
+  "evolution-nucleus",
+]) {
+  handles.delete(id);
+}
+runEvolution({
+  reader: evolution.reader,
+  executor: evolution.executor,
+  runUniverseSelection: evolution.runUniverseSelection,
+  runPlanetSelection: () => {},
+  challengeGroups: [],
+});
+assert.equal(
+  trace.some((entry) => entry[1] === "evolution-organelles"),
+  true,
+);
+actionRows.splice(actionRows.indexOf(organellesRow), 1);
+for (const id of [
+  "evolution-mitochondria",
+  "evolution-eukaryotic_cell",
+  "evolution-nucleus",
+]) {
+  handles.set(id, { elementId: id, generation: 1, methods: ["action"] });
+}
 
 // DeadSpace's final menu exposes imitation rows only. The configured imitation must win even if
 // another row appears first in the DOM.

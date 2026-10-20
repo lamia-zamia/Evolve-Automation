@@ -370,6 +370,12 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
     trace({ stage: "cell-upgrade-plan", details: { candidates: cellClicks } });
   for (const id of cellClicks) {
     const outcome = executor.clickEvolution(id);
+    // Evolve only draws each cell action after its native prerequisite is met. Keep scanning the
+    // planned cell actions when an earlier prerequisite has no current control; each invocation
+    // resolves a fresh handle, so this does not carry stale controls forward.
+    if (typeof outcome !== "boolean" && outcome.status === "unavailable") {
+      continue;
+    }
     if (!actionChanged(outcome) && typeof outcome !== "boolean") {
       returned("cell-upgrade", "action-not-confirmed", { id, outcome });
       return;

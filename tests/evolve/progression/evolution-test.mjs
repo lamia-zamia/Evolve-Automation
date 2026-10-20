@@ -243,18 +243,17 @@ const cells = makeEvolutionReader().sampleCells();
 assert.ok(Number.isNaN(cells.rnaMax));
 assert.ok(Number.isNaN(cells.dnaMax));
 assert.equal(cells.nucleusCount, 3);
-assert.ok(
-  Number.isNaN(
-    makeEvolutionReader({
-      evolutions: {
-        mitochondria: {},
-        eukaryotic_cell: { count: 2 },
-        nucleus: { count: 3 },
-        organelles: { count: 4 },
-      },
-    }).sampleCells().mitochondriaCount,
-  ),
-  "an evolution action with no count yet coerces to NaN",
+assert.equal(
+  makeEvolutionReader({
+    evolutions: {
+      mitochondria: {},
+      eukaryotic_cell: { count: 2 },
+      nucleus: { count: 3 },
+      organelles: { count: 4 },
+    },
+  }).sampleCells().mitochondriaCount,
+  0,
+  "an evolution action with no count yet has zero upgrades",
 );
 
 console.log("evolution planner unit checks passed");

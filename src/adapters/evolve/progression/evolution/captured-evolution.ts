@@ -213,7 +213,10 @@ function resourceAmount(
 function evolutionCount(rootState: GameRootStateSource, id: string): number {
   const root = rootRecord(rootState);
   const evolution = nestedRecord(nestedRecord(root, "evolution"), id);
-  return Number(readProperty(evolution, "count"));
+  const count = Number(readProperty(evolution, "count"));
+  // Evolve creates cell nodes only when their native progression condition is met. An absent
+  // node therefore means zero upgrades, rather than an unknown count that suppresses planning.
+  return Number.isFinite(count) ? count : 0;
 }
 
 function actionRowsForTree(
@@ -363,10 +366,24 @@ export function createCapturedEvolution(
       }
       const rna = capturedEvolutionResource(root, "RNA");
       const dna = capturedEvolutionResource(root, "DNA");
+      const evolution = nestedRecord(
+        rootRecord(dependencies.rootState),
+        "evolution",
+      );
+      const race = readRace(dependencies.rootState);
+      const dnaStartupDemand =
+        readProperty(race, "species") === "protoplasm" &&
+        Number(readProperty(evolution, "dna")) > 0 &&
+        dna?.display === true &&
+        readProperty(evolution, "organelles") === undefined
+          ? 4
+          : 0;
       // Before unlock, Evolve may omit an entire resource record; its amount and cap coerce as zero.
+      // In the protoplasm bootstrap, native Evolve creates organelles at 4 DNA, before that
+      // action's cost is drawn. Preserve that native threshold as the initial demand signal.
       return Object.freeze({
         maxRna,
-        maxDna,
+        maxDna: Math.max(maxDna, dnaStartupDemand),
         rnaCurrent: rna?.amount ?? 0,
         rnaMax: rna?.max ?? 0,
         rnaDisplay: rna?.display ?? false,

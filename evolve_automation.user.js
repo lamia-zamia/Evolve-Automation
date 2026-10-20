@@ -43786,8 +43786,8 @@
     return Number(readProperty(resource, field));
   }
   function evolutionCount(rootState, id) {
-    let root = rootRecord(rootState), evolution = nestedRecord(nestedRecord(root, "evolution"), id);
-    return Number(readProperty(evolution, "count"));
+    let root = rootRecord(rootState), evolution = nestedRecord(nestedRecord(root, "evolution"), id), count2 = Number(readProperty(evolution, "count"));
+    return Number.isFinite(count2) ? count2 : 0;
   }
   function actionRowsForTree(rows, challengeIds, targetId, rootState) {
     let targetRow = rows.find(
@@ -43874,10 +43874,13 @@
         ), maxRna = 0, maxDna = 0;
         for (let row of rows)
           maxRna = Math.max(maxRna, row.cost.RNA ?? 0), maxDna = Math.max(maxDna, row.cost.DNA ?? 0);
-        let rna = capturedEvolutionResource(root, "RNA"), dna = capturedEvolutionResource(root, "DNA");
+        let rna = capturedEvolutionResource(root, "RNA"), dna = capturedEvolutionResource(root, "DNA"), evolution = nestedRecord(
+          rootRecord(dependencies.rootState),
+          "evolution"
+        ), race = readRace(dependencies.rootState), dnaStartupDemand = readProperty(race, "species") === "protoplasm" && Number(readProperty(evolution, "dna")) > 0 && dna?.display === !0 && readProperty(evolution, "organelles") === void 0 ? 4 : 0;
         return Object.freeze({
           maxRna,
-          maxDna,
+          maxDna: Math.max(maxDna, dnaStartupDemand),
           rnaCurrent: rna?.amount ?? 0,
           rnaMax: rna?.max ?? 0,
           rnaDisplay: rna?.display ?? !1,
@@ -56035,7 +56038,7 @@ Only continue if you trust the source. Injected code:
     );
     for (let id of cellClicks) {
       let outcome = executor.clickEvolution(id);
-      if (!actionChanged(outcome) && typeof outcome != "boolean") {
+      if (!(typeof outcome != "boolean" && outcome.status === "unavailable") && !actionChanged(outcome) && typeof outcome != "boolean") {
         returned("cell-upgrade", "action-not-confirmed", { id, outcome });
         return;
       }

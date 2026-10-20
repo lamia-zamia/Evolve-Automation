@@ -378,7 +378,8 @@ export function createEvolutionReader(
         if (action === undefined) {
           throw new TypeError(`evolutions.${id} is missing`);
         }
-        return coerceNumber(action.count);
+        const count = coerceNumber(action.count);
+        return Number.isFinite(count) ? count : 0;
       };
       return Object.freeze({
         mitochondriaCount: countOf("mitochondria"),
