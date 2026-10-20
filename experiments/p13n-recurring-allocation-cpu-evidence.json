@@ -1,0 +1,121 @@
+{
+  "status": "inconclusive-stop-without-optimization",
+  "inputs": {
+    "branch": "deadspace",
+    "startingHead": "d383292a5769131bdd1649c8c393fff04f3f6ff4",
+    "upstream": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    "gameSnapshot": {
+      "path": "test-artifacts/game/evolve-deadspace.js",
+      "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7"
+    },
+    "runnerCheckout": "lamia-zamia/tools@dba71a91ea4928e049847e7b399bd54f112ac8f6",
+    "runnerArtifactSha256": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+    "testBundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+    "save": {
+      "path": "test-artifacts/benchmark/tmp/stage4f3-p9000-save.json",
+      "sha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+      "provenance": "Stage 4F.3 p9000 G checkpoint; used only as the identical starting state for current-source arms"
+    },
+    "settings": {
+      "path": "test-artifacts/benchmark/slice0/settings/stage2e-integrated-mad-no-triggers.json",
+      "sha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+      "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804"
+    },
+    "seed": 42,
+    "epoch": "2026-09-21T00:00:00.000Z",
+    "gatherIntervention": "goal-derived-conjunctive",
+    "windowPeriods": 1000,
+    "workTicks": 125,
+    "phaseAndCallbackProfilingInCpuRuns": false
+  },
+  "armMapping": {
+    "requestedOrdinaryG": "Stage 4A scenario B",
+    "note": "Stage 4F scenario G still evaluates the goal selector and is not an ordinary-behavior baseline."
+  },
+  "cpuWindows": [
+    {
+      "pair": 1,
+      "order": ["B", "J"],
+      "B": {
+        "rendererCpuSec": 19.232219,
+        "taskDurationSec": 16.288667,
+        "scriptDurationSec": 0.043076
+      },
+      "J": {
+        "rendererCpuSec": 19.663969,
+        "taskDurationSec": 16.613065,
+        "scriptDurationSec": 0.037287
+      },
+      "JrelativeToBPercent": { "rendererCpu": 2.24, "taskDuration": 1.99 }
+    },
+    {
+      "pair": 2,
+      "order": ["J", "B"],
+      "B": {
+        "rendererCpuSec": 20.156983,
+        "taskDurationSec": 17.057368,
+        "scriptDurationSec": 0.042721
+      },
+      "J": {
+        "rendererCpuSec": 20.910285,
+        "taskDurationSec": 17.741202,
+        "scriptDurationSec": 0.042735
+      },
+      "JrelativeToBPercent": { "rendererCpu": 3.74, "taskDuration": 4.01 }
+    }
+  ],
+  "sameBundleControls": {
+    "BB": [
+      { "rendererCpuSec": 20.368405, "taskDurationSec": 17.341448 },
+      { "rendererCpuSec": 19.487674, "taskDurationSec": 16.431311 }
+    ],
+    "JJ": [
+      { "rendererCpuSec": 19.652184, "taskDurationSec": 16.61242 },
+      { "rendererCpuSec": 20.098231, "taskDurationSec": 16.904369 }
+    ],
+    "secondRelativeToFirstPercent": {
+      "BB": { "rendererCpu": -4.32, "taskDuration": -5.25 },
+      "JJ": { "rendererCpu": 2.27, "taskDuration": 1.76 }
+    }
+  },
+  "parity": {
+    "finalExportSha256BAndJ": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+    "nativeControlUsageMapSha256BAndJ": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff",
+    "orderedMarketRouteOperationsSha256BAndJ": "c6a8a63fefccbfe8b8c5e756383431320ffb425401fdbbec168899d1d7a3cd71",
+    "nativeResearchDrawsPerArm": 131,
+    "randomCallsPerArm": 1194,
+    "finalRouteAssignments": [
+      { "resourceId": "Crystal", "routes": 46 },
+      { "resourceId": "Lumber", "routes": 47 }
+    ],
+    "extraResearchDrawsRequestedByJ": 0,
+    "acceptedSignals": 0,
+    "finalFenceRecaptures": 0,
+    "orderedMarketRouteOperationsPerArm": 422,
+    "resourceSnapshotSha256BAndJ": "de831eaf8982f2cedb1bf68a97c47502450b075e43e89594db1500c15ffbbc76"
+  },
+  "workCycleCallbackLatencyMs": {
+    "method": "125 callbacks per arm; period divisible by 8; callbackProfile enabled in separate run",
+    "B": { "p50": 75.3, "p95": 100.2, "p99": 128.4, "max": 238.5 },
+    "J": { "p50": 76.8, "p95": 105.4, "p99": 117.3, "max": 254.3 }
+  },
+  "testOnlyJAttribution": {
+    "selectorCalls": 125,
+    "noImportableShortfall": 125,
+    "proposedSignals": 0,
+    "acceptedSignals": 0,
+    "additionalFreshResearchRequests": 0,
+    "catalogCaptureElapsedMs": 116.5,
+    "selectorElapsedMs": 252.3,
+    "elapsedTimingIsRendererCpu": false
+  },
+  "implementation": {
+    "removedWork": "none",
+    "reusedWork": "none",
+    "reason": "No safe removable incremental cost was established at a controlled CPU resolution; no cross-cycle cache was introduced."
+  },
+  "validationHeavyScenario": {
+    "run": false,
+    "reason": "No-signal improvement was not established; Stage 4F.3 already documents the historical validation-heavy workload."
+  }
+}
