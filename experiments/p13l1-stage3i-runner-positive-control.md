@@ -1,7 +1,7 @@
 # P13L.1 — Stage 3I D runner positive-control diagnosis
 
-Date: 2026-10-20  
-Repository: `deadspace`, starting HEAD `671ad482fde11fea72ef14ad62282b24b58b0804`  
+Date: 2026-10-20
+Repository: `deadspace`, starting HEAD `671ad482fde11fea72ef14ad62282b24b58b0804`
 Pinned upstream: `pmotschmann/Evolve @ db38e2af831907d49aeb5348d678d8d8745d6c3f`
 
 ## Decision
@@ -12,7 +12,7 @@ Pinned upstream: `pmotschmann/Evolve @ db38e2af831907d49aeb5348d678d8d8745d6c3f`
 
 `tools/chromium-evolve-runner.mjs`, `tools/chromium/bridge.js`, and `tools/chromium-evolve-runner-test.mjs` are owned by the nested `D:\work\Evolve-Automation\tools` repository (`https://github.com/lamia-zamia/tools`), not by `deadspace`.
 
-The historical manifest records runner fingerprint `23383ea302dcbe5545ba83c8aa72e0d8f231a96135fd31b60d9bc95bd9102257`. No commit in the local tools repository history reproduces that fingerprint, so its commit SHA cannot be established from the available checkout. The bounded replay used fingerprint `a982b70325d12cf89c4c0a042f4cffe06966655d9ddfaf83146e35f219ae02d1`. The final runner source fingerprint is `3ece7df32a7506f061120579aaa8fa80a2b712813feaaba3a04e89609cacd89d`; the only runner change after the replay preserved the prior frozen-hook behavior when the new option is omitted. The replay supplied the option, so its initialization path is unchanged.
+The historical manifest records runner fingerprint `23383ea302dcbe5545ba83c8aa72e0d8f231a96135fd31b60d9bc95bd9102257`. No commit in the local tools repository history reproduces that fingerprint, so its commit SHA cannot be established from the available checkout. The bounded replay and final runner source fingerprint are both `3ece7df32a7506f061120579aaa8fa80a2b712813feaaba3a04e89609cacd89d`.
 
 With `nativeTrace: true`, the previous bridge installed a frozen `window.__EA_TEST_HOOKS__`. Stage 3I's `runVariant()` assigned `gatherIntervention` after `openSession()`. In the non-strict Puppeteer callback that assignment could silently fail; `Reflect.set()` against the frozen property returns false. Replacing the object would discard `onControlInvocation`. The runner now accepts only a plain `initialTestInterventions.gatherIntervention.resourceClaimMode` value from its recognized mode set, installs it in the document-start bridge before the bundle runs, leaves the hook container writable, and defines the trace callback as non-writable and non-configurable. A session-storage marker makes this a one-load intervention; a game reload reports it as already consumed and does not restore the mode.
 
