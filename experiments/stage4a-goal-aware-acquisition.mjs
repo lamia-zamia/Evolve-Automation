@@ -40,10 +40,23 @@ const outputPath = path.resolve(
 const upstreamCommit = "db38e2af831907d49aeb5348d678d8d8745d6c3f";
 const startCommit = "978619241a35cf9854e1eb3ddd7f29c57911dd46";
 const shortProbe = process.argv.includes("--short-probe");
-const activePeriod = shortProbe ? 1 : 8_000;
+const windowPeriodsArgument = process.argv.find((argument) =>
+  argument.startsWith("--window-periods="),
+);
+const windowPeriods = windowPeriodsArgument
+  ? Number(windowPeriodsArgument.slice("--window-periods=".length))
+  : undefined;
+if (
+  windowPeriods !== undefined &&
+  (!Number.isSafeInteger(windowPeriods) || windowPeriods <= 0)
+)
+  throw new Error("--window-periods must be a positive integer");
+const activePeriod = shortProbe ? 1 : windowPeriods === undefined ? 8_000 : 0;
 const checkpoints = shortProbe
   ? [1, 100]
-  : [8_000, 8_001, 8_008, 9_000, 10_000, 12_000, 16_000, 20_000];
+  : windowPeriods === undefined
+    ? [8_000, 8_001, 8_008, 9_000, 10_000, 12_000, 16_000, 20_000]
+    : [windowPeriods];
 const scenariosArgument = process.argv.find((argument) =>
   argument.startsWith("--scenarios="),
 );
@@ -73,21 +86,25 @@ if (
   throw new Error("unsupported Stage 4F probe");
 const activeCheckpoints = shortProbe
   ? checkpoints
-  : debugMode
-    ? stage4fProbe === "market-route-count"
-      ? [8_000, 8_001, 8_008, 8_016]
-      : [8_000, 8_001, 8_008]
-    : checkpoints;
+  : windowPeriods !== undefined
+    ? checkpoints
+    : debugMode
+      ? stage4fProbe === "market-route-count"
+        ? [8_000, 8_001, 8_008, 8_016]
+        : [8_000, 8_001, 8_008]
+      : checkpoints;
 const snapshotPeriods = [
   ...new Set([
     ...(shortProbe
       ? [1, 100]
-      : [
-          8_000,
-          8_001,
-          ...Array.from({ length: 121 }, (_, index) => 8_000 + index * 100),
-          20_000,
-        ]),
+      : windowPeriods !== undefined
+        ? [windowPeriods]
+        : [
+            8_000,
+            8_001,
+            ...Array.from({ length: 121 }, (_, index) => 8_000 + index * 100),
+            20_000,
+          ]),
   ]),
 ];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -147,7 +164,12 @@ const built = await esbuild.build({
 await mkdir(path.dirname(bundlePath), { recursive: true });
 await writeFile(bundlePath, built.outputFiles[0].contents);
 
-function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
+function installObservers(
+  scenario,
+  diagnosticSamplingEnabled,
+  stage4fProbe,
+  activeOnInstall,
+) {
   const hooks = window.__EA_TEST_HOOKS__;
   hooks.gatherIntervention = { resourceClaimMode: "goal-derived-conjunctive" };
   hooks.readPeriodForTest = () => window.__EA_RUNNER__.periods();
@@ -155,8 +177,8 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
   hooks.stage4aScenario = scenario;
   hooks.preserveGoalDemandMoneyFloorForTest = ["G", "J"].includes(scenario);
   hooks.allowHistoricalGoalComparisonForTest = ["F", "G"].includes(scenario);
-  hooks.stage4aActive = false;
-  hooks.stage4aRecordFromNow = false;
+  hooks.stage4aActive = activeOnInstall;
+  hooks.stage4aRecordFromNow = activeOnInstall;
   hooks.stage4aDecisions = [];
   hooks.stage4aProposedSignals = [];
   hooks.stage4aAcceptedSignals = [];
@@ -800,6 +822,7 @@ const result = {
       : "disabled",
     phaseInstrumentation,
     activeAfterPeriod: activePeriod,
+    boundedWindowPeriods: windowPeriods,
     checkpoints: activeCheckpoints,
     snapshotPeriods,
     extensionRule:
@@ -820,16 +843,17 @@ try {
       seed: 42,
       epoch: Date.parse(result.inputs.epoch),
       perf: phaseInstrumentation,
+      callbackProfile: process.argv.includes("--callback-profile"),
       forwardPerfSummary: phaseInstrumentation,
       snapshotAt: snapshotPeriods,
     });
     try {
-      const metricsBefore = await session.metrics();
       await session.evaluate(
         installObservers,
         scenario,
         sampleMissedOpportunities,
         scenario === "J" ? stage4fProbe : undefined,
+        activePeriod === 0,
       );
       console.log(`${scenario}: opened exact Chromium session`);
       let period = 0;
@@ -900,12 +924,16 @@ try {
       };
 
       const wallStarted = performance.now();
+      const cpuBefore = await runner.processCpu();
+      const metricsBefore = await session.metrics();
       for (const targetPeriod of activeCheckpoints) {
         if (targetPeriod <= period) continue;
         await session.advance(targetPeriod - period);
         period = targetPeriod;
-        outputCheckpoints.push(await sample(period));
-        console.log(`${scenario}: captured p${period}`);
+        if (windowPeriods === undefined) {
+          outputCheckpoints.push(await sample(period));
+          console.log(`${scenario}: captured p${period}`);
+        }
         if (period === activePeriod) {
           await session.evaluate(() => {
             window.__EA_TEST_HOOKS__.stage4aRecordFromNow = true;
@@ -963,8 +991,22 @@ try {
       }
       const wallMs = performance.now() - wallStarted;
       const metricsAfter = await session.metrics();
+      const cpuAfter = await runner.processCpu();
+      if (windowPeriods !== undefined) {
+        outputCheckpoints.push(await sample(period));
+        console.log(`${scenario}: captured p${period}`);
+      }
       const diagnostics = await session.diagnostics();
       const state = await session.readState();
+      const finalExport = await session.exportSave();
+      const workCycleCallbacks = (diagnostics.callbackDurationsMs ?? [])
+        .filter((entry) => entry.period % 8 === 0)
+        .map((entry) => entry.durationMs)
+        .sort((left, right) => left - right);
+      const latencyAt = (fraction) =>
+        workCycleCallbacks[
+          Math.floor((workCycleCallbacks.length - 1) * fraction)
+        ];
       const moneyMinimum = moneySamples.reduce(
         (minimum, entry) => (entry.amount < minimum.amount ? entry : minimum),
         moneySamples[0] ?? { period: null, amount: null },
@@ -1050,6 +1092,17 @@ try {
             metricsAfter.TaskDuration - metricsBefore.TaskDuration,
           rendererScriptSeconds:
             metricsAfter.ScriptDuration - metricsBefore.ScriptDuration,
+          processCpu: cpuAfter.map((entry) => {
+            const before = cpuBefore.find((prior) => prior.id === entry.id);
+            return {
+              type: entry.type,
+              id: entry.id,
+              beforeCpuSec: before?.cpuSec,
+              afterCpuSec: entry.cpuSec,
+              cpuSec:
+                before === undefined ? undefined : entry.cpuSec - before.cpuSec,
+            };
+          }),
           jsHeapBytes: metricsAfter.JSHeapUsedSize,
           domNodes: metricsAfter.Nodes,
           workTicks: diagnostics.workTicks,
@@ -1057,8 +1110,19 @@ try {
           errors: diagnostics.errors,
           controlUsage: diagnostics.controlUsage,
           perfSummaries: diagnostics.perfSummaries,
+          workCycleCallbackLatencyMs:
+            workCycleCallbacks.length === 0
+              ? undefined
+              : {
+                  count: workCycleCallbacks.length,
+                  p50: latencyAt(0.5),
+                  p95: latencyAt(0.95),
+                  p99: latencyAt(0.99),
+                  max: workCycleCallbacks.at(-1),
+                },
         },
         finalAssignments: assignmentSnapshot(state),
+        finalExportSha256: sha256(finalExport),
       });
     } finally {
       await session.close();
@@ -1070,7 +1134,12 @@ try {
 
 await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`);
 for (const scenario of result.scenarios) {
-  if (["F", "G"].includes(scenario.scenario) && !shortProbe && !debugMode) {
+  if (
+    ["F", "G"].includes(scenario.scenario) &&
+    !shortProbe &&
+    !debugMode &&
+    windowPeriods === undefined
+  ) {
     assert.ok(
       scenario.proposedGoalDemandSignals.length > 0,
       `${scenario.scenario} must propose historical goal-demand signals`,
@@ -1080,7 +1149,12 @@ for (const scenario of result.scenarios) {
       `${scenario.scenario} historical signals must reach the Market planner`,
     );
   }
-  if (scenario.scenario === "G" && !shortProbe && !debugMode) {
+  if (
+    scenario.scenario === "G" &&
+    !shortProbe &&
+    !debugMode &&
+    windowPeriods === undefined
+  ) {
     const distinctAcceptedPlans = scenario.routePlans.filter(
       (plan) => typeof plan.testDemandResourceId === "string",
     );
