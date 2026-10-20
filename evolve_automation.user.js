@@ -18912,7 +18912,10 @@
       ...inputConsistencyReasons === void 0 ? {} : { inputConsistencyReasons },
       mandatoryActionIds: Object.freeze([]),
       alternativeGroups: Object.freeze([]),
-      work: Object.freeze({ nativePathVisits: visits }),
+      work: Object.freeze({
+        nativePathVisits: visits,
+        nativePathVisitBudget: 512
+      }),
       reasons: Object.freeze([...new Set(reasons)])
     }), graphIdentity = researchPrerequisiteSnapshotIdentity(graph), eligibility = input.targetEligibility;
     if (eligibility === void 0 || eligibility.actionId !== graph.targetActionId || eligibility.snapshotIdentity !== graphIdentity || JSON.stringify(eligibility.freshness) !== JSON.stringify(graph.freshness))
@@ -18923,7 +18926,7 @@
       return unavailable2(
         eligibility.reasons.length > 0 ? eligibility.reasons : ["terminal Research condition or route is not eligible"]
       );
-    if (graph.targetStatus === "satisfied" || graph.targetStatus === "unavailable" || input.definitions === void 0 || input.grantLevels === void 0 || input.applicabilityByActionId === void 0 || input.offeredActionIds === void 0)
+    if (graph.targetStatus === "satisfied" || input.definitions === void 0 || input.grantLevels === void 0 || input.applicabilityByActionId === void 0 || input.offeredActionIds === void 0)
       return unavailable2([
         "current native Research prerequisite evidence is incomplete"
       ]);
@@ -18958,11 +18961,12 @@
     let memo = /* @__PURE__ */ new Map(), graphActions = new Map(
       graph.actions.map((action) => [action.actionId, action])
     ), activeActions = /* @__PURE__ */ new Set(), activeRequirements = /* @__PURE__ */ new Set(), alternativeGroups = [], uncertaintyReasons = [], unknownPathReasons = /* @__PURE__ */ new Map(), grantAlternativesByRequirement = /* @__PURE__ */ new Map(), solveRequirement = (technologyId, requiredLevel, candidateActionId) => {
-      if ((currentLevels.get(technologyId) ?? 0) >= requiredLevel)
-        return "bypass";
+      let observedLevel = currentLevels.get(technologyId);
+      if (observedLevel === void 0) return "unknown";
+      if (observedLevel >= requiredLevel) return "bypass";
       let key = `requirement:${technologyId}:${requiredLevel}:${candidateActionId}`, cached = memo.get(key);
       if (cached !== void 0) return cached;
-      if (activeRequirements.has(key)) return "impossible";
+      if (activeRequirements.has(key)) return "unknown";
       let candidates = (grants.get(technologyId) ?? []).filter(
         (definition) => definition.grantLevel >= requiredLevel
       );
@@ -18991,7 +18995,7 @@
       let result = viable.length === 0 ? "impossible" : viable.includes("unknown") ? "unknown" : viable.includes("bypass") ? "bypass" : "mandatory";
       return memo.set(key, result), result;
     }, solveAction = (definition, candidateActionId, requiredTechnologyId, requiredLevel) => {
-      if (visits += 1, visits > 1e4)
+      if (visits += 1, visits > 512)
         return "unknown";
       if (definition.actionId === candidateActionId)
         return offered.has(definition.actionId) && graphActions.get(definition.actionId)?.status === "frontier" ? "mandatory" : "unknown";
@@ -19000,18 +19004,24 @@
       let graphAction = graphActions.get(definition.actionId);
       if (graphAction === void 0) return "unknown";
       if (graphAction.status === "excluded") return "impossible";
-      if (graphAction.status === "conditional" || graphAction.status === "unavailable")
-        return "unknown";
       let applicabilityState = applicability.get(definition.actionId);
       if (applicabilityState?.status === "excluded") return "impossible";
       if (definition.prerequisites.kind !== "declared") return "unknown";
       let actionKey = `${definition.actionId}:${requiredTechnologyId}:${requiredLevel}:${candidateActionId}`, cached = memo.get(`action:${actionKey}`);
       if (cached !== void 0) return cached;
-      if (activeActions.has(actionKey)) return "impossible";
+      if (activeActions.has(actionKey)) return "unknown";
       activeActions.add(actionKey);
-      let dependencies = definition.prerequisites.requirements.filter(
+      let sameTechnologyRequirements = definition.prerequisites.requirements.filter(
         (requirement) => requirement.technologyId === requiredTechnologyId
-      ).map(
+      );
+      if (sameTechnologyRequirements.some(
+        (requirement) => requirement.requiredLevel >= requiredLevel && requirement.applicabilityBoundary === void 0
+      )) {
+        activeActions.delete(actionKey);
+        let result2 = "impossible";
+        return memo.set(`action:${actionKey}`, result2), result2;
+      }
+      let dependencies = sameTechnologyRequirements.map(
         (requirement) => requirement.applicabilityBoundary !== void 0 && (currentLevels.get(requirement.technologyId) ?? 0) < requirement.requiredLevel ? "unknown" : solveRequirement(
           requirement.technologyId,
           requirement.requiredLevel,
@@ -19020,7 +19030,7 @@
       );
       activeActions.delete(actionKey);
       let result;
-      return dependencies.includes("impossible") ? result = "impossible" : dependencies.includes("mandatory") ? result = "mandatory" : dependencies.includes("unknown") || applicabilityState?.status === "unknown" || definition.hasNativeCondition ? result = "unknown" : result = "bypass", memo.set(`action:${actionKey}`, result), result;
+      return dependencies.includes("impossible") ? result = "impossible" : dependencies.includes("mandatory") ? result = "mandatory" : dependencies.includes("unknown") || graphAction.status === "conditional" || graphAction.status === "unavailable" || applicabilityState?.status === "unknown" || definition.hasNativeCondition ? result = "unknown" : result = "bypass", memo.set(`action:${actionKey}`, result), result;
     }, mandatoryActionIds = [], mandatoryProofs = [];
     for (let offeredActionId of graph.actionableFrontier) {
       let candidate = definitions.get(offeredActionId);
@@ -19074,7 +19084,10 @@
       mandatoryProofs: Object.freeze(
         mandatoryProofs.map((proof) => Object.freeze(proof))
       ),
-      work: Object.freeze({ nativePathVisits: visits }),
+      work: Object.freeze({
+        nativePathVisits: visits,
+        nativePathVisitBudget: 512
+      }),
       reasons: Object.freeze([]),
       authority: Object.freeze({
         targetActionId: graph.targetActionId,

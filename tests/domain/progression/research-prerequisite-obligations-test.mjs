@@ -113,6 +113,7 @@ const nativeGraph = (
   frontier,
   grantLevels,
   applicabilityByActionId,
+  options = {},
 ) =>
   planNativeResearchPrerequisites({
     targetActionId,
@@ -126,8 +127,8 @@ const nativeGraph = (
     cycle: 1,
     progressionEpoch: "epoch-1",
     rootGeneration: 1,
-    maxDepth: 12,
-    maxActions: 40,
+    maxDepth: options.maxDepth ?? 12,
+    maxActions: options.maxActions ?? 40,
   });
 
 const eligibilityFor = (currentGraph) =>
@@ -456,10 +457,12 @@ const eligibilityFor = (currentGraph) =>
     applicabilityByActionId,
     offeredActionIds: new Set(frontier),
   });
-  assert.equal(result.status, "unavailable");
+  assert.equal(result.status, "verified");
   assert.equal(result.inputConsistency, "incomplete");
-  assert.deepEqual(result.mandatoryActionIds, []);
-  assert.match(result.reasons.join(" "), /unresolved native alternatives/);
+  assert.deepEqual(result.mandatoryActionIds, [
+    "tech-black_powder",
+    "tech-mad_science",
+  ]);
 
   const freshEligibility = eligibilityFor(currentGraph);
   for (const staleFreshness of [
@@ -674,12 +677,10 @@ const eligibilityFor = (currentGraph) =>
     currentGraph,
     { ...input, targetEligibility: eligibilityFor(currentGraph) },
   );
-  assert.equal(dominatedAlternatives.status, "unavailable");
-  assert.deepEqual(dominatedAlternatives.mandatoryActionIds, []);
-  assert.match(
-    dominatedAlternatives.reasons.join(" "),
-    /unresolved native alternatives/,
-  );
+  assert.equal(dominatedAlternatives.status, "verified");
+  assert.deepEqual(dominatedAlternatives.mandatoryActionIds, [
+    "tech-steel_containers",
+  ]);
 
   const genuineBypass = nativeDefinition(
     "tech-alternate_container_route",
@@ -759,6 +760,425 @@ const eligibilityFor = (currentGraph) =>
     false,
   );
   assert.equal(result.status, "unavailable");
+}
+
+// Conditional execution does not erase a captured same-technology prerequisite.
+{
+  const target = "tech-mad";
+  const blackPowder = nativeDefinition("tech-black_powder", "explosives", 1);
+  const explosives = [
+    nativeDefinition(
+      "tech-dynamite",
+      "explosives",
+      2,
+      [{ technologyId: "explosives", requiredLevel: 1 }],
+      { hasNativeCondition: true },
+    ),
+    nativeDefinition(
+      "tech-anfo",
+      "explosives",
+      3,
+      [
+        { technologyId: "explosives", requiredLevel: 2 },
+        { technologyId: "oil", requiredLevel: 1 },
+      ],
+      { hasNativeCondition: true },
+    ),
+    nativeDefinition(
+      "tech-super_tnt",
+      "explosives",
+      4,
+      [
+        { technologyId: "explosives", requiredLevel: 3 },
+        { technologyId: "science", requiredLevel: 23 },
+      ],
+      { hasNativeCondition: true },
+    ),
+  ];
+  const blackDefinitions = [
+    nativeDefinition(target, "mad", 1, [
+      { technologyId: "explosives", requiredLevel: 3 },
+    ]),
+    blackPowder,
+    ...explosives,
+  ];
+  const blackLevels = new Map([
+    ["mad", 0],
+    ["explosives", 0],
+    ["oil", 0],
+    ["science", 4],
+  ]);
+  const blackApplicability = new Map([
+    ["tech-black_powder", { status: "eligible" }],
+  ]);
+  const blackGraph = nativeGraph(
+    target,
+    blackDefinitions,
+    [blackPowder.actionId],
+    blackLevels,
+    blackApplicability,
+  );
+  const blackProof = classifyMandatoryNativeResearchObligations(blackGraph, {
+    targetEligibility: eligibilityFor(blackGraph),
+    definitions: blackDefinitions,
+    grantLevels: blackLevels,
+    applicabilityByActionId: blackApplicability,
+    offeredActionIds: new Set([blackPowder.actionId]),
+  });
+  assert.equal(blackProof.status, "verified");
+  assert.deepEqual(blackProof.mandatoryActionIds, ["tech-black_powder"]);
+  assert.equal(
+    blackProof.work.nativePathVisits <= blackProof.work.nativePathVisitBudget,
+    true,
+  );
+
+  const highTechDefinitions = [
+    nativeDefinition(target, "mad", 1, [
+      { technologyId: "high_tech", requiredLevel: 7 },
+    ]),
+    nativeDefinition("tech-mad_science", "high_tech", 1),
+    nativeDefinition(
+      "tech-electricity",
+      "high_tech",
+      2,
+      [
+        { technologyId: "high_tech", requiredLevel: 1 },
+        { technologyId: "independent_unknown", requiredLevel: 1 },
+      ],
+      { hasNativeCondition: true },
+    ),
+    nativeDefinition(
+      "tech-industrialization",
+      "high_tech",
+      3,
+      [{ technologyId: "high_tech", requiredLevel: 2 }],
+      { hasNativeCondition: true },
+    ),
+    nativeDefinition("tech-electronics", "high_tech", 4, [
+      { technologyId: "high_tech", requiredLevel: 3 },
+    ]),
+    nativeDefinition("tech-fission", "high_tech", 5, [
+      { technologyId: "high_tech", requiredLevel: 4 },
+    ]),
+    nativeDefinition("tech-arpa", "high_tech", 6, [
+      { technologyId: "high_tech", requiredLevel: 5 },
+    ]),
+    nativeDefinition(
+      "tech-rocketry",
+      "high_tech",
+      7,
+      [
+        { technologyId: "high_tech", requiredLevel: 6 },
+        { technologyId: "unobserved_route", requiredLevel: 1 },
+      ],
+      { hasNativeCondition: true },
+    ),
+    nativeDefinition("tech-robotics", "high_tech", 8, [
+      { technologyId: "high_tech", requiredLevel: 7 },
+    ]),
+    nativeDefinition("tech-lasers", "high_tech", 9, [
+      { technologyId: "high_tech", requiredLevel: 8 },
+      { technologyId: "space", requiredLevel: 3 },
+    ]),
+    nativeDefinition("tech-artifical_intelligence", "high_tech", 10, [
+      { technologyId: "high_tech", requiredLevel: 9 },
+    ]),
+    nativeDefinition("tech-quantum_computing", "high_tech", 11, [
+      { technologyId: "high_tech", requiredLevel: 10 },
+      { technologyId: "nano", requiredLevel: 1 },
+    ]),
+    nativeDefinition("tech-virtual_reality", "high_tech", 12, [
+      { technologyId: "high_tech", requiredLevel: 11 },
+    ]),
+    nativeDefinition("tech-plasma", "high_tech", 13, [
+      { technologyId: "high_tech", requiredLevel: 12 },
+    ]),
+    nativeDefinition("tech-shields", "high_tech", 14, [
+      { technologyId: "high_tech", requiredLevel: 13 },
+    ]),
+    nativeDefinition("tech-ai_core", "high_tech", 15, [
+      { technologyId: "high_tech", requiredLevel: 14 },
+      { technologyId: "science", requiredLevel: 15 },
+    ]),
+    nativeDefinition("tech-metaphysics", "high_tech", 16, [
+      { technologyId: "high_tech", requiredLevel: 15 },
+    ]),
+    nativeDefinition("tech-orichalcum_analysis", "high_tech", 17, [
+      { technologyId: "high_tech", requiredLevel: 16 },
+    ]),
+    nativeDefinition("tech-cybernetics", "high_tech", 18, [
+      { technologyId: "high_tech", requiredLevel: 17 },
+    ]),
+    nativeDefinition("tech-divinity", "high_tech", 19, [
+      { technologyId: "high_tech", requiredLevel: 18 },
+    ]),
+  ];
+  const highLevels = new Map([
+    ["mad", 0],
+    ["high_tech", 0],
+    ["independent_unknown", 0],
+    ["unobserved_route", 0],
+    ["space", 0],
+    ["nano", 0],
+    ["science", 4],
+  ]);
+  const highApplicability = new Map([
+    ["tech-mad_science", { status: "eligible" }],
+  ]);
+  const highGraph = nativeGraph(
+    target,
+    highTechDefinitions,
+    ["tech-mad_science"],
+    highLevels,
+    highApplicability,
+    { maxDepth: 24, maxActions: 64 },
+  );
+  const highProof = classifyMandatoryNativeResearchObligations(highGraph, {
+    targetEligibility: eligibilityFor(highGraph),
+    definitions: highTechDefinitions,
+    grantLevels: highLevels,
+    applicabilityByActionId: highApplicability,
+    offeredActionIds: new Set(["tech-mad_science"]),
+  });
+  assert.equal(highProof.status, "verified");
+  assert.deepEqual(highProof.mandatoryActionIds, ["tech-mad_science"]);
+
+  // A direct higher-level grant with no declared same-tech requirement is a real bypass.
+  const bypass = nativeDefinition("tech-independent_high_tech", "high_tech", 7);
+  const bypassDefinitions = [
+    highTechDefinitions[0],
+    highTechDefinitions[1],
+    bypass,
+  ];
+  const bypassOffers = ["tech-mad_science", bypass.actionId];
+  const bypassApplicability = new Map([
+    ...highApplicability,
+    [bypass.actionId, { status: "eligible" }],
+  ]);
+  const bypassGraph = nativeGraph(
+    target,
+    bypassDefinitions,
+    bypassOffers,
+    highLevels,
+    bypassApplicability,
+  );
+  const bypassProof = classifyMandatoryNativeResearchObligations(bypassGraph, {
+    targetEligibility: eligibilityFor(bypassGraph),
+    definitions: bypassDefinitions,
+    grantLevels: highLevels,
+    applicabilityByActionId: bypassApplicability,
+    offeredActionIds: new Set(bypassOffers),
+  });
+  assert.equal(bypassProof.status, "verified");
+  assert.deepEqual(bypassProof.mandatoryActionIds, [bypass.actionId]);
+}
+
+// Missing, exceptional, stale, or cyclic declarations never prove a bypass or necessity.
+{
+  const target = "tech-mad";
+  const candidate = nativeDefinition("tech-mad_science", "high_tech", 1);
+  const conditional = nativeDefinition(
+    "tech-conditional_high_tech",
+    "high_tech",
+    7,
+    [{ technologyId: "high_tech", requiredLevel: 6 }],
+    { hasNativeCondition: true },
+  );
+  const base = [
+    nativeDefinition(target, "mad", 1, [
+      { technologyId: "high_tech", requiredLevel: 7 },
+    ]),
+    candidate,
+    conditional,
+    nativeDefinition("tech-high_tech_6", "high_tech", 6, [
+      { technologyId: "high_tech", requiredLevel: 1 },
+    ]),
+  ];
+  const levels = new Map([
+    ["mad", 0],
+    ["high_tech", 0],
+  ]);
+  const applicability = new Map([[candidate.actionId, { status: "eligible" }]]);
+  const run = (
+    definitions = base,
+    currentLevels = levels,
+    graphOptions = {},
+  ) => {
+    const currentGraph = nativeGraph(
+      target,
+      definitions,
+      [candidate.actionId],
+      currentLevels,
+      applicability,
+      graphOptions,
+    );
+    return classifyMandatoryNativeResearchObligations(currentGraph, {
+      targetEligibility: eligibilityFor(currentGraph),
+      definitions,
+      grantLevels: currentLevels,
+      applicabilityByActionId: applicability,
+      offeredActionIds: new Set([candidate.actionId]),
+    });
+  };
+  assert.equal(
+    run().status,
+    "verified",
+    "conditional alternatives with a proven predecessor remain necessary",
+  );
+  assert.equal(
+    run(base, new Map([["mad", 0]])).status,
+    "unavailable",
+    "a missing high-tech level is not zero",
+  );
+
+  const missingComputed = base.map((definition) =>
+    definition.actionId === conditional.actionId
+      ? {
+          ...definition,
+          prerequisites: {
+            kind: "conditional",
+            reason: "computed reqs were not captured",
+          },
+        }
+      : definition,
+  );
+  const missingComputedProof = run(missingComputed);
+  assert.equal(missingComputedProof.inputConsistency, "incomplete");
+  assert.equal(
+    missingComputedProof.mandatoryActionIds.includes(candidate.actionId),
+    false,
+  );
+
+  const exceptionBoundary = base.map((definition) =>
+    definition.actionId === conditional.actionId
+      ? {
+          ...definition,
+          prerequisites: {
+            kind: "declared",
+            requirements: [
+              {
+                technologyId: "high_tech",
+                requiredLevel: 6,
+                applicabilityBoundary:
+                  "native requirement exception unresolved",
+              },
+            ],
+          },
+        }
+      : definition,
+  );
+  assert.equal(run(exceptionBoundary).status, "unavailable");
+
+  const cycle = base.map((definition) =>
+    definition.actionId === "tech-high_tech_6"
+      ? {
+          ...definition,
+          prerequisites: {
+            kind: "declared",
+            requirements: [{ technologyId: "high_tech", requiredLevel: 7 }],
+          },
+        }
+      : definition,
+  );
+  const cycleProof = run(cycle);
+  assert.equal(cycleProof.inputConsistency, "incomplete");
+  assert.equal(
+    cycleProof.mandatoryActionIds.includes(candidate.actionId),
+    false,
+    "cycles remain unknown instead of being discarded as impossible",
+  );
+
+  const extraAlternative = nativeDefinition(
+    "tech-unlisted_high_tech_alternative",
+    "high_tech",
+    8,
+    [{ technologyId: "high_tech", requiredLevel: 7 }],
+  );
+  const incompleteDefinitions = [...base, extraAlternative];
+  const incompleteCandidateSet = nativeGraph(
+    target,
+    incompleteDefinitions,
+    [candidate.actionId],
+    levels,
+    applicability,
+  );
+  const missingAlternativeGraph = {
+    ...incompleteCandidateSet,
+    requirements: incompleteCandidateSet.requirements.map((gate) =>
+      gate.id === "research:high_tech:7"
+        ? { ...gate, candidateActionIds: ["tech-conditional_high_tech"] }
+        : gate,
+    ),
+  };
+  const incompleteProof = classifyMandatoryNativeResearchObligations(
+    missingAlternativeGraph,
+    {
+      targetEligibility: eligibilityFor(missingAlternativeGraph),
+      definitions: incompleteDefinitions,
+      grantLevels: levels,
+      applicabilityByActionId: applicability,
+      offeredActionIds: new Set([candidate.actionId]),
+    },
+  );
+  assert.equal(incompleteProof.status, "unavailable");
+
+  const currentGraph = nativeGraph(
+    target,
+    base,
+    [candidate.actionId],
+    levels,
+    applicability,
+  );
+  const staleProof = classifyMandatoryNativeResearchObligations(currentGraph, {
+    targetEligibility: {
+      ...eligibilityFor(currentGraph),
+      freshness: {
+        ...currentGraph.freshness,
+        offerGenerations: [[candidate.actionId, 99]],
+      },
+    },
+    definitions: base,
+    grantLevels: levels,
+    applicabilityByActionId: applicability,
+    offeredActionIds: new Set([candidate.actionId]),
+  });
+  assert.equal(
+    staleProof.status,
+    "unavailable",
+    "stale offer binding cannot authorize a current proof",
+  );
+
+  const excluded = { ...conditional, actionId: "tech-excluded_high_tech" };
+  const excludedDefinitions = [...base, excluded];
+  const excludedApplicability = new Map([
+    ...applicability,
+    [
+      excluded.actionId,
+      { status: "excluded", reasons: ["native route exclusion"] },
+    ],
+  ]);
+  const excludedGraph = nativeGraph(
+    target,
+    excludedDefinitions,
+    [candidate.actionId],
+    levels,
+    excludedApplicability,
+  );
+  const excludedProof = classifyMandatoryNativeResearchObligations(
+    excludedGraph,
+    {
+      targetEligibility: eligibilityFor(excludedGraph),
+      definitions: excludedDefinitions,
+      grantLevels: levels,
+      applicabilityByActionId: excludedApplicability,
+      offeredActionIds: new Set([candidate.actionId]),
+    },
+  );
+  assert.equal(
+    excludedProof.status,
+    "verified",
+    "a currently excluded route is not a bypass; a conditional route remains unresolved",
+  );
 }
 
 const evidence = (overrides = {}) => ({

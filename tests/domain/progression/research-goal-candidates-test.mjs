@@ -256,9 +256,8 @@ const input = (overrides = {}) => ({
     "tech-tier-one",
     "tech-tier-two",
   ]);
-  assert.equal(nativeProof.status, "unavailable");
-  assert.deepEqual(nativeProof.mandatoryActionIds, []);
-  assert.match(nativeProof.reasons.join(" "), /unresolved native alternatives/);
+  assert.equal(nativeProof.status, "verified");
+  assert.deepEqual(nativeProof.mandatoryActionIds, ["tech-tier-one"]);
 
   const contradictoryNativeProof = classifyMandatoryNativeResearchObligations(
     chainGraph,
@@ -311,10 +310,10 @@ const input = (overrides = {}) => ({
   );
   assert.equal(
     evaluation.frontierSelection.status,
-    "blocked-by-missing-native-authority",
-    "an unoffered conditional intermediate cannot establish a mandatory frontier",
+    "provisional-mandatory-prerequisite-choice",
+    "a declared same-technology dependency proves the offered frontier is required",
   );
-  assert.equal(evaluation.preferredActionId, undefined);
+  assert.equal(evaluation.preferredActionId, "tech-tier-one");
 
   for (const [mandatoryActionIds, reason] of [
     [["tech-unrelated"], "unrelated mandatory action"],

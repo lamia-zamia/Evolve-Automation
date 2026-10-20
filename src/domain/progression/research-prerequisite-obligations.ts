@@ -35,7 +35,10 @@ export interface ResearchPrerequisiteObligationPlan {
       }>[];
     }>[];
   }>[];
-  readonly work?: Readonly<{ nativePathVisits: number }>;
+  readonly work?: Readonly<{
+    nativePathVisits: number;
+    nativePathVisitBudget: number;
+  }>;
   readonly reasons: readonly string[];
   readonly authority?: Readonly<{
     readonly targetActionId: string;
@@ -630,6 +633,7 @@ export function classifyMandatoryNativeResearchObligations(
     offeredActionIds: ReadonlySet<string> | undefined;
   }>,
 ): Readonly<ResearchPrerequisiteObligationPlan> {
+  const nativePathVisitBudget = 512;
   let visits = 0;
   const unavailable = (
     reasons: readonly string[],
@@ -644,7 +648,10 @@ export function classifyMandatoryNativeResearchObligations(
         : { inputConsistencyReasons }),
       mandatoryActionIds: Object.freeze([]),
       alternativeGroups: Object.freeze([]),
-      work: Object.freeze({ nativePathVisits: visits }),
+      work: Object.freeze({
+        nativePathVisits: visits,
+        nativePathVisitBudget,
+      }),
       reasons: Object.freeze([...new Set(reasons)]),
     });
   const graphIdentity = researchPrerequisiteSnapshotIdentity(graph);
@@ -666,7 +673,6 @@ export function classifyMandatoryNativeResearchObligations(
     );
   if (
     graph.targetStatus === "satisfied" ||
-    graph.targetStatus === "unavailable" ||
     input.definitions === undefined ||
     input.grantLevels === undefined ||
     input.applicabilityByActionId === undefined ||
@@ -729,12 +735,13 @@ export function classifyMandatoryNativeResearchObligations(
     requiredLevel: number,
     candidateActionId: string,
   ): CandidatePathResult => {
-    if ((currentLevels.get(technologyId) ?? 0) >= requiredLevel)
-      return "bypass";
+    const observedLevel = currentLevels.get(technologyId);
+    if (observedLevel === undefined) return "unknown";
+    if (observedLevel >= requiredLevel) return "bypass";
     const key = `requirement:${technologyId}:${requiredLevel}:${candidateActionId}`;
     const cached = memo.get(key);
     if (cached !== undefined) return cached;
-    if (activeRequirements.has(key)) return "impossible";
+    if (activeRequirements.has(key)) return "unknown";
     const candidates = (grants.get(technologyId) ?? []).filter(
       (definition) => definition.grantLevel >= requiredLevel,
     );
@@ -787,7 +794,7 @@ export function classifyMandatoryNativeResearchObligations(
     requiredLevel: number,
   ): CandidatePathResult => {
     visits += 1;
-    if (visits > 10000) {
+    if (visits > nativePathVisitBudget) {
       return "unknown";
     }
     if (definition.actionId === candidateActionId)
@@ -802,44 +809,58 @@ export function classifyMandatoryNativeResearchObligations(
     const graphAction = graphActions.get(definition.actionId);
     if (graphAction === undefined) return "unknown";
     if (graphAction.status === "excluded") return "impossible";
-    if (
-      graphAction.status === "conditional" ||
-      graphAction.status === "unavailable"
-    )
-      return "unknown";
     const applicabilityState = applicability.get(definition.actionId);
     if (applicabilityState?.status === "excluded") return "impossible";
     if (definition.prerequisites.kind !== "declared") return "unknown";
     const actionKey = `${definition.actionId}:${requiredTechnologyId}:${requiredLevel}:${candidateActionId}`;
     const cached = memo.get(`action:${actionKey}`);
     if (cached !== undefined) return cached;
-    if (activeActions.has(actionKey)) return "impossible";
+    if (activeActions.has(actionKey)) return "unknown";
     activeActions.add(actionKey);
     // Only same-technology prerequisites establish a route to a higher grant of this
     // technology. Other requirements can make an action route impossible, so ignoring
     // them is conservative: it can withhold a claim, but cannot invent a bypass route
     // through an action whose native condition or route eligibility is unknown.
-    const dependencies = definition.prerequisites.requirements
-      .filter(
+    const sameTechnologyRequirements =
+      definition.prerequisites.requirements.filter(
         (requirement) => requirement.technologyId === requiredTechnologyId,
-      )
-      .map((requirement) =>
-        requirement.applicabilityBoundary !== undefined &&
-        (currentLevels.get(requirement.technologyId) ?? 0) <
-          requirement.requiredLevel
-          ? "unknown"
-          : solveRequirement(
-              requirement.technologyId,
-              requirement.requiredLevel,
-              candidateActionId,
-            ),
       );
+    // An action cannot be the first grant to a level if its native declaration
+    // already requires that level (or a higher one). Exception boundaries stay
+    // unknown because native skip semantics may change whether that gate applies.
+    if (
+      sameTechnologyRequirements.some(
+        (requirement) =>
+          requirement.requiredLevel >= requiredLevel &&
+          requirement.applicabilityBoundary === undefined,
+      )
+    ) {
+      activeActions.delete(actionKey);
+      const result: CandidatePathResult = "impossible";
+      memo.set(`action:${actionKey}`, result);
+      return result;
+    }
+    const dependencies = sameTechnologyRequirements.map((requirement) =>
+      requirement.applicabilityBoundary !== undefined &&
+      (currentLevels.get(requirement.technologyId) ?? 0) <
+        requirement.requiredLevel
+        ? "unknown"
+        : solveRequirement(
+            requirement.technologyId,
+            requirement.requiredLevel,
+            candidateActionId,
+          ),
+    );
     activeActions.delete(actionKey);
     let result: CandidatePathResult;
     if (dependencies.includes("impossible")) result = "impossible";
+    // A proven same-technology prerequisite establishes structural necessity even
+    // when separate conditions, queues, or side prerequisites are unresolved.
     else if (dependencies.includes("mandatory")) result = "mandatory";
     else if (
       dependencies.includes("unknown") ||
+      graphAction.status === "conditional" ||
+      graphAction.status === "unavailable" ||
       applicabilityState?.status === "unknown" ||
       definition.hasNativeCondition
     )
@@ -934,7 +955,10 @@ export function classifyMandatoryNativeResearchObligations(
     mandatoryProofs: Object.freeze(
       mandatoryProofs.map((proof) => Object.freeze(proof)),
     ),
-    work: Object.freeze({ nativePathVisits: visits }),
+    work: Object.freeze({
+      nativePathVisits: visits,
+      nativePathVisitBudget,
+    }),
     reasons: Object.freeze([]),
     authority: Object.freeze({
       targetActionId: graph.targetActionId,
