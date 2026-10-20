@@ -15,6 +15,7 @@ import { planNativeResearchPrerequisites } from "../src/domain/progression/resea
 import {
   classifyDeclaredRelationship,
   classifyP13KOutcome,
+  deriveCycle232EconomicDecision,
   reconstructDeclaredResearchWitness,
 } from "./p13k-declared-witness.mjs";
 
@@ -101,7 +102,10 @@ if (
   );
   if (
     observation.offerMembership !== "complete" ||
-    observation.offers.some(({ bindingGeneration }) => !(bindingGeneration > 0))
+    observation.offers.some(
+      ({ bindingGeneration }) =>
+        !Number.isSafeInteger(bindingGeneration) || bindingGeneration < 1,
+    )
   )
     issues.push(
       "offer membership or a native offer binding generation is incomplete",
@@ -435,14 +439,16 @@ const report = {
           status: "unavailable",
           reason: "retained graph or definitions unavailable",
         },
-    economicDecision: {
-      cycle: 232,
-      decision: "no incremental resource intervention justified",
-      reason:
-        "ordinary Research had sufficient Knowledge and Steel, and the native Steel Containers purchase succeeded at this Research boundary",
-      smelterAuthority:
-        "none; Research price and affordability do not carry into another owner cycle",
-    },
+    economicDecision: deriveCycle232EconomicDecision({
+      cycle: observation.cycle,
+      offer: steelOffer,
+      ownerRead: observation.ownerRead?.find(
+        ({ actionId }) => actionId === "tech-steel_containers",
+      ),
+      result: observation.result,
+      grantBefore: grantLevels?.get("steel_container"),
+      grantAfter: observation.result?.grantAfter,
+    }),
   },
   diagnostic: {
     prerequisitePlannerInvocations: graph === undefined ? 0 : 1,

@@ -43,7 +43,10 @@ export function reconstructDeclaredResearchWitness(
   let truncated = false;
 
   const examineNode = (key) => {
-    if (active.has(key)) return false;
+    if (active.has(key)) {
+      unknownReasons.add(`cycle encountered at ${key}`);
+      return false;
+    }
     if (work.nodesExamined >= maxNodes) {
       truncated = true;
       return false;
@@ -80,6 +83,7 @@ export function reconstructDeclaredResearchWitness(
     const key = `requirement:${requirementId}`;
     if (requirement === undefined) {
       unknownReasons.add(`retained requirement ${requirementId} is missing`);
+      unknownReasons.add(`unresolved requirement branch ${requirementId}`);
       return undefined;
     }
     if (!examineNode(key)) return undefined;
@@ -170,6 +174,7 @@ export function reconstructDeclaredResearchWitness(
           ? `retained action ${actionId} is missing`
           : `effective definition for ${actionId} is missing`,
       );
+      unknownReasons.add(`unresolved action branch ${actionId}`);
       return undefined;
     }
     if (!examineNode(key)) return undefined;
@@ -244,6 +249,16 @@ export function reconstructDeclaredResearchWitness(
     targetActionId,
     ancestorActionId,
     witness: result,
+    searchComplete:
+      result === undefined && !truncated && unknownReasons.size === 0,
+    visitedCycles: Object.freeze(
+      [...unknownReasons].filter((reason) =>
+        reason.startsWith("cycle encountered at "),
+      ),
+    ),
+    unresolvedBranches: Object.freeze(
+      [...unknownReasons].filter((reason) => reason.startsWith("unresolved ")),
+    ),
     work: Object.freeze({
       ...work,
       maxNodes,
@@ -271,7 +286,10 @@ export function classifyDeclaredRelationship({
   if (currentOffer === undefined) return "unknown-current-offer-unavailable";
   if (currentOffer.actionId !== definition.actionId)
     return "unknown-current-offer-mismatch";
-  if (currentOffer.bindingGeneration < 1)
+  if (
+    !Number.isSafeInteger(currentOffer.bindingGeneration) ||
+    currentOffer.bindingGeneration < 1
+  )
     return "unknown-current-binding-invalid";
   if (currentAuthority !== true) return "unknown-current-authority";
   const completeAuthority =
@@ -308,9 +326,58 @@ export function classifyDeclaredRelationship({
   if (witness?.status === "truncated") return "unknown-witness-truncated";
   if (witness?.status === "unknown" || witness?.status === "unavailable")
     return "unknown-witness-incomplete";
+  if (witness?.status !== "not-found" || witness.searchComplete !== true)
+    return "unknown-witness-incomplete";
   if (inputConsistency !== "consistent" || currentEvidence !== "complete")
     return "unknown-incomplete-evidence";
   return "proven-unrelated";
+}
+
+export function deriveCycle232EconomicDecision({
+  cycle,
+  offer,
+  ownerRead,
+  result,
+  grantBefore,
+  grantAfter,
+}) {
+  const actionId = "tech-steel_containers";
+  const valid =
+    cycle === 232 &&
+    offer?.actionId === actionId &&
+    Number.isSafeInteger(offer.bindingGeneration) &&
+    offer.bindingGeneration > 0 &&
+    offer.nativeAffordableAtDraw === true &&
+    ownerRead?.actionId === actionId &&
+    ownerRead.ownerAffordable === true &&
+    ownerRead.nativeAffordable === true &&
+    ownerRead.resourceAffordable === true &&
+    result?.kind === "result" &&
+    result.cycle === cycle &&
+    result.actionId === actionId &&
+    result.disposition === "researched" &&
+    Number.isSafeInteger(grantBefore) &&
+    Number.isSafeInteger(grantAfter) &&
+    grantAfter === grantBefore + 1 &&
+    result.grantAfter === grantAfter;
+  return Object.freeze({
+    cycle,
+    decision: valid
+      ? "no incremental resource intervention justified"
+      : "unavailable",
+    reason: valid
+      ? "the current native offer was affordable at the native Research owner boundary, the owner confirmed all resource affordability, and the native Research result advanced the grant"
+      : "native offer, owner affordability, Research result, and grant transition do not form a complete consistent cycle-232 evidence chain",
+    evidence: Object.freeze({
+      offer: offer ?? "unavailable",
+      ownerRead: ownerRead ?? "unavailable",
+      result: result ?? "unavailable",
+      grantBefore: grantBefore ?? "unavailable",
+      grantAfter: grantAfter ?? "unavailable",
+    }),
+    smelterAuthority:
+      "none; Research price and affordability do not carry into another owner cycle",
+  });
 }
 
 export function classifyP13KOutcome({

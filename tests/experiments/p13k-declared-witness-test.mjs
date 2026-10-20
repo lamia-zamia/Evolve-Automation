@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   classifyDeclaredRelationship,
   classifyP13KOutcome,
+  deriveCycle232EconomicDecision,
   reconstructDeclaredResearchWitness,
 } from "../../experiments/p13k-declared-witness.mjs";
 import {
@@ -375,7 +376,7 @@ const steelPathDefinitions = [
       currentEvidence: "complete",
       currentAuthority: true,
     }),
-    "proven-unrelated",
+    "unknown-witness-incomplete",
   );
 
   const unrelatedDefinition = definition("tech-barns", "barns", 1);
@@ -390,6 +391,7 @@ const steelPathDefinitions = [
     "tech-barns",
   );
   assert.equal(unrelatedWitness.status, "not-found");
+  assert.equal(unrelatedWitness.searchComplete, true);
   assert.equal(
     classifyDeclaredRelationship({
       goalActionId: "tech-mad",
@@ -403,6 +405,98 @@ const steelPathDefinitions = [
       currentAuthority: true,
     }),
     "proven-unrelated",
+  );
+
+  for (const incompleteWitness of [
+    undefined,
+    { status: "unavailable" },
+    { status: "truncated", searchComplete: false },
+    { status: "unknown", searchComplete: false, visitedCycles: ["action:x"] },
+    {
+      status: "not-found",
+      searchComplete: false,
+      unresolvedBranches: ["action:x"],
+    },
+    { status: "not-found" },
+  ])
+    assert.notEqual(
+      classifyDeclaredRelationship({
+        goalActionId: "tech-mad",
+        definition: unrelatedDefinition,
+        witness: incompleteWitness,
+        mandatoryActionIds: [],
+        alternativeGroups: [],
+        inputConsistency: "consistent",
+        currentOffer: { actionId: "tech-barns", bindingGeneration: 1 },
+        currentEvidence: "complete",
+        currentAuthority: true,
+      }),
+      "proven-unrelated",
+      "incomplete negative witness evidence must remain unknown",
+    );
+
+  for (const bindingGeneration of [undefined, Number.NaN, 0, 1.5])
+    assert.equal(
+      classifyDeclaredRelationship({
+        goalActionId: "tech-mad",
+        definition: unrelatedDefinition,
+        witness: unrelatedWitness,
+        mandatoryActionIds: [],
+        alternativeGroups: [],
+        inputConsistency: "consistent",
+        currentOffer: { actionId: "tech-barns", bindingGeneration },
+        currentEvidence: "complete",
+        currentAuthority: true,
+      }),
+      "unknown-current-binding-invalid",
+    );
+
+  assert.equal(
+    deriveCycle232EconomicDecision({
+      cycle: 232,
+      offer: {
+        actionId: "tech-steel_containers",
+        bindingGeneration: 251,
+        nativeAffordableAtDraw: true,
+      },
+      ownerRead: {
+        actionId: "tech-steel_containers",
+        ownerAffordable: true,
+        nativeAffordable: true,
+        resourceAffordable: true,
+      },
+      result: {
+        kind: "result",
+        cycle: 232,
+        actionId: "tech-steel_containers",
+        disposition: "researched",
+        grantAfter: 1,
+      },
+      grantBefore: 0,
+      grantAfter: 1,
+    }).decision,
+    "no incremental resource intervention justified",
+  );
+  assert.equal(
+    deriveCycle232EconomicDecision({
+      cycle: 232,
+      offer: {
+        actionId: "tech-steel_containers",
+        bindingGeneration: 251,
+        nativeAffordableAtDraw: true,
+      },
+      ownerRead: undefined,
+      result: {
+        kind: "result",
+        cycle: 232,
+        actionId: "tech-steel_containers",
+        disposition: "researched",
+        grantAfter: 1,
+      },
+      grantBefore: 0,
+      grantAfter: 1,
+    }).decision,
+    "unavailable",
   );
 
   const missingIntermediate = {
