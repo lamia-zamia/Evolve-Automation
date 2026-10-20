@@ -232,6 +232,136 @@
       "result": "native action and bounded automation did not produce an ordinary MAD-compatible state"
     }
   ],
+  "postFixFreshStandardReplay": {
+    "mechanism": "normal native --save none initialization, current-full settings, evolution fixes, exact Chromium runner",
+    "settingsAllRequiredOwnersEnabled": {
+      "masterScriptToggle": true,
+      "autoEvolution": true,
+      "autoResearch": true,
+      "autoMarket": true,
+      "autoSmelter": true,
+      "autoBuild": true,
+      "autoJobs": true
+    },
+    "bundleSha256": "d3d875c3242dd5d386c223cb1fa4eaa365760cfd3e4d93f44bbef2c5bfefe615",
+    "settingsSha256": "f7fd9286607695d8716359f20f1a5f680264832de36879f84a7a67c4bd970042",
+    "runnerReportPath": "test-artifacts/benchmark/tmp/p14-postfix2-fresh-50000.json",
+    "runnerReportSha256": "5d6da6933c3d1f5a810ae27218065d749557fb1074c379bb6131a103dde17370",
+    "exportPath": "test-artifacts/benchmark/tmp/p14-postfix2-fresh-50000.txt",
+    "exportSha256": "96e6afc6384267a6d83402a863a033be40674f335432c6f4601614b2664cf882",
+    "periods": 50000,
+    "seed": 42,
+    "endState": {
+      "raceUniverse": "standard",
+      "species": "shroomi",
+      "day": 0,
+      "reset": 0,
+      "tech": { "primitive": 2, "wsc": 0 }
+    },
+    "randomCalls": 3618,
+    "nativeControlUsage": {
+      "evolution-dna.action": 2603,
+      "evolution-rna.action": 7397,
+      "evolution-organelles.action": 2220,
+      "evolution-nucleus.action": 32,
+      "evolution-eukaryotic_cell.action": 13,
+      "evolution-sexual_reproduction.action": 8,
+      "evolution-mitochondria.action": 17,
+      "evolution-chitin.action": 6,
+      "evolution-membrane.action": 9,
+      "evolution-multicellular.action": 6
+    },
+    "result": "authentic Standard fresh game progressed through native evolution to Shroomi; ordinary economy still at day zero"
+  },
+  "candidateOfferInspection": {
+    "sourceExportSha256": "96e6afc6384267a6d83402a863a033be40674f335432c6f4601614b2664cf882",
+    "offerEvidencePath": "test-artifacts/benchmark/tmp/p14-standard-offers.json",
+    "offerEvidenceSha256": "387837d8ce8fa12100dbf52c3549c7fec8ee28f34b51195df7155161489f10ad",
+    "offerActionId": "tech-sundial",
+    "exactNativePrice": { "Lumber": 8, "Stone": 10 },
+    "stocksAtObservation": {
+      "Lumber": { "amount": 72, "max": 200 },
+      "Stone": { "amount": 0, "max": 200 }
+    },
+    "shortage": { "resource": "Stone", "quantity": 10 },
+    "nativeProductionControl": {
+      "elementId": "undefined-stone",
+      "method": "action",
+      "visible": true
+    },
+    "incumbentGatherPolicy": "stopped for routine material gathering after primitive technology level 1",
+    "market": { "active": false, "workers": 0 },
+    "quarry": { "built": 0 },
+    "result": "plausible single-resource bottleneck; existing Gather owner does not invoke the available Stone control"
+  },
+  "nativeProgressionChecks": [
+    {
+      "mechanism": "10 direct clicks on the visible native Gather Stone control, then unchanged current-full automation",
+      "sourceExportSha256": "96e6afc6384267a6d83402a863a033be40674f335432c6f4601614b2664cf882",
+      "evidencePath": "test-artifacts/benchmark/tmp/p14-native-progress-standard.json",
+      "evidenceSha256": "65d72946796e8976569f646e0968506974267cdb00b88779cb9f0735aaa5f02e",
+      "resultExportPath": "test-artifacts/benchmark/tmp/p14-native-progress-standard.txt",
+      "resultExportSha256": "bb99cba34df3c06f366b2c9b435e55efa77f8edab46ca3a79b2fac2cc7db1390",
+      "periods": 5000,
+      "nativeStoneAfterClicks": 10,
+      "endState": {
+        "raceUniverse": "standard",
+        "species": "shroomi",
+        "day": 250,
+        "tech": {
+          "primitive": 3,
+          "compost": 2,
+          "housing": 1,
+          "currency": 1,
+          "storage": 1,
+          "mining": 1,
+          "science": 1,
+          "military": 1,
+          "banking": 1
+        }
+      },
+      "verifiedResearchActionInvocation": "tech-sundial.action",
+      "marketActive": false,
+      "result": "native manual production enabled Sundial purchase and downstream native grants; this is not an automation comparison"
+    },
+    {
+      "mechanism": "unchanged current-full automation continued from native-progression export",
+      "sourceExportSha256": "bb99cba34df3c06f366b2c9b435e55efa77f8edab46ca3a79b2fac2cc7db1390",
+      "evidencePath": "test-artifacts/benchmark/tmp/p14-continue-standard.json",
+      "evidenceSha256": "c3453fda06a3bc94b644d1533b816606b8c2faadd9af75292211ab7cf54028ec",
+      "resultExportPath": "test-artifacts/benchmark/tmp/p14-continue-standard.txt",
+      "resultExportSha256": "07934ca15d67d6cd246269a4cb59f835691dea6bf4942e250c6a2fa328aa7ddf",
+      "periods": 20000,
+      "endState": {
+        "raceUniverse": "standard",
+        "species": "shroomi",
+        "day": 1250,
+        "starvedPopulation": 54,
+        "resources": {
+          "Food": 26,
+          "Lumber": 17,
+          "Stone": 0,
+          "Money": 0.37,
+          "Knowledge": 100
+        },
+        "marketActive": false,
+        "quarryBuilt": 0,
+        "workers": { "total": 3, "unemployed": 3, "assignedToProduction": 0 },
+        "nextOffer": {
+          "actionId": "tech-stone_axe",
+          "price": { "Knowledge": 45, "Lumber": 20, "Stone": 20 },
+          "shortages": { "Lumber": 3, "Stone": 20 }
+        }
+      },
+      "result": "progressed to a two-resource shortage with no active ordinary producer or Market"
+    }
+  ],
+  "p14BottleneckDecision": {
+    "outcome": "C_owner_authority_insufficient",
+    "testOnlyInterventionImplemented": false,
+    "reason": "Gather planner stops routine materials after bootstrap; the gather phase precedes Research; existing test hook does not accept bounded Research demand; reusing a prior-cycle Research offer or price would be stale",
+    "nextRequirement": "same-owner-boundary current-offer and price validation, current stock read, and one bounded demand proposal to an existing owner with no cross-cycle handles"
+  },
   "comparison": {
     "baselineAndInterventionArmsRun": false,
     "nativeResearchOfferSelected": false,
