@@ -18906,12 +18906,13 @@
     });
   }
   function classifyMandatoryNativeResearchObligations(graph, input) {
-    let unavailable2 = (reasons, inputConsistency, inputConsistencyReasons) => Object.freeze({
+    let visits = 0, unavailable2 = (reasons, inputConsistency, inputConsistencyReasons) => Object.freeze({
       status: "unavailable",
       ...inputConsistency === void 0 ? {} : { inputConsistency },
       ...inputConsistencyReasons === void 0 ? {} : { inputConsistencyReasons },
       mandatoryActionIds: Object.freeze([]),
       alternativeGroups: Object.freeze([]),
+      work: Object.freeze({ nativePathVisits: visits }),
       reasons: Object.freeze([...new Set(reasons)])
     }), graphIdentity = researchPrerequisiteSnapshotIdentity(graph), eligibility = input.targetEligibility;
     if (eligibility === void 0 || eligibility.actionId !== graph.targetActionId || eligibility.snapshotIdentity !== graphIdentity || JSON.stringify(eligibility.freshness) !== JSON.stringify(graph.freshness))
@@ -18956,7 +18957,7 @@
     }
     let memo = /* @__PURE__ */ new Map(), graphActions = new Map(
       graph.actions.map((action) => [action.actionId, action])
-    ), activeActions = /* @__PURE__ */ new Set(), activeRequirements = /* @__PURE__ */ new Set(), alternativeGroups = [], uncertaintyReasons = [], unknownPathReasons = /* @__PURE__ */ new Map(), visits = 0, solveRequirement = (technologyId, requiredLevel, candidateActionId) => {
+    ), activeActions = /* @__PURE__ */ new Set(), activeRequirements = /* @__PURE__ */ new Set(), alternativeGroups = [], uncertaintyReasons = [], unknownPathReasons = /* @__PURE__ */ new Map(), grantAlternativesByRequirement = /* @__PURE__ */ new Map(), solveRequirement = (technologyId, requiredLevel, candidateActionId) => {
       if ((currentLevels.get(technologyId) ?? 0) >= requiredLevel)
         return "bypass";
       let key = `requirement:${technologyId}:${requiredLevel}:${candidateActionId}`, cached = memo.get(key);
@@ -18967,21 +18968,20 @@
       );
       if (candidates.length === 0) return "impossible";
       activeRequirements.add(key);
-      let viable = [];
-      for (let definition of candidates) {
-        let result2 = solveAction(
+      let routeOutcomes = candidates.map((definition) => ({
+        actionId: definition.actionId,
+        outcome: solveAction(
           definition,
           candidateActionId,
           technologyId,
           requiredLevel
-        );
-        result2 !== "impossible" && viable.push(result2);
-      }
+        )
+      }));
+      grantAlternativesByRequirement.set(key, Object.freeze(routeOutcomes));
+      let viable = routeOutcomes.map(({ outcome }) => outcome).filter((outcome) => outcome !== "impossible");
       activeRequirements.delete(key), viable.includes("unknown") && unknownPathReasons.set(
         key,
-        candidates.map(
-          (definition) => `${definition.actionId}=${solveAction(definition, candidateActionId, technologyId, requiredLevel)}`
-        ).join(",")
+        routeOutcomes.map(({ actionId, outcome }) => `${actionId}=${outcome}`).join(",")
       ), viable.length > 1 && alternativeGroups.push({
         requirementId: `research:${technologyId}:${requiredLevel}`,
         actionIds: Object.freeze(
@@ -19021,7 +19021,7 @@
       activeActions.delete(actionKey);
       let result;
       return dependencies.includes("impossible") ? result = "impossible" : dependencies.includes("mandatory") ? result = "mandatory" : dependencies.includes("unknown") || applicabilityState?.status === "unknown" || definition.hasNativeCondition ? result = "unknown" : result = "bypass", memo.set(`action:${actionKey}`, result), result;
-    }, mandatoryActionIds = [];
+    }, mandatoryActionIds = [], mandatoryProofs = [];
     for (let offeredActionId of graph.actionableFrontier) {
       let candidate = definitions.get(offeredActionId);
       if (candidate === void 0 || !offered.has(offeredActionId)) continue;
@@ -19035,14 +19035,29 @@
         (requirement) => requirement.technologyId === candidate.grantTechnology
       );
       if (directRequirement === void 0) continue;
-      let outcome = solveRequirement(
+      let requirementId = `research:${directRequirement.technologyId}:${directRequirement.requiredLevel}`, requirementKey = `requirement:${directRequirement.technologyId}:${directRequirement.requiredLevel}:${offeredActionId}`, outcome = solveRequirement(
         directRequirement.technologyId,
         directRequirement.requiredLevel,
         offeredActionId
       );
       outcome === "unknown" && uncertaintyReasons.push(
-        `${offeredActionId} cannot be proven mandatory for ${directRequirement.technologyId}:${directRequirement.requiredLevel}; unresolved native alternatives: ${unknownPathReasons.get(`requirement:${directRequirement.technologyId}:${directRequirement.requiredLevel}:${offeredActionId}`) ?? "incomplete native evidence"}`
-      ), outcome === "mandatory" && mandatoryActionIds.push(offeredActionId);
+        `${offeredActionId} cannot be proven mandatory for ${directRequirement.technologyId}:${directRequirement.requiredLevel}; unresolved native alternatives: ${unknownPathReasons.get(requirementKey) ?? "incomplete native evidence"}`
+      ), outcome === "mandatory" && (mandatoryActionIds.push(offeredActionId), mandatoryProofs.push({
+        actionId: offeredActionId,
+        requirementId,
+        technologyId: directRequirement.technologyId,
+        requiredLevel: directRequirement.requiredLevel,
+        grantAlternatives: grantAlternativesByRequirement.get(requirementKey) ?? Object.freeze([]),
+        supportingRequirements: Object.freeze(
+          [...grantAlternativesByRequirement.entries()].filter(([key]) => key.endsWith(`:${offeredActionId}`)).map(([key, grantAlternatives]) => {
+            let parts = key.split(":"), technologyId = parts.slice(1, -2).join(":"), requiredLevel = parts.at(-2);
+            return Object.freeze({
+              requirementId: `research:${technologyId}:${requiredLevel}`,
+              grantAlternatives
+            });
+          })
+        )
+      }));
     }
     return uncertaintyReasons.length > 0 ? unavailable2(
       uncertaintyReasons,
@@ -19056,6 +19071,10 @@
       alternativeGroups: Object.freeze(
         alternativeGroups.map((group) => Object.freeze(group))
       ),
+      mandatoryProofs: Object.freeze(
+        mandatoryProofs.map((proof) => Object.freeze(proof))
+      ),
+      work: Object.freeze({ nativePathVisits: visits }),
       reasons: Object.freeze([]),
       authority: Object.freeze({
         targetActionId: graph.targetActionId,

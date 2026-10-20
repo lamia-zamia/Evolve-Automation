@@ -259,6 +259,23 @@ try {
         actionId: selection?.publication.actionId,
         ownerQueueEvidence: selection?.publication.queueEvidence,
         targetEligibility: selection?.publication.targetEligibility,
+        currentMadAuthority: selection
+          ? {
+              cycle: selection.publication.cycle,
+              selectedPrestige: selection.publication.selectedPrestige,
+              researchPermission: selection.publication.researchPermission,
+              rootGeneration: selection.publication.rootGeneration,
+              progressionEpoch: selection.publication.progressionEpoch,
+              catalogCurrent: selection.publication.catalogCurrent,
+              offerBindingsCurrent: selection.publication.offerBindingsCurrent,
+              definitions: selection.publication.definitions,
+              grantLevels: selection.publication.grantLevels,
+              applicability: selection.publication.applicability,
+              madTargetCondition: selection.publication.madTargetCondition,
+              madControl: selection.publication.madControl,
+              queueEvidence: selection.publication.queueEvidence,
+            }
+          : undefined,
         selectedPrefix: selection?.publication.observed.map((tech) => ({
           actionId: tech.actionId,
           nativeAffordable: tech.nativeAffordable,

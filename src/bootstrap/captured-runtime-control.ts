@@ -1616,13 +1616,30 @@ export function startCapturedRuntime({
         currentOffer === undefined
           ? undefined
           : pageCapture.controls.resolve(currentOffer.elementId);
+      const allOfferBindingsCurrent =
+        observedOffers !== undefined &&
+        observedOffers.every((offer) => {
+          const control = pageCapture.controls.resolve(offer.elementId);
+          return (
+            offer.generation > 0 && control?.generation === offer.generation
+          );
+        });
       const ownerCatalogCurrent =
         root !== undefined &&
         root === pageCapture.rootState.readRoot() &&
         rootGeneration === progression.readRootGeneration() &&
         progressionEpoch === progression.readProgressionEpoch() &&
-        currentOffer?.generation === currentControl?.generation;
+        currentOffer?.generation === currentControl?.generation &&
+        allOfferBindingsCurrent;
       const definitions = progression.readResearchActionDefinitions();
+      const grantLevels =
+        root === undefined || definitions === undefined
+          ? undefined
+          : readResearchGrantLevels(root, definitions);
+      const applicability = readCapturedTechApplicability(root, definitions);
+      const madTargetCondition = readCapturedMadTargetCondition(root);
+      const madControl = pageCapture.controls.resolve(CAPTURED_MAD_CONTROL);
+      const selectedSettings = settingsStore.readRaw();
       const definition = definitions?.find(
         (entry) => entry.actionId === selection.decision.techId,
       );
@@ -1636,21 +1653,31 @@ export function startCapturedRuntime({
         ? manaBeforeValue
         : undefined;
       const grantBefore =
-        definition === undefined ||
-        root === undefined ||
-        definitions === undefined
+        definition === undefined || grantLevels === undefined
           ? undefined
-          : readResearchGrantLevels(root, definitions)?.get(
-              definition.grantTechnology,
-            );
+          : grantLevels.get(definition.grantTechnology);
       if (isRecord(hooks)) {
         const publication = Object.freeze({
           cycle: automationCycle,
           rootGeneration,
           progressionEpoch,
           catalogCurrent: ownerCatalogCurrent,
-          researchPermission: settingsStore.readRaw()["autoResearch"],
+          selectedPrestige: selectedSettings["prestigeType"],
+          researchPermission: selectedSettings["autoResearch"],
           queueEvidence: ownerQueueEvidence,
+          definitions,
+          grantLevels: grantLevels === undefined ? undefined : [...grantLevels],
+          applicability:
+            applicability === undefined ? undefined : [...applicability],
+          madTargetCondition,
+          madControl:
+            madControl === undefined
+              ? undefined
+              : Object.freeze({
+                  generation: madControl.generation,
+                  methods: madControl.methods,
+                }),
+          offerBindingsCurrent: allOfferBindingsCurrent,
           targetEligibility:
             progression.readResearchActionEligibility?.(
               selection.decision.techId,

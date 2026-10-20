@@ -163,15 +163,42 @@ const eligibilityFor = (currentGraph) =>
   const currentOffers = new Map(currentGraph.freshness.offerGenerations);
   const currentEvidence = {
     goalActionId: "tech-terminal",
+    ownerCycle: 1,
     progressionEpoch: "epoch-1",
     rootGeneration: 1,
     offers: currentOffers,
   };
   assert.equal(result.status, "verified");
   assert.deepEqual(result.mandatoryActionIds, ["tech-required"]);
+  assert.equal(result.inputConsistency, "consistent");
+  assert.equal(result.work.nativePathVisits > 0, true);
+  assert.deepEqual(result.mandatoryProofs, [
+    {
+      actionId: "tech-required",
+      requirementId: "research:required:1",
+      technologyId: "required",
+      requiredLevel: 1,
+      grantAlternatives: [{ actionId: "tech-required", outcome: "mandatory" }],
+      supportingRequirements: [
+        {
+          requirementId: "research:required:1",
+          grantAlternatives: [
+            { actionId: "tech-required", outcome: "mandatory" },
+          ],
+        },
+      ],
+    },
+  ]);
   assert.equal(
     currentMandatoryResearchEvidence(result, currentGraph, currentEvidence),
     "complete",
+  );
+  assert.equal(
+    currentMandatoryResearchEvidence(result, currentGraph, {
+      ...currentEvidence,
+      ownerCycle: 2,
+    }),
+    "partial",
   );
   assert.equal(
     currentMandatoryResearchEvidence(result, currentGraph, {
@@ -212,6 +239,150 @@ const eligibilityFor = (currentGraph) =>
     currentMandatoryResearchEvidence(result, currentGraph, {
       ...currentEvidence,
       offers: new Map([["tech-required", 99]]),
+    }),
+    "partial",
+  );
+  assert.equal(
+    currentMandatoryResearchEvidence(result, currentGraph, {
+      ...currentEvidence,
+      offers: new Map([["tech-required", 0]]),
+    }),
+    "partial",
+  );
+  assert.equal(
+    currentMandatoryResearchEvidence(result, currentGraph, {
+      ...currentEvidence,
+      ownerCycle: 0,
+    }),
+    "partial",
+  );
+  assert.equal(
+    currentMandatoryResearchEvidence(result, currentGraph, {
+      ...currentEvidence,
+      rootGeneration: 0,
+    }),
+    "partial",
+  );
+}
+
+{
+  const definitions = [
+    nativeDefinition("tech-mad", "mad", 1, [
+      { technologyId: "high_tech", requiredLevel: 2 },
+    ]),
+    nativeDefinition("tech-mad_science", "high_tech", 1),
+    nativeDefinition("tech-uncaptured_high_tech", "high_tech", 2, [], {
+      conditional: true,
+    }),
+    nativeDefinition("tech-steel_containers", "steel_container", 1),
+  ];
+  const frontier = ["tech-steel_containers"];
+  const grantLevels = new Map([
+    ["mad", 0],
+    ["high_tech", 0],
+    ["steel_container", 0],
+  ]);
+  const applicabilityByActionId = new Map([
+    ["tech-steel_containers", { status: "eligible" }],
+  ]);
+  const currentGraph = nativeGraph(
+    "tech-mad",
+    definitions,
+    frontier,
+    grantLevels,
+    applicabilityByActionId,
+  );
+  const result = classifyMandatoryNativeResearchObligations(currentGraph, {
+    targetEligibility: eligibilityFor(currentGraph),
+    definitions,
+    grantLevels,
+    applicabilityByActionId,
+    offeredActionIds: new Set(frontier),
+  });
+  assert.equal(result.status, "verified");
+  assert.equal(result.inputConsistency, "incomplete");
+  assert.deepEqual(result.mandatoryActionIds, []);
+  assert.deepEqual(result.mandatoryProofs, []);
+  assert.equal(
+    currentMandatoryResearchEvidence(result, currentGraph, {
+      goalActionId: "tech-mad",
+      ownerCycle: 1,
+      progressionEpoch: "epoch-1",
+      rootGeneration: 1,
+      offers: new Map(currentGraph.freshness.offerGenerations),
+    }),
+    "partial",
+    "Steel Containers stays unknown when a terminal alternative is conditional",
+  );
+}
+
+{
+  const definitions = [
+    nativeDefinition("tech-terminal", "terminal", 1, [
+      { technologyId: "required", requiredLevel: 1 },
+    ]),
+    nativeDefinition("tech-required", "required", 1),
+  ];
+  const frontier = ["tech-required"];
+  const grantLevels = new Map([
+    ["terminal", 0],
+    ["required", 0],
+  ]);
+  const applicabilityByActionId = new Map([
+    ["tech-required", { status: "eligible" }],
+  ]);
+  const incompleteGraph = {
+    ...nativeGraph(
+      "tech-terminal",
+      definitions,
+      frontier,
+      grantLevels,
+      applicabilityByActionId,
+    ),
+    dependencyEvidence: "partial",
+    unavailableFacts: ["an unrelated native declaration is incomplete"],
+  };
+  const scopedClaim = classifyMandatoryNativeResearchObligations(
+    incompleteGraph,
+    {
+      targetEligibility: eligibilityFor(incompleteGraph),
+      definitions,
+      grantLevels,
+      applicabilityByActionId,
+      offeredActionIds: new Set(frontier),
+    },
+  );
+  assert.equal(scopedClaim.status, "verified");
+  assert.deepEqual(scopedClaim.mandatoryActionIds, ["tech-required"]);
+  assert.equal(scopedClaim.inputConsistency, "incomplete");
+  assert.equal(
+    currentMandatoryResearchEvidence(scopedClaim, incompleteGraph, {
+      goalActionId: "tech-terminal",
+      ownerCycle: 1,
+      progressionEpoch: "epoch-1",
+      rootGeneration: 1,
+      offers: new Map(incompleteGraph.freshness.offerGenerations),
+    }),
+    "partial",
+    "a scoped classifier result cannot upgrade globally incomplete terminal evidence",
+  );
+
+  const limitedGraph = { ...incompleteGraph, limits: ["actions:256"] };
+  const limited = classifyMandatoryNativeResearchObligations(limitedGraph, {
+    targetEligibility: eligibilityFor(limitedGraph),
+    definitions,
+    grantLevels,
+    applicabilityByActionId,
+    offeredActionIds: new Set(frontier),
+  });
+  assert.equal(limited.inputConsistency, "incomplete");
+  assert.equal(
+    currentMandatoryResearchEvidence(limited, limitedGraph, {
+      goalActionId: "tech-terminal",
+      ownerCycle: 1,
+      progressionEpoch: "epoch-1",
+      rootGeneration: 1,
+      offers: new Map(limitedGraph.freshness.offerGenerations),
     }),
     "partial",
   );
@@ -336,6 +507,21 @@ const eligibilityFor = (currentGraph) =>
   );
   assert.equal(missingEligibility.status, "unavailable");
   assert.match(missingEligibility.reasons.join(" "), /missing or stale/);
+  const unknownEligibility = classifyMandatoryNativeResearchObligations(
+    currentGraph,
+    {
+      targetEligibility: bindNativeResearchEligibilityEvidence(currentGraph, {
+        actionId: currentGraph.targetActionId,
+        status: "unknown",
+        reasons: ["terminal native condition is unknown"],
+      }),
+      definitions,
+      grantLevels,
+      applicabilityByActionId,
+      offeredActionIds: new Set(frontier),
+    },
+  );
+  assert.equal(unknownEligibility.status, "unavailable");
 }
 
 {
@@ -369,6 +555,10 @@ const eligibilityFor = (currentGraph) =>
   assert.equal(result.status, "verified");
   assert.deepEqual(result.mandatoryActionIds, []);
   assert.ok(result.alternativeGroups.length > 0);
+  assert.deepEqual(result.alternativeGroups[0].actionIds, [
+    "tech-black_powder",
+    "tech-alternate_powder",
+  ]);
 }
 
 {
@@ -428,6 +618,7 @@ const eligibilityFor = (currentGraph) =>
   assert.equal(
     currentMandatoryResearchEvidence(result, currentGraph, {
       goalActionId: "tech-mad",
+      ownerCycle: 1,
       progressionEpoch: "epoch-1",
       rootGeneration: 1,
       offers: new Map(currentGraph.freshness.offerGenerations),

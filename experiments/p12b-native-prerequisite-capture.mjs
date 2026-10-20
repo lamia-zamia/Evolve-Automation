@@ -330,6 +330,7 @@ function evaluatePlanner(catalog) {
     graph,
     {
       goalActionId: "tech-mad",
+      ownerCycle: graph.freshness.cycle,
       progressionEpoch: context.progressionEpoch,
       rootGeneration: context.rootGeneration,
       offers: new Map(

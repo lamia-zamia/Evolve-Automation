@@ -18,6 +18,24 @@ export interface ResearchPrerequisiteObligationPlan {
     readonly requirementId: string;
     readonly actionIds: readonly string[];
   }>[];
+  readonly mandatoryProofs?: readonly Readonly<{
+    readonly actionId: string;
+    readonly requirementId: string;
+    readonly technologyId: string;
+    readonly requiredLevel: number;
+    readonly grantAlternatives: readonly Readonly<{
+      readonly actionId: string;
+      readonly outcome: CandidatePathResult;
+    }>[];
+    readonly supportingRequirements: readonly Readonly<{
+      readonly requirementId: string;
+      readonly grantAlternatives: readonly Readonly<{
+        readonly actionId: string;
+        readonly outcome: CandidatePathResult;
+      }>[];
+    }>[];
+  }>[];
+  readonly work?: Readonly<{ nativePathVisits: number }>;
   readonly reasons: readonly string[];
   readonly authority?: Readonly<{
     readonly targetActionId: string;
@@ -31,24 +49,34 @@ export function currentMandatoryResearchEvidence(
   graph: Readonly<NativeResearchPrerequisiteGraph>,
   input: Readonly<{
     goalActionId: string;
+    ownerCycle: number;
     progressionEpoch: string;
     rootGeneration: number;
     offers: ReadonlyMap<string, number>;
   }>,
 ): "complete" | "partial" | "unavailable" {
   if (plan.status === "unavailable") return "unavailable";
+  if (plan.inputConsistency !== "consistent") return "partial";
   const authority = plan.authority;
   const graphOffers = graph.freshness.offerGenerations;
   if (
     authority === undefined ||
+    !Number.isSafeInteger(input.ownerCycle) ||
+    input.ownerCycle < 0 ||
+    !Number.isSafeInteger(input.rootGeneration) ||
+    input.rootGeneration < 0 ||
     authority.targetActionId !== input.goalActionId ||
     graph.targetActionId !== input.goalActionId ||
+    graph.freshness.cycle !== input.ownerCycle ||
     authority.snapshotIdentity !==
       researchPrerequisiteSnapshotIdentity(graph) ||
     JSON.stringify(authority.freshness) !== JSON.stringify(graph.freshness) ||
     graph.freshness.progressionEpoch !== input.progressionEpoch ||
     graph.freshness.rootGeneration !== input.rootGeneration ||
     graphOffers === undefined ||
+    [...graphOffers, ...input.offers].some(
+      ([, generation]) => !Number.isSafeInteger(generation) || generation < 1,
+    ) ||
     graphOffers.length !== input.offers.size ||
     graphOffers.some(
       ([actionId, generation]) => input.offers.get(actionId) !== generation,
@@ -602,6 +630,7 @@ export function classifyMandatoryNativeResearchObligations(
     offeredActionIds: ReadonlySet<string> | undefined;
   }>,
 ): Readonly<ResearchPrerequisiteObligationPlan> {
+  let visits = 0;
   const unavailable = (
     reasons: readonly string[],
     inputConsistency?: "consistent" | "incomplete" | "inconsistent",
@@ -615,6 +644,7 @@ export function classifyMandatoryNativeResearchObligations(
         : { inputConsistencyReasons }),
       mandatoryActionIds: Object.freeze([]),
       alternativeGroups: Object.freeze([]),
+      work: Object.freeze({ nativePathVisits: visits }),
       reasons: Object.freeze([...new Set(reasons)]),
     });
   const graphIdentity = researchPrerequisiteSnapshotIdentity(graph);
@@ -689,7 +719,10 @@ export function classifyMandatoryNativeResearchObligations(
   }[] = [];
   const uncertaintyReasons: string[] = [];
   const unknownPathReasons = new Map<string, string>();
-  let visits = 0;
+  const grantAlternativesByRequirement = new Map<
+    string,
+    readonly Readonly<{ actionId: string; outcome: CandidatePathResult }>[]
+  >();
 
   const solveRequirement = (
     technologyId: string,
@@ -707,25 +740,25 @@ export function classifyMandatoryNativeResearchObligations(
     );
     if (candidates.length === 0) return "impossible";
     activeRequirements.add(key);
-    const viable: CandidatePathResult[] = [];
-    for (const definition of candidates) {
-      const result = solveAction(
+    const routeOutcomes = candidates.map((definition) => ({
+      actionId: definition.actionId,
+      outcome: solveAction(
         definition,
         candidateActionId,
         technologyId,
         requiredLevel,
-      );
-      if (result !== "impossible") viable.push(result);
-    }
+      ),
+    }));
+    grantAlternativesByRequirement.set(key, Object.freeze(routeOutcomes));
+    const viable = routeOutcomes
+      .map(({ outcome }) => outcome)
+      .filter((outcome) => outcome !== "impossible");
     activeRequirements.delete(key);
     if (viable.includes("unknown"))
       unknownPathReasons.set(
         key,
-        candidates
-          .map(
-            (definition) =>
-              `${definition.actionId}=${solveAction(definition, candidateActionId, technologyId, requiredLevel)}`,
-          )
+        routeOutcomes
+          .map(({ actionId, outcome }) => `${actionId}=${outcome}`)
           .join(","),
       );
     if (viable.length > 1)
@@ -817,6 +850,23 @@ export function classifyMandatoryNativeResearchObligations(
   };
 
   const mandatoryActionIds: string[] = [];
+  const mandatoryProofs: {
+    actionId: string;
+    requirementId: string;
+    technologyId: string;
+    requiredLevel: number;
+    grantAlternatives: readonly Readonly<{
+      actionId: string;
+      outcome: CandidatePathResult;
+    }>[];
+    supportingRequirements: readonly Readonly<{
+      requirementId: string;
+      grantAlternatives: readonly Readonly<{
+        actionId: string;
+        outcome: CandidatePathResult;
+      }>[];
+    }>[];
+  }[] = [];
   for (const offeredActionId of graph.actionableFrontier) {
     const candidate = definitions.get(offeredActionId);
     if (candidate === undefined || !offered.has(offeredActionId)) continue;
@@ -830,6 +880,8 @@ export function classifyMandatoryNativeResearchObligations(
       (requirement) => requirement.technologyId === candidate.grantTechnology,
     );
     if (directRequirement === undefined) continue;
+    const requirementId = `research:${directRequirement.technologyId}:${directRequirement.requiredLevel}`;
+    const requirementKey = `requirement:${directRequirement.technologyId}:${directRequirement.requiredLevel}:${offeredActionId}`;
     const outcome = solveRequirement(
       directRequirement.technologyId,
       directRequirement.requiredLevel,
@@ -837,9 +889,33 @@ export function classifyMandatoryNativeResearchObligations(
     );
     if (outcome === "unknown")
       uncertaintyReasons.push(
-        `${offeredActionId} cannot be proven mandatory for ${directRequirement.technologyId}:${directRequirement.requiredLevel}; unresolved native alternatives: ${unknownPathReasons.get(`requirement:${directRequirement.technologyId}:${directRequirement.requiredLevel}:${offeredActionId}`) ?? "incomplete native evidence"}`,
+        `${offeredActionId} cannot be proven mandatory for ${directRequirement.technologyId}:${directRequirement.requiredLevel}; unresolved native alternatives: ${unknownPathReasons.get(requirementKey) ?? "incomplete native evidence"}`,
       );
-    if (outcome === "mandatory") mandatoryActionIds.push(offeredActionId);
+    if (outcome === "mandatory") {
+      mandatoryActionIds.push(offeredActionId);
+      mandatoryProofs.push({
+        actionId: offeredActionId,
+        requirementId,
+        technologyId: directRequirement.technologyId,
+        requiredLevel: directRequirement.requiredLevel,
+        grantAlternatives:
+          grantAlternativesByRequirement.get(requirementKey) ??
+          Object.freeze([]),
+        supportingRequirements: Object.freeze(
+          [...grantAlternativesByRequirement.entries()]
+            .filter(([key]) => key.endsWith(`:${offeredActionId}`))
+            .map(([key, grantAlternatives]) => {
+              const parts = key.split(":");
+              const technologyId = parts.slice(1, -2).join(":");
+              const requiredLevel = parts.at(-2);
+              return Object.freeze({
+                requirementId: `research:${technologyId}:${requiredLevel}`,
+                grantAlternatives,
+              });
+            }),
+        ),
+      });
+    }
   }
   if (uncertaintyReasons.length > 0)
     return unavailable(
@@ -855,6 +931,10 @@ export function classifyMandatoryNativeResearchObligations(
     alternativeGroups: Object.freeze(
       alternativeGroups.map((group) => Object.freeze(group)),
     ),
+    mandatoryProofs: Object.freeze(
+      mandatoryProofs.map((proof) => Object.freeze(proof)),
+    ),
+    work: Object.freeze({ nativePathVisits: visits }),
     reasons: Object.freeze([]),
     authority: Object.freeze({
       targetActionId: graph.targetActionId,
