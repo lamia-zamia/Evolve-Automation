@@ -376,6 +376,13 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
     if (typeof outcome !== "boolean" && outcome.status === "unavailable") {
       continue;
     }
+    if (
+      typeof outcome !== "boolean" &&
+      outcome.status === "invoked" &&
+      !outcome.stateChanged
+    ) {
+      continue;
+    }
     if (!actionChanged(outcome) && typeof outcome !== "boolean") {
       returned("cell-upgrade", "action-not-confirmed", { id, outcome });
       return;

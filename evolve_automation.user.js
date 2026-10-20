@@ -56038,7 +56038,7 @@ Only continue if you trust the source. Injected code:
     );
     for (let id of cellClicks) {
       let outcome = executor.clickEvolution(id);
-      if (!(typeof outcome != "boolean" && outcome.status === "unavailable") && !actionChanged(outcome) && typeof outcome != "boolean") {
+      if (!(typeof outcome != "boolean" && outcome.status === "unavailable") && !(typeof outcome != "boolean" && outcome.status === "invoked" && !outcome.stateChanged) && !actionChanged(outcome) && typeof outcome != "boolean") {
         returned("cell-upgrade", "action-not-confirmed", { id, outcome });
         return;
       }

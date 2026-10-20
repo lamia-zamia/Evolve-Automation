@@ -525,6 +525,46 @@ for (const id of [
   handles.set(id, { elementId: id, generation: 1, methods: ["action"] });
 }
 
+// An unaffordable mitochondria upgrade is a native no-op. It must not block the affordable
+// eukaryotic-cell capacity upgrade that raises DNA storage for the queued evolution action.
+root.evolution.mitochondria = { count: 1 };
+root.evolution.eukaryotic_cell = { count: 1 };
+root.evolution.nucleus = { count: 1 };
+root.evolution.organelles = { count: 2 };
+root.resource = {
+  RNA: { amount: 100, max: 100, display: true },
+  DNA: { amount: 120, max: 120, display: true },
+};
+const bunkerRow = actionRows.find((row) => row.id === "evolution-bunker");
+const savedBunkerCost = bunkerRow.cost;
+bunkerRow.cost = { DNA: 150 };
+trace.length = 0;
+controls.invoke = (handle) => {
+  trace.push(["invoke", handle.elementId]);
+  if (handle.elementId === "evolution-mitochondria") {
+    return { ok: true, value: undefined };
+  }
+  if (handle.elementId === "evolution-eukaryotic_cell") {
+    root.evolution.eukaryotic_cell.count += 1;
+    root.resource.DNA.max += 20;
+    return { ok: true, value: undefined };
+  }
+  return defaultInvoke(handle, "action");
+};
+runEvolution({
+  reader: evolution.reader,
+  executor: evolution.executor,
+  runUniverseSelection: evolution.runUniverseSelection,
+  runPlanetSelection: () => {},
+  challengeGroups: [],
+});
+assert.ok(
+  trace.findIndex((entry) => entry[1] === "evolution-eukaryotic_cell") >
+    trace.findIndex((entry) => entry[1] === "evolution-mitochondria"),
+);
+controls.invoke = defaultInvoke;
+bunkerRow.cost = savedBunkerCost;
+
 // DeadSpace's final menu exposes imitation rows only. The configured imitation must win even if
 // another row appears first in the DOM.
 settings.imitateRace = "human";
