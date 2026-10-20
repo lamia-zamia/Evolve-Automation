@@ -65,6 +65,8 @@ To upgrade mandatory status, the evidence must establish, for every native actio
 
 P13H cycle 232 equals its Research-owner publication cycle. MAD was the selected prestige; Research permission was enabled; queues were empty; the root generation was 0; and the progression epoch and catalog identity were current. Root generation 0 is valid. The offer-set identity was `c9bacdfea9d23974ebe965df6ba786710f669c7fc4a8b6a930ccf16f710a0e51`; offer membership was complete and binding generations were positive. Steel Containers was offered at generation 251, with native affordability true and a native price of 9,000 Knowledge and 250 Steel. Ordinary Research selected it and verified the `steel_container:1` grant.
 
+The relationship classifier now additionally requires the selected MAD goal, matching owner cycle, current catalog and offer-binding status, nonnegative root generation, progression identity, complete offer membership with positive generations, captured definition/grant/applicability identities, and eligible MAD target evidence before it reports current offer actionability. A stale cycle or incomplete authority yields unknown even if a retained path witness exists.
+
 This establishes actionability only at that Research-owner boundary. It does not carry the quoted price, affordability, offer membership, or binding authority into a later Smelter cycle. The supported economic decision is **no incremental resource intervention justified**: Research already held enough Knowledge and Steel and completed the native purchase. No extra Steel allocation target is warranted, and the historical purchase does not justify a production change. P12G Smelter was not rerun.
 
 The result is not connected to production Research, Smelter, Gather, Jobs, or Construction execution. It adds no purchase override, reservation, or recurring traversal.
@@ -80,6 +82,8 @@ The tracked `evolve_automation.user.js` was rebuilt. Its small generated diff re
 ## Regression coverage and reproducibility
 
 Focused tests cover the existing direct mandatory prerequisite, the indirect declared witness, a complete-authority indirect mandatory contract, an OR bypass, an unresolved alternative, a complete unrelated action, a missing definition, a globally incomplete but locally valid witness, stale cycle/root/progression/binding generations, valid root generation zero versus invalid offer-binding generation zero, and the no-actionable-obligation outcome staying C. The committed Stage 3I manifest remains a positive control for independent Black Powder and Mad Science claims (100 and 50 Mana).
+
+Additional regressions ensure an absent intermediate action makes a no-path result unknown rather than unrelated, and stale owner authority cannot promote a locally valid witness to current actionability.
 
 P13J asserts the retained cycle-232 sample remains fail-closed and that no incremental resource intervention is justified. Reproduce the P13H capture and P13K classification with:
 
