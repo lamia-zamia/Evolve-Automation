@@ -67,6 +67,18 @@ if (scenarioNames.some((scenario) => !["B", "F", "G", "J"].includes(scenario)))
   throw new Error("--scenarios accepts only B,F,G,J");
 const debugMode = process.argv.includes("--debug");
 const phaseInstrumentation = !process.argv.includes("--disable-perf");
+const calibrationArgument = process.argv.find((argument) =>
+  argument.startsWith("--calibration-ms-per-call="),
+);
+const calibrationMsPerCall = calibrationArgument
+  ? Number(calibrationArgument.slice("--calibration-ms-per-call=".length))
+  : 0;
+if (
+  !Number.isFinite(calibrationMsPerCall) ||
+  calibrationMsPerCall < 0 ||
+  calibrationMsPerCall > 20
+)
+  throw new Error("--calibration-ms-per-call must be between 0 and 20");
 const disableAutoMad = process.argv.includes("--disable-auto-mad");
 const sampleMissedOpportunities = process.argv.includes(
   "--sample-missed-opportunities",
@@ -107,6 +119,7 @@ const snapshotPeriods = [
           ]),
   ]),
 ];
+const measurementSnapshots = windowPeriods === undefined ? snapshotPeriods : [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 if (
@@ -169,6 +182,7 @@ function installObservers(
   diagnosticSamplingEnabled,
   stage4fProbe,
   activeOnInstall,
+  calibrationMsPerCall,
 ) {
   const hooks = window.__EA_TEST_HOOKS__;
   hooks.gatherIntervention = { resourceClaimMode: "goal-derived-conjunctive" };
@@ -193,6 +207,7 @@ function installObservers(
     selectorMaxMs: 0,
   };
   hooks.stage4aSelectorFailures = [];
+  hooks.stage4aCalibration = { calls: 0, elapsedMs: 0, checksum: 0 };
   hooks.stage4aPlans = [];
   hooks.stage4aApplied = [];
   hooks.stage4aControlEvents = [];
@@ -254,6 +269,17 @@ function installObservers(
       };
     }
     const selectorMs = now() - selectorStarted;
+    if (calibrationMsPerCall > 0) {
+      const started = window.__EA_RUNNER__.nativeNow();
+      const deadline = started + calibrationMsPerCall;
+      let checksum = hooks.stage4aCalibration.checksum;
+      while (window.__EA_RUNNER__.nativeNow() < deadline)
+        checksum = (Math.imul(checksum, 1664525) + 1013904223) >>> 0;
+      hooks.stage4aCalibration.checksum = checksum;
+      hooks.stage4aCalibration.calls += 1;
+      hooks.stage4aCalibration.elapsedMs +=
+        window.__EA_RUNNER__.nativeNow() - started;
+    }
     const profile = hooks.stage4aSelectorProfile;
     profile.calls += 1;
     profile.catalogCaptureTotalMs += catalogCaptureMs;
@@ -824,7 +850,8 @@ const result = {
     activeAfterPeriod: activePeriod,
     boundedWindowPeriods: windowPeriods,
     checkpoints: activeCheckpoints,
-    snapshotPeriods,
+    snapshotPeriods: measurementSnapshots,
+    calibrationMsPerCall,
     extensionRule:
       "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
     demandSource:
@@ -845,7 +872,7 @@ try {
       perf: phaseInstrumentation,
       callbackProfile: process.argv.includes("--callback-profile"),
       forwardPerfSummary: phaseInstrumentation,
-      snapshotAt: snapshotPeriods,
+      snapshotAt: measurementSnapshots,
     });
     try {
       await session.evaluate(
@@ -854,6 +881,7 @@ try {
         sampleMissedOpportunities,
         scenario === "J" ? stage4fProbe : undefined,
         activePeriod === 0,
+        calibrationMsPerCall,
       );
       console.log(`${scenario}: opened exact Chromium session`);
       let period = 0;
@@ -923,9 +951,12 @@ try {
         };
       };
 
-      const wallStarted = performance.now();
-      const cpuBefore = await runner.processCpu();
-      const metricsBefore = await session.metrics();
+      const measurementStartedAt = performance.now();
+      const [cpuBefore, metricsBefore] = await Promise.all([
+        runner.processCpu(),
+        session.metrics(),
+      ]);
+      const initialCountersReadAt = performance.now();
       for (const targetPeriod of activeCheckpoints) {
         if (targetPeriod <= period) continue;
         await session.advance(targetPeriod - period);
@@ -941,7 +972,26 @@ try {
           });
         }
       }
-      const snapshots = await session.snapshots();
+      let measurementEnd;
+      const readFinalCounters = async () => {
+        const measurementEndMarkerAt = performance.now();
+        const finalCountersReadStartedAt = performance.now();
+        const [cpuAfter, metricsAfter] = await Promise.all([
+          runner.processCpu(),
+          session.metrics(),
+        ]);
+        return {
+          measurementEndMarkerAt,
+          finalCountersReadStartedAt,
+          finalCountersReadCompletedAt: performance.now(),
+          cpuAfter,
+          metricsAfter,
+        };
+      };
+      if (windowPeriods !== undefined)
+        measurementEnd = await readFinalCounters();
+      const snapshots =
+        windowPeriods === undefined ? await session.snapshots() : {};
       const moneySamples = Object.entries(snapshots)
         .map(([at, snapshot]) => ({
           period: Number(at),
@@ -989,14 +1039,29 @@ try {
           }
         }
       }
-      const wallMs = performance.now() - wallStarted;
-      const metricsAfter = await session.metrics();
-      const cpuAfter = await runner.processCpu();
       if (windowPeriods !== undefined) {
         outputCheckpoints.push(await sample(period));
         console.log(`${scenario}: captured p${period}`);
       }
+      // Full replays can extend from p20000 to p30000. Keep their established
+      // snapshot/extension behavior and take final counters after that work.
+      if (windowPeriods === undefined)
+        measurementEnd = await readFinalCounters();
+      const {
+        measurementEndMarkerAt,
+        finalCountersReadStartedAt,
+        finalCountersReadCompletedAt,
+        cpuAfter,
+        metricsAfter,
+      } = measurementEnd;
+      const wallMs =
+        (windowPeriods === undefined
+          ? finalCountersReadStartedAt
+          : measurementEndMarkerAt) - initialCountersReadAt;
       const diagnostics = await session.diagnostics();
+      const calibration = await session.evaluate(
+        () => window.__EA_TEST_HOOKS__.stage4aCalibration,
+      );
       const state = await session.readState();
       const finalExport = await session.exportSave();
       const workCycleCallbacks = (diagnostics.callbackDurationsMs ?? [])
@@ -1088,6 +1153,25 @@ try {
         researchSequence,
         diagnostics: {
           wallMs,
+          measurementBoundary: {
+            clock: "Node performance.now() monotonic milliseconds",
+            start:
+              "after setup and initial counters; immediately before first requested advance",
+            startCounters: {
+              readStartedAt: measurementStartedAt,
+              readCompletedAt: initialCountersReadAt,
+            },
+            end:
+              windowPeriods === undefined
+                ? "after the final replay advance (including any extension); counters are queried before final diagnostics and export"
+                : "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+            measurementEndMarkerAt,
+            finalCountersReadStartedAt,
+            finalCountersReadCompletedAt,
+            requestedPeriods: windowPeriods ?? period,
+            snapshotAtPeriods: measurementSnapshots,
+            calibration,
+          },
           rendererTaskSeconds:
             metricsAfter.TaskDuration - metricsBefore.TaskDuration,
           rendererScriptSeconds:

@@ -1,0 +1,1429 @@
+{
+  "schemaVersion": 1,
+  "objective": "Test whether the corrected bounded renderer CPU protocol can resolve a 2% increment; no allocator optimization.",
+  "runBudget": {
+    "maximum": 12,
+    "used": 8,
+    "stopAfterCalibrationFailure": true
+  },
+  "sourceSha256": "2fbd1f8fa56823cd56e0dc4afde33f53c18a00e3559ab32b2049e86adb93ba22",
+  "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+  "measurementProtocol": {
+    "periods": 1000,
+    "scenarios": ["B", "J"],
+    "snapshotAt": [],
+    "initialCounters": "After setup, before period advance; CPU and TaskDuration sampled concurrently.",
+    "finalCounters": "Immediately after last requested advance resolves; CPU and TaskDuration sampled concurrently before state export, snapshot retrieval, hashing, diagnostics projection, and report construction.",
+    "postMeasurementParity": "State export and diagnostic parity taken after final counters; bounded window does not request snapshots.",
+    "calibration": "Test-only inert synchronous integer workload, controlled-loop observer, 125 J selector calls, no game state/RNG/native controls."
+  },
+  "runs": [
+    {
+      "order": 1,
+      "id": "BB-01",
+      "scenario": "B",
+      "calibrationMsPerCall": 0,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 0,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 25864,
+        "activeCpuSeconds": 18.312165999999998,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 25864,
+            "beforeCpuSec": 0.886355,
+            "afterCpuSec": 19.198521,
+            "cpuSec": 18.312165999999998
+          },
+          {
+            "type": "renderer",
+            "id": 29924,
+            "beforeCpuSec": 0.038935,
+            "afterCpuSec": 0.039295,
+            "cpuSec": 0.0003599999999999992
+          }
+        ]
+      },
+      "rendererTaskSeconds": 15.430804,
+      "wallMs": 15442.616300000002,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1656.435,
+          "readCompletedAt": 1657.7185
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 17100.3348,
+        "finalCountersReadStartedAt": 17100.3354,
+        "finalCountersReadCompletedAt": 17101.5507,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 0,
+          "elapsedMs": 0,
+          "checksum": 0
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 26652,
+          "beforeCpuSec": 0.293484,
+          "afterCpuSec": 0.314273,
+          "cpuSec": 0.020789000000000002
+        },
+        {
+          "type": "renderer",
+          "id": 25864,
+          "beforeCpuSec": 0.886355,
+          "afterCpuSec": 19.198521,
+          "cpuSec": 18.312165999999998
+        },
+        {
+          "type": "renderer",
+          "id": 29924,
+          "beforeCpuSec": 0.038935,
+          "afterCpuSec": 0.039295,
+          "cpuSec": 0.0003599999999999992
+        },
+        {
+          "type": "GPU",
+          "id": 32368,
+          "beforeCpuSec": 0.176359,
+          "afterCpuSec": 0.513091,
+          "cpuSec": 0.336732
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 7660,
+          "beforeCpuSec": 0.092708,
+          "afterCpuSec": 0.092792,
+          "cpuSec": 0.00008400000000000074
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "id": "BB-02",
+      "scenario": "B",
+      "calibrationMsPerCall": 0,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 0,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 31772,
+        "activeCpuSeconds": 19.821248,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 31772,
+            "beforeCpuSec": 0.912267,
+            "afterCpuSec": 20.733515,
+            "cpuSec": 19.821248
+          },
+          {
+            "type": "renderer",
+            "id": 32916,
+            "beforeCpuSec": 0.038726,
+            "afterCpuSec": 0.03906,
+            "cpuSec": 0.00033400000000000096
+          }
+        ]
+      },
+      "rendererTaskSeconds": 16.817796,
+      "wallMs": 16830.8735,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1749.4515,
+          "readCompletedAt": 1750.712
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 18581.5855,
+        "finalCountersReadStartedAt": 18581.5861,
+        "finalCountersReadCompletedAt": 18582.9316,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 0,
+          "elapsedMs": 0,
+          "checksum": 0
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 29668,
+          "beforeCpuSec": 0.291766,
+          "afterCpuSec": 0.314124,
+          "cpuSec": 0.02235799999999999
+        },
+        {
+          "type": "renderer",
+          "id": 31772,
+          "beforeCpuSec": 0.912267,
+          "afterCpuSec": 20.733515,
+          "cpuSec": 19.821248
+        },
+        {
+          "type": "renderer",
+          "id": 32916,
+          "beforeCpuSec": 0.038726,
+          "afterCpuSec": 0.03906,
+          "cpuSec": 0.00033400000000000096
+        },
+        {
+          "type": "GPU",
+          "id": 16224,
+          "beforeCpuSec": 0.177628,
+          "afterCpuSec": 0.566506,
+          "cpuSec": 0.38887799999999995
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 33344,
+          "beforeCpuSec": 0.091487,
+          "afterCpuSec": 0.091572,
+          "cpuSec": 0.00008500000000000174
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "id": "JJ-01",
+      "scenario": "J",
+      "calibrationMsPerCall": 0,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 0,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 15908,
+        "activeCpuSeconds": 19.993087,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 15908,
+            "beforeCpuSec": 0.917038,
+            "afterCpuSec": 20.910125,
+            "cpuSec": 19.993087
+          },
+          {
+            "type": "renderer",
+            "id": 4684,
+            "beforeCpuSec": 0.042543,
+            "afterCpuSec": 0.042937,
+            "cpuSec": 0.00039400000000000546
+          }
+        ]
+      },
+      "rendererTaskSeconds": 16.759825999999997,
+      "wallMs": 16775.7916,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1724.1913,
+          "readCompletedAt": 1725.6117
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 18501.4033,
+        "finalCountersReadStartedAt": 18501.4039,
+        "finalCountersReadCompletedAt": 18502.6413,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 0,
+          "elapsedMs": 0,
+          "checksum": 0
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 27424,
+          "beforeCpuSec": 0.30052,
+          "afterCpuSec": 0.323992,
+          "cpuSec": 0.023471999999999993
+        },
+        {
+          "type": "renderer",
+          "id": 15908,
+          "beforeCpuSec": 0.917038,
+          "afterCpuSec": 20.910125,
+          "cpuSec": 19.993087
+        },
+        {
+          "type": "renderer",
+          "id": 4684,
+          "beforeCpuSec": 0.042543,
+          "afterCpuSec": 0.042937,
+          "cpuSec": 0.00039400000000000546
+        },
+        {
+          "type": "GPU",
+          "id": 480,
+          "beforeCpuSec": 0.186471,
+          "afterCpuSec": 0.573663,
+          "cpuSec": 0.38719200000000004
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 21992,
+          "beforeCpuSec": 0.094758,
+          "afterCpuSec": 0.094839,
+          "cpuSec": 0.00008100000000001162
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "id": "JJ-02",
+      "scenario": "J",
+      "calibrationMsPerCall": 0,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 0,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 26608,
+        "activeCpuSeconds": 18.224732000000003,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 26608,
+            "beforeCpuSec": 0.902388,
+            "afterCpuSec": 19.12712,
+            "cpuSec": 18.224732000000003
+          },
+          {
+            "type": "renderer",
+            "id": 33460,
+            "beforeCpuSec": 0.039856,
+            "afterCpuSec": 0.040353,
+            "cpuSec": 0.0004969999999999974
+          }
+        ]
+      },
+      "rendererTaskSeconds": 15.124351,
+      "wallMs": 15138.259100000001,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1660.5465,
+          "readCompletedAt": 1661.8594
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 16800.1185,
+        "finalCountersReadStartedAt": 16800.1191,
+        "finalCountersReadCompletedAt": 16801.4056,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 0,
+          "elapsedMs": 0,
+          "checksum": 0
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 876,
+          "beforeCpuSec": 0.287459,
+          "afterCpuSec": 0.308366,
+          "cpuSec": 0.020906999999999953
+        },
+        {
+          "type": "renderer",
+          "id": 26608,
+          "beforeCpuSec": 0.902388,
+          "afterCpuSec": 19.12712,
+          "cpuSec": 18.224732000000003
+        },
+        {
+          "type": "renderer",
+          "id": 33460,
+          "beforeCpuSec": 0.039856,
+          "afterCpuSec": 0.040353,
+          "cpuSec": 0.0004969999999999974
+        },
+        {
+          "type": "GPU",
+          "id": 6788,
+          "beforeCpuSec": 0.178728,
+          "afterCpuSec": 0.526489,
+          "cpuSec": 0.347761
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 29248,
+          "beforeCpuSec": 0.091066,
+          "afterCpuSec": 0.091131,
+          "cpuSec": 0.0000650000000000095
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "id": "CAL-J-01",
+      "scenario": "J",
+      "calibrationMsPerCall": 0,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 0,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 2796,
+        "activeCpuSeconds": 17.969023999999997,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 2796,
+            "beforeCpuSec": 0.881163,
+            "afterCpuSec": 18.850187,
+            "cpuSec": 17.969023999999997
+          },
+          {
+            "type": "renderer",
+            "id": 32700,
+            "beforeCpuSec": 0.040074,
+            "afterCpuSec": 0.040505,
+            "cpuSec": 0.0004310000000000008
+          }
+        ]
+      },
+      "rendererTaskSeconds": 14.893187,
+      "wallMs": 14905.189400000001,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1637.2478,
+          "readCompletedAt": 1638.8411
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 16544.0305,
+        "finalCountersReadStartedAt": 16544.0312,
+        "finalCountersReadCompletedAt": 16545.2207,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 0,
+          "elapsedMs": 0,
+          "checksum": 0
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 27872,
+          "beforeCpuSec": 0.292519,
+          "afterCpuSec": 0.313623,
+          "cpuSec": 0.02110400000000001
+        },
+        {
+          "type": "renderer",
+          "id": 2796,
+          "beforeCpuSec": 0.881163,
+          "afterCpuSec": 18.850187,
+          "cpuSec": 17.969023999999997
+        },
+        {
+          "type": "renderer",
+          "id": 32700,
+          "beforeCpuSec": 0.040074,
+          "afterCpuSec": 0.040505,
+          "cpuSec": 0.0004310000000000008
+        },
+        {
+          "type": "GPU",
+          "id": 32028,
+          "beforeCpuSec": 0.179527,
+          "afterCpuSec": 0.504766,
+          "cpuSec": 0.32523900000000006
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 29268,
+          "beforeCpuSec": 0.090887,
+          "afterCpuSec": 0.090955,
+          "cpuSec": 0.00006799999999999862
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "id": "CAL-JPLUS-01",
+      "scenario": "J",
+      "calibrationMsPerCall": 2.9,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 2.9,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 300,
+        "activeCpuSeconds": 17.934121,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 300,
+            "beforeCpuSec": 0.867302,
+            "afterCpuSec": 18.801423,
+            "cpuSec": 17.934121
+          },
+          {
+            "type": "renderer",
+            "id": 30384,
+            "beforeCpuSec": 0.038064,
+            "afterCpuSec": 0.038526,
+            "cpuSec": 0.00046199999999999714
+          }
+        ]
+      },
+      "rendererTaskSeconds": 14.848963,
+      "wallMs": 14858.6085,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1621.6516,
+          "readCompletedAt": 1623.0087
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 16481.6172,
+        "finalCountersReadStartedAt": 16481.6178,
+        "finalCountersReadCompletedAt": 16483.0883,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 125,
+          "elapsedMs": 366.80000003427267,
+          "checksum": 159976681
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 29156,
+          "beforeCpuSec": 0.281592,
+          "afterCpuSec": 0.303042,
+          "cpuSec": 0.02144999999999997
+        },
+        {
+          "type": "renderer",
+          "id": 300,
+          "beforeCpuSec": 0.867302,
+          "afterCpuSec": 18.801423,
+          "cpuSec": 17.934121
+        },
+        {
+          "type": "renderer",
+          "id": 30384,
+          "beforeCpuSec": 0.038064,
+          "afterCpuSec": 0.038526,
+          "cpuSec": 0.00046199999999999714
+        },
+        {
+          "type": "GPU",
+          "id": 31900,
+          "beforeCpuSec": 0.175576,
+          "afterCpuSec": 0.49596,
+          "cpuSec": 0.320384
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 30884,
+          "beforeCpuSec": 0.0898,
+          "afterCpuSec": 0.08988,
+          "cpuSec": 0.00007999999999999674
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "id": "CAL-JPLUS-02",
+      "scenario": "J",
+      "calibrationMsPerCall": 2.9,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 2.9,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 22416,
+        "activeCpuSeconds": 17.971543999999998,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 22416,
+            "beforeCpuSec": 0.887775,
+            "afterCpuSec": 18.859319,
+            "cpuSec": 17.971543999999998
+          },
+          {
+            "type": "renderer",
+            "id": 13936,
+            "beforeCpuSec": 0.040222,
+            "afterCpuSec": 0.040572,
+            "cpuSec": 0.00034999999999999615
+          }
+        ]
+      },
+      "rendererTaskSeconds": 14.986196000000001,
+      "wallMs": 14996.566200000001,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1632.4879,
+          "readCompletedAt": 1633.7261
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 16630.2923,
+        "finalCountersReadStartedAt": 16630.2927,
+        "finalCountersReadCompletedAt": 16631.4528,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 125,
+          "elapsedMs": 364.600000038743,
+          "checksum": 3564510000
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 7132,
+          "beforeCpuSec": 0.281059,
+          "afterCpuSec": 0.301679,
+          "cpuSec": 0.02061999999999997
+        },
+        {
+          "type": "renderer",
+          "id": 22416,
+          "beforeCpuSec": 0.887775,
+          "afterCpuSec": 18.859319,
+          "cpuSec": 17.971543999999998
+        },
+        {
+          "type": "renderer",
+          "id": 13936,
+          "beforeCpuSec": 0.040222,
+          "afterCpuSec": 0.040572,
+          "cpuSec": 0.00034999999999999615
+        },
+        {
+          "type": "GPU",
+          "id": 27228,
+          "beforeCpuSec": 0.180286,
+          "afterCpuSec": 0.501584,
+          "cpuSec": 0.32129800000000003
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 29716,
+          "beforeCpuSec": 0.090668,
+          "afterCpuSec": 0.090786,
+          "cpuSec": 0.00011800000000000699
+        }
+      ]
+    },
+    {
+      "order": 8,
+      "id": "CAL-J-02",
+      "scenario": "J",
+      "calibrationMsPerCall": 0,
+      "inputs": {
+        "branch": "deadspace",
+        "startingHead": "e82e34ee520410bdfb1be614cb783e84c53d326f",
+        "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+        "snapshot": {
+          "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+          "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+          "commit": "db38e2af",
+          "builtAt": "2026-10-16T20:57:30.273Z"
+        },
+        "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8",
+        "bundleSha256": "c17d0ade1c004a40b1b0fce2d5a89b5fe8dae6fb7a6be188434b55085250b66b",
+        "save": "test-artifacts\\benchmark\\tmp\\stage4f3-p9000-save.json",
+        "saveSha256": "8ef0c4b8c4d4259e40c86e505d89b3e149b09789543d6a1ecae50b2de64b2000",
+        "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+        "effectiveSettingsSha256": "7a8aa4367cc9e28a7ece76a6c7c502b512acd9eaf9666c1b37c59f8d339ca804",
+        "effectiveOverrides": {
+          "autoMarket": true,
+          "autoSmelter": true,
+          "buyTitanium": true
+        },
+        "seed": 42,
+        "epoch": "2026-09-21T00:00:00.000Z",
+        "gatherIntervention": "goal-derived-conjunctive",
+        "missedOpportunitySampling": "disabled",
+        "phaseInstrumentation": false,
+        "activeAfterPeriod": 0,
+        "boundedWindowPeriods": 1000,
+        "checkpoints": [1000],
+        "snapshotPeriods": [],
+        "calibrationMsPerCall": 0,
+        "extensionRule": "Continue to p30000 when High Tech remains below 7 and all Money samples through p20000 plus current Money are positive.",
+        "demandSource": "one-cycle test-only signal from current native Research candidate price",
+        "moneyFloor": "unchanged native planTradeRoutes input settings and decision"
+      },
+      "rendererProcess": {
+        "activePid": 25552,
+        "activeCpuSeconds": 17.850996,
+        "rendererProcesses": [
+          {
+            "type": "renderer",
+            "id": 25552,
+            "beforeCpuSec": 0.877248,
+            "afterCpuSec": 18.728244,
+            "cpuSec": 17.850996
+          },
+          {
+            "type": "renderer",
+            "id": 1176,
+            "beforeCpuSec": 0.037246,
+            "afterCpuSec": 0.037694,
+            "cpuSec": 0.000447999999999997
+          }
+        ]
+      },
+      "rendererTaskSeconds": 14.780718,
+      "wallMs": 14794.233500000002,
+      "measurementBoundary": {
+        "clock": "Node performance.now() monotonic milliseconds",
+        "start": "after setup and initial counters; immediately before first requested advance",
+        "startCounters": {
+          "readStartedAt": 1620.344,
+          "readCompletedAt": 1621.6534
+        },
+        "end": "immediately when final requested advance resolves; counters queried before exports or diagnostics",
+        "advanceCompletedAt": 16415.8869,
+        "finalCountersReadStartedAt": 16415.8877,
+        "finalCountersReadCompletedAt": 16417.3098,
+        "requestedPeriods": 1000,
+        "snapshotAtPeriods": [],
+        "calibration": {
+          "calls": 0,
+          "elapsedMs": 0,
+          "checksum": 0
+        }
+      },
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "finalAssignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "appliedRouteOperations": 422,
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "acceptedGoalSignals": 0,
+      "proposedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlEvents": 0,
+      "processRows": [
+        {
+          "type": "browser",
+          "id": 30848,
+          "beforeCpuSec": 0.286008,
+          "afterCpuSec": 0.307354,
+          "cpuSec": 0.02134600000000003
+        },
+        {
+          "type": "renderer",
+          "id": 25552,
+          "beforeCpuSec": 0.877248,
+          "afterCpuSec": 18.728244,
+          "cpuSec": 17.850996
+        },
+        {
+          "type": "renderer",
+          "id": 1176,
+          "beforeCpuSec": 0.037246,
+          "afterCpuSec": 0.037694,
+          "cpuSec": 0.000447999999999997
+        },
+        {
+          "type": "GPU",
+          "id": 26896,
+          "beforeCpuSec": 0.176284,
+          "afterCpuSec": 0.506474,
+          "cpuSec": 0.33019
+        },
+        {
+          "type": "network.mojom.NetworkService",
+          "id": 25016,
+          "beforeCpuSec": 0.0889,
+          "afterCpuSec": 0.088992,
+          "cpuSec": 0.00009199999999999486
+        }
+      ]
+    }
+  ],
+  "analysis": {
+    "sameBundleControls": {
+      "BB": ["BB-01", "BB-02"],
+      "JJ": ["JJ-01", "JJ-02"]
+    },
+    "calibrationPairs": [
+      ["CAL-J-01", "CAL-JPLUS-01"],
+      ["CAL-J-02", "CAL-JPLUS-02"]
+    ],
+    "paired95PercentMethod": "Paired t interval, two-sided 95%, n=2, df=1, critical t=12.706; descriptive only due very small n.",
+    "knownWorkloadElapsedMs": [366.8, 364.6],
+    "expectedApproximatePercentOfOrdinaryRendererCpu": 2,
+    "sensitivityDecision": "Not detected reliably; paired uncertainty intervals span zero and effects far below/above the injected workload. Stop before B/J reassessment."
+  },
+  "accounting": {
+    "cpuCounter": "Chromium SystemInfo.getProcessInfo cumulative CPU deltas, per process ID; renderer rows recorded individually; active game renderer is largest delta in each run.",
+    "taskDurationCounter": "CDP renderer page-target TaskDuration delta.",
+    "contaminationCheck": "Secondary renderer deltas are all below 0.0005 s in these runs; browser and GPU process deltas recorded but excluded from renderer CPU.",
+    "limits": "Process CPU has millisecond granularity and SystemInfo process rows do not directly map a process ID to the page target. PID attribution uses the launched game renderer / dominant renderer delta. No claim of zero OS scheduling noise."
+  },
+  "parityChecks": [
+    {
+      "runId": "BB-01",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "runId": "BB-02",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "runId": "JJ-01",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "runId": "JJ-02",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "runId": "CAL-J-01",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "runId": "CAL-JPLUS-01",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "runId": "CAL-JPLUS-02",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "runId": "CAL-J-02",
+      "finalExportSha256": "44b3417fe3db8b81c4d55e0899f6bc50e72098dea62e7ecb919ee7535cf0e622",
+      "assignments": [
+        {
+          "resourceId": "Crystal",
+          "routes": 46
+        },
+        {
+          "resourceId": "Lumber",
+          "routes": 47
+        }
+      ],
+      "traceCounts": {
+        "plan": 125,
+        "complete": 125,
+        "applied": 422
+      },
+      "appliedRouteOperations": 422,
+      "proposedGoalSignals": 0,
+      "acceptedGoalSignals": 0,
+      "finalFenceEvents": 0,
+      "nativeControlUsage": {
+        "methodCount": 95,
+        "returnedAndThrownCount": 48562,
+        "sha256": "9c6ad485fee4c4d9904d89942cc101d4eb985f70740c74922570a31d42a3dbff"
+      },
+      "researchSequence": {
+        "capturedEvents": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    }
+  ],
+  "sourceSha256AtRun": "c85a2252fe7c92231237397b87cc99afe0d31739f3958a7d80a49f8b3f984f24"
+}
