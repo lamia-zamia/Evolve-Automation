@@ -94,7 +94,6 @@ try {
       throw new Error(
         `runner did not install the configured test hooks: ${JSON.stringify(startup)}`,
       );
-    const initialState = await session.readState();
     const startingPeriod = await session.periods();
     let periodsAdvanced = 0;
     let firstSelection = [];
