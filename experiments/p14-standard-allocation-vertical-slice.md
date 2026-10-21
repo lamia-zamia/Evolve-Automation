@@ -83,7 +83,7 @@ less-than-2% gate remains unresolved.
 No additional save is required to establish the blocker: the fresh export is a
 genuine Standard Shroomi state with valid native progression. To continue P14,
 the minimum requirement is an owner-boundary mechanism that, for one explicit
-experiment target, can verify the *current* Research offer and exact price,
+experiment target, can verify the _current_ Research offer and exact price,
 sample the current shortage, and propose a bounded demand to an existing owner
 without retaining price, stock, reservation, or control handles across cycles.
 Alternatively, provide an unmodified Standard export in which the normal

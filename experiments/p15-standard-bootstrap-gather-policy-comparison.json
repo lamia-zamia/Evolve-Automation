@@ -1,0 +1,1216 @@
+{
+  "experiment": "P15 phase 2 existing-policy comparison",
+  "runner": "chromium-exact",
+  "periodsPerCheckpoint": 100,
+  "horizon": 5000,
+  "seed": 42,
+  "inputs": {
+    "savePath": "test-artifacts/benchmark/tmp/p14-postfix2-fresh-50000.txt",
+    "saveSha256": "96e6afc6384267a6d83402a863a033be40674f335432c6f4601614b2664cf882",
+    "settingsPath": "test-artifacts/benchmark/slice0/settings/current-full.json",
+    "settingsSha256": "f7fd9286607695d8716359f20f1a5f680264832de36879f84a7a67c4bd970042",
+    "gamePath": "test-artifacts/game/evolve-deadspace.js",
+    "gameSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "bundlePath": "evolve_automation.user.js",
+    "bundleSha256": "d3d875c3242dd5d386c223cb1fa4eaa365760cfd3e4d93f44bbef2c5bfefe615",
+    "runnerSha256": "0525816731735c804247b88cbc2fb47cdc344e50a55cf6376189c94b0acbc1f5",
+    "bridgeSha256": "8ebfb7484fee91571dfd129e3871e6cf4a0f208eb6500d14a88c5cd9232bd4e1"
+  },
+  "results": [
+    {
+      "id": "A-current-full",
+      "settings": {
+        "buildingAlwaysClick": false
+      },
+      "start": {
+        "universe": "standard",
+        "species": "shroomi",
+        "primitive": 2,
+        "stock": {
+          "Food": 40,
+          "Lumber": 72,
+          "Stone": 0,
+          "Chrysotile": 0,
+          "Knowledge": 0
+        }
+      },
+      "final": {
+        "periods": 5000,
+        "day": 0,
+        "tech": {
+          "primitive": 2,
+          "wsc": 0
+        },
+        "stock": {
+          "Food": 40,
+          "Lumber": 72,
+          "Stone": 0,
+          "Chrysotile": 0,
+          "Knowledge": 0
+        },
+        "population": 0,
+        "starved": 0,
+        "died": 0,
+        "activeJobs": {},
+        "market": {
+          "qty": 10,
+          "mtrade": 0,
+          "trade": 0,
+          "active": false
+        }
+      },
+      "checkpoints": [
+        {
+          "periods": 500,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 1000,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 1500,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 2000,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 2500,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 3000,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 3500,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 4000,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 4500,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 5000,
+          "day": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Chrysotile": 0,
+            "Knowledge": 0
+          },
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {},
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        }
+      ],
+      "gatherCalls": {},
+      "researchCalls": {},
+      "controlUsage": {
+        "#mainColumn div.content.swapTab": {
+          "returned": 626,
+          "threw": 0
+        },
+        "civ-unemployed.setDefault": {
+          "returned": 625,
+          "threw": 0
+        }
+      },
+      "diagnostics": {
+        "loads": 1,
+        "periods": 5000,
+        "messages": 5000,
+        "randomCalls": 500,
+        "workTicks": null,
+        "captureComplete": true,
+        "keyState": {
+          "x10": false,
+          "x25": false,
+          "x100": false,
+          "shiftPressed": false
+        },
+        "counts": {},
+        "lines": [],
+        "events": [],
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 626,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 625,
+            "threw": 0
+          }
+        },
+        "callbackDurationsMs": null,
+        "longTaskDurationsMs": null,
+        "nativeInvocations": null,
+        "virtualMs": 1250000,
+        "periodMs": 250,
+        "timerCallbacks": 11,
+        "pendingTimers": 1,
+        "workers": 1,
+        "dialogs": [],
+        "perfSummaries": []
+      },
+      "exportSha256": "15365df4b38031514b3db3021db148b464486fa6971c7845a590ed468727d150"
+    },
+    {
+      "id": "B-building-always-click",
+      "settings": {
+        "buildingAlwaysClick": true
+      },
+      "start": {
+        "universe": "standard",
+        "species": "shroomi",
+        "primitive": 2,
+        "stock": {
+          "Food": 40,
+          "Lumber": 72,
+          "Stone": 0,
+          "Chrysotile": 0,
+          "Knowledge": 0
+        }
+      },
+      "firstSundialAt": 16,
+      "final": {
+        "periods": 5000,
+        "day": 250,
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "compost": 2,
+          "housing": 1,
+          "currency": 1,
+          "storage": 1,
+          "axe": 1,
+          "mining": 1,
+          "science": 1,
+          "military": 2,
+          "banking": 1,
+          "s_lodge": 1
+        },
+        "stock": {
+          "Food": 2400,
+          "Lumber": 1000,
+          "Stone": 700,
+          "Chrysotile": 0,
+          "Knowledge": 316.3350000000046
+        },
+        "population": 6,
+        "starved": 0,
+        "died": 0,
+        "activeJobs": {
+          "lumberjack": 3,
+          "quarry_worker": 3,
+          "garrison": 2
+        },
+        "market": {
+          "qty": 10,
+          "mtrade": 0,
+          "trade": 0,
+          "active": false
+        }
+      },
+      "checkpoints": [
+        {
+          "periods": 500,
+          "day": 25,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1
+          },
+          "stock": {
+            "Food": 1600,
+            "Lumber": 259.4000000000001,
+            "Stone": 192,
+            "Chrysotile": 0,
+            "Knowledge": 6.1800000000001205
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 5
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 1000,
+          "day": 50,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1
+          },
+          "stock": {
+            "Food": 1800,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 21.18000000000012
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 1500,
+          "day": 75,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1
+          },
+          "stock": {
+            "Food": 1800,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 73.05499999999975
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 2000,
+          "day": 100,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "stock": {
+            "Food": 1800,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 3.404999999999376
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 2500,
+          "day": 125,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "stock": {
+            "Food": 1800,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 122.35499999999873
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 3000,
+          "day": 150,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1,
+            "s_lodge": 1
+          },
+          "stock": {
+            "Food": 1800,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 60.480000000001134
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 3500,
+          "day": 175,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1,
+            "s_lodge": 1
+          },
+          "stock": {
+            "Food": 1800,
+            "Lumber": 1000,
+            "Stone": 550.3999999999996,
+            "Chrysotile": 0,
+            "Knowledge": 180.25500000000184
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 4000,
+          "day": 200,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 2,
+            "banking": 1,
+            "s_lodge": 1
+          },
+          "stock": {
+            "Food": 1800,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 75.30500000000393
+          },
+          "population": 5,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2,
+            "garrison": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 4500,
+          "day": 225,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 2,
+            "banking": 1,
+            "s_lodge": 1
+          },
+          "stock": {
+            "Food": 2000,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 197.43500000000387
+          },
+          "population": 6,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 3,
+            "garrison": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        },
+        {
+          "periods": 5000,
+          "day": 250,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 2,
+            "banking": 1,
+            "s_lodge": 1
+          },
+          "stock": {
+            "Food": 2400,
+            "Lumber": 1000,
+            "Stone": 700,
+            "Chrysotile": 0,
+            "Knowledge": 316.3350000000046
+          },
+          "population": 6,
+          "starved": 0,
+          "died": 0,
+          "activeJobs": {
+            "lumberjack": 3,
+            "quarry_worker": 3,
+            "garrison": 2
+          },
+          "market": {
+            "qty": 10,
+            "mtrade": 0,
+            "trade": 0,
+            "active": false
+          }
+        }
+      ],
+      "gatherCalls": {
+        "undefined-food.action": {
+          "returned": 1911,
+          "threw": 0
+        },
+        "city-lumber.action": {
+          "returned": 2287,
+          "threw": 0
+        },
+        "undefined-stone.action": {
+          "returned": 1739,
+          "threw": 0
+        }
+      },
+      "researchCalls": {
+        "tech-sundial.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-compost.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-housing.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-currency.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-storage.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-stone_axe.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-mining.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-science.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-garrison.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-banking.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-hot_compost.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-alt_lodge.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-bows.action": {
+          "returned": 1,
+          "threw": 0
+        }
+      },
+      "controlUsage": {
+        "#mainColumn div.content.swapTab": {
+          "returned": 641,
+          "threw": 0
+        },
+        "undefined-food.action": {
+          "returned": 1911,
+          "threw": 0
+        },
+        "city-lumber.action": {
+          "returned": 2287,
+          "threw": 0
+        },
+        "undefined-stone.action": {
+          "returned": 1739,
+          "threw": 0
+        },
+        "civ-unemployed.setDefault": {
+          "returned": 59,
+          "threw": 0
+        },
+        "tech-sundial.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-compost.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-compost.on_cap": {
+          "returned": 4981,
+          "threw": 0
+        },
+        "buildQueue.setData": {
+          "returned": 44440,
+          "threw": 0
+        },
+        "city-compost.action": {
+          "returned": 7,
+          "threw": 0
+        },
+        "tech-housing.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-basic_housing.action": {
+          "returned": 5,
+          "threw": 0
+        },
+        "tech-currency.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-storage.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-stone_axe.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-lumber_yard.action": {
+          "returned": 5,
+          "threw": 0
+        },
+        "civ-unemployed.sub": {
+          "returned": 5,
+          "threw": 0
+        },
+        "civ-lumberjack.add": {
+          "returned": 5,
+          "threw": 0
+        },
+        "civ-lumberjack.setDefault": {
+          "returned": 22,
+          "threw": 0
+        },
+        "tech-mining.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-rock_quarry.action": {
+          "returned": 2,
+          "threw": 0
+        },
+        "civ-lumberjack.sub": {
+          "returned": 2,
+          "threw": 0
+        },
+        "civ-quarry_worker.add": {
+          "returned": 2,
+          "threw": 0
+        },
+        "civ-quarry_worker.setDefault": {
+          "returned": 544,
+          "threw": 0
+        },
+        "city-shed.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-science.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-garrison.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-garrison.on_cap": {
+          "returned": 3822,
+          "threw": 0
+        },
+        "tech-banking.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-university.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-hot_compost.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "tech-alt_lodge.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-garrison.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "mTabCivic.swapTab": {
+          "returned": 1,
+          "threw": 0
+        },
+        "foreign.vis": {
+          "returned": 382,
+          "threw": 0
+        },
+        "c_garrison.hell": {
+          "returned": 190,
+          "threw": 0
+        },
+        "c_garrison.s_max": {
+          "returned": 190,
+          "threw": 0
+        },
+        "tech-bows.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-bank.action": {
+          "returned": 1,
+          "threw": 0
+        },
+        "city-lodge.action": {
+          "returned": 1,
+          "threw": 0
+        }
+      },
+      "diagnostics": {
+        "loads": 1,
+        "periods": 5000,
+        "messages": 5000,
+        "randomCalls": 941,
+        "workTicks": null,
+        "captureComplete": true,
+        "keyState": {
+          "x10": false,
+          "x25": false,
+          "x100": false,
+          "shiftPressed": false
+        },
+        "counts": {},
+        "lines": [],
+        "events": [],
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 641,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 1911,
+            "threw": 0
+          },
+          "city-lumber.action": {
+            "returned": 2287,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 1739,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 59,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-compost.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-compost.on_cap": {
+            "returned": 4981,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 44440,
+            "threw": 0
+          },
+          "city-compost.action": {
+            "returned": 7,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-stone_axe.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-lumber_yard.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-unemployed.sub": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.add": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.setDefault": {
+            "returned": 22,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-rock_quarry.action": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-lumberjack.sub": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-quarry_worker.add": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-quarry_worker.setDefault": {
+            "returned": 544,
+            "threw": 0
+          },
+          "city-shed.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-science.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-garrison.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-garrison.on_cap": {
+            "returned": 3822,
+            "threw": 0
+          },
+          "tech-banking.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-university.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-hot_compost.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-alt_lodge.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-garrison.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "mTabCivic.swapTab": {
+            "returned": 1,
+            "threw": 0
+          },
+          "foreign.vis": {
+            "returned": 382,
+            "threw": 0
+          },
+          "c_garrison.hell": {
+            "returned": 190,
+            "threw": 0
+          },
+          "c_garrison.s_max": {
+            "returned": 190,
+            "threw": 0
+          },
+          "tech-bows.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-bank.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-lodge.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        },
+        "callbackDurationsMs": null,
+        "longTaskDurationsMs": null,
+        "nativeInvocations": null,
+        "virtualMs": 1250000,
+        "periodMs": 250,
+        "timerCallbacks": 11,
+        "pendingTimers": 1,
+        "workers": 1,
+        "dialogs": [],
+        "perfSummaries": []
+      },
+      "exportSha256": "082d2cbb607f6bc7691327f26c2a60b8d34f13121f09a11f9bd934ffde916465"
+    }
+  ]
+}

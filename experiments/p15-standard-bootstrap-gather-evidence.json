@@ -1,0 +1,628 @@
+{
+  "experiment": "P15 targeted existing-Gather intervention",
+  "runner": "chromium-exact",
+  "seed": 42,
+  "fixture": {
+    "path": "test-artifacts/benchmark/tmp/p14-postfix2-fresh-50000.txt",
+    "sha256": "96e6afc6384267a6d83402a863a033be40674f335432c6f4601614b2664cf882",
+    "universe": "standard",
+    "species": "shroomi",
+    "primitive": 2,
+    "stock": {
+      "Food": 40,
+      "Lumber": 72,
+      "Stone": 0
+    }
+  },
+  "settings": {
+    "path": "test-artifacts/benchmark/slice0/settings/current-full.json",
+    "sha256": "f7fd9286607695d8716359f20f1a5f680264832de36879f84a7a67c4bd970042",
+    "buildingAlwaysClick": false
+  },
+  "game": {
+    "path": "test-artifacts/game/evolve-deadspace.js",
+    "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "pinned": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f"
+  },
+  "sourceHashes": {
+    "src/domain/economy/resources/gather-resources.ts": "01163777939f25e8651353682cfd72107510394fd2688b038bd02be803751ceb",
+    "src/adapters/evolve/economy/resources/captured-gather-resources.ts": "30ea6e3cdcbbb3a5b7c5688a50fe77d9d6f950b54a1b843c243671c14ad3433e",
+    "src/bootstrap/captured-runtime-control.ts": "2720512fd14747b45faf3f4a78b63898d3e0cda2923ca772272f854e017abd76",
+    "tools/chromium-evolve-runner.mjs": "0525816731735c804247b88cbc2fb47cdc344e50a55cf6376189c94b0acbc1f5",
+    "tools/chromium/chrome.mjs": "0f44e349d5cd6b7d75a8e28d0ea1e3d0ba16ff00769ebfa679712f1524f869f8",
+    "tools/chromium/page-server.mjs": "c93367a02129871437ff3f8e88584da579bab5983b03a31effec79ae9a60b4cd",
+    "tools/chromium/bridge.js": "8ebfb7484fee91571dfd129e3871e6cf4a0f208eb6500d14a88c5cd9232bd4e1"
+  },
+  "bundles": {
+    "normal": {
+      "path": "evolve_automation.user.js",
+      "sha256": "ba70cbf19f74f6f3a69510abb248093e87cd320256fef751f9add5aa616b2b3a"
+    },
+    "testSurface": {
+      "path": "test-artifacts/benchmark/tmp/p15-test-surface.user.js",
+      "sha256": "5fbc4adf8c0e40542669e73dfd28525e3a9ddbe685209b76d48cbcb69b1da8c8"
+    }
+  },
+  "runnerInputs": {
+    "gameSnapshot": {
+      "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+      "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+      "commit": "db38e2af",
+      "builtAt": "2026-10-16T20:57:30.273Z"
+    },
+    "upstream": "D:\\work\\Evolve-DeadSpace",
+    "libraries": {
+      "vue": "3.5.22",
+      "buefy": "3.0.10",
+      "@popperjs/core": "2.9.2",
+      "sortablejs": "1.10.2",
+      "chart.js": "3.8.2"
+    },
+    "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8"
+  },
+  "P14References": {
+    "sundialOffer": {
+      "path": "test-artifacts/benchmark/tmp/p14-standard-offers.json",
+      "sha256": "387837d8ce8fa12100dbf52c3549c7fec8ee28f34b51195df7155161489f10ad",
+      "actionId": "tech-sundial",
+      "exactNativePrice": {
+        "Lumber": 8,
+        "Stone": 10
+      }
+    },
+    "manualStoneClicks": {
+      "path": "test-artifacts/benchmark/tmp/p14-native-progress-standard.json",
+      "sha256": "65d72946796e8976569f646e0968506974267cdb00b88779cb9f0735aaa5f02e",
+      "clicks": 10,
+      "exportPath": "test-artifacts/benchmark/tmp/p14-native-progress-standard.txt",
+      "exportSha256": "bb99cba34df3c06f366b2c9b435e55efa77f8edab46ca3a79b2fac2cc7db1390",
+      "endAt5000": {
+        "day": 250,
+        "population": 3,
+        "starved": 6,
+        "died": 0,
+        "food": 47,
+        "lumber": 17,
+        "stone": 0,
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "compost": 2,
+          "housing": 1,
+          "currency": 1,
+          "storage": 1,
+          "mining": 1,
+          "science": 1,
+          "military": 1,
+          "banking": 1
+        }
+      }
+    }
+  },
+  "periods": {
+    "baselineHorizon": 10000,
+    "comparisonHorizon": 5000,
+    "continuationPeriods": 5000,
+    "targetedSundialPurchasePeriod": 16
+  },
+  "deterministicParity": {
+    "targetedExportSha256At5000": "ef8d4a197ad97b585bb8c954da11d49ad76d5f642550368fc6057cf5ab09f430",
+    "matchingExportSha256At10000": "478f6d05bf49023c3ec56b0599f1d13bcdb5c3cf914322de51e975b6c1d1a86f",
+    "matchingControlUsage": true,
+    "matchedContexts": 2
+  },
+  "arms": {
+    "A": {
+      "comparison": {
+        "periods": 5000,
+        "state": {
+          "universe": "standard",
+          "species": "shroomi",
+          "day": 0,
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Knowledge": 0
+          },
+          "activeJobs": {},
+          "market": false
+        },
+        "gatherCalls": {},
+        "researchCalls": {},
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 626,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 625,
+            "threw": 0
+          }
+        },
+        "execution": {
+          "periods": 5000,
+          "randomCalls": 500,
+          "workTicks": null,
+          "counts": {}
+        },
+        "nativeFailures": {},
+        "diagnosticEvents": [],
+        "diagnosticsCounts": {},
+        "exportSha256": "15365df4b38031514b3db3021db148b464486fa6971c7845a590ed468727d150"
+      },
+      "continuation": {
+        "periods": 10000,
+        "state": {
+          "universe": "standard",
+          "species": "shroomi",
+          "day": 0,
+          "population": 0,
+          "starved": 0,
+          "died": 0,
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "stock": {
+            "Food": 40,
+            "Lumber": 72,
+            "Stone": 0,
+            "Knowledge": 0
+          },
+          "activeJobs": {},
+          "market": false
+        },
+        "gatherCalls": {},
+        "researchCalls": {},
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 1251,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 1250,
+            "threw": 0
+          }
+        },
+        "execution": {
+          "periods": 10000,
+          "randomCalls": 1000,
+          "workTicks": null,
+          "counts": {}
+        },
+        "nativeFailures": {},
+        "diagnosticEvents": [],
+        "diagnosticsCounts": {},
+        "exportSha256": "58654253be2605148a172b3eb5b1a8c75e726b89ebca5887f06aa180c9c953c1"
+      }
+    },
+    "targeted": {
+      "comparison": {
+        "periods": 5000,
+        "state": {
+          "universe": "standard",
+          "species": "shroomi",
+          "day": 250,
+          "population": 3,
+          "starved": 9,
+          "died": 0,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "stock": {
+            "Food": 17,
+            "Lumber": 17,
+            "Stone": 0,
+            "Knowledge": 100
+          },
+          "activeJobs": {
+            "unemployed": 3
+          },
+          "market": false,
+          "quarry": 0
+        },
+        "gatherCalls": {
+          "undefined-stone.action": {
+            "returned": 10,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 1750,
+            "threw": 0
+          }
+        },
+        "researchCalls": {
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-compost.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-science.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-garrison.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-banking.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-hot_compost.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 637,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 10,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 625,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-compost.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-compost.on_cap": {
+            "returned": 4973,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 12277,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 3,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 1750,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-science.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-garrison.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-garrison.on_cap": {
+            "returned": 3991,
+            "threw": 0
+          },
+          "tech-banking.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-hot_compost.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        },
+        "execution": {
+          "periods": 5000,
+          "randomCalls": 1096,
+          "workTicks": null,
+          "counts": {}
+        },
+        "nativeFailures": {},
+        "diagnosticEvents": [],
+        "diagnosticsCounts": {},
+        "exportSha256": "ef8d4a197ad97b585bb8c954da11d49ad76d5f642550368fc6057cf5ab09f430"
+      },
+      "continuation": {
+        "periods": 10000,
+        "state": {
+          "universe": "standard",
+          "species": "shroomi",
+          "day": 500,
+          "population": 3,
+          "starved": 25,
+          "died": 0,
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "compost": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "stock": {
+            "Food": 17,
+            "Lumber": 17,
+            "Stone": 0,
+            "Knowledge": 100
+          },
+          "activeJobs": {
+            "unemployed": 3
+          },
+          "market": false,
+          "quarry": 0
+        },
+        "gatherCalls": {
+          "undefined-stone.action": {
+            "returned": 10,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 3550,
+            "threw": 0
+          }
+        },
+        "researchCalls": {
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-compost.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-science.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-garrison.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-banking.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-hot_compost.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 1262,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 10,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 1250,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-compost.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-compost.on_cap": {
+            "returned": 9973,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 26027,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 3,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 3550,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-science.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-garrison.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-garrison.on_cap": {
+            "returned": 8991,
+            "threw": 0
+          },
+          "tech-banking.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-hot_compost.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        },
+        "execution": {
+          "periods": 10000,
+          "randomCalls": 2193,
+          "workTicks": null,
+          "counts": {}
+        },
+        "nativeFailures": {},
+        "diagnosticEvents": [],
+        "diagnosticsCounts": {},
+        "exportSha256": "478f6d05bf49023c3ec56b0599f1d13bcdb5c3cf914322de51e975b6c1d1a86f"
+      },
+      "duplicate": {
+        "comparisonExportSha256": "ef8d4a197ad97b585bb8c954da11d49ad76d5f642550368fc6057cf5ab09f430",
+        "continuationExportSha256": "478f6d05bf49023c3ec56b0599f1d13bcdb5c3cf914322de51e975b6c1d1a86f",
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 1262,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 10,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 1250,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-compost.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-compost.on_cap": {
+            "returned": 9973,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 26027,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 3,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 3550,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-science.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-garrison.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-garrison.on_cap": {
+            "returned": 8991,
+            "threw": 0
+          },
+          "tech-banking.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-hot_compost.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        }
+      }
+    }
+  }
+}
