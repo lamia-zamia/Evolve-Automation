@@ -77,7 +77,7 @@
   },
   "inputHashes": {
     "sourceFileCount": 709,
-    "sourceAggregateSha256": "33513065c3c9e9b2e4e1aac7073835d68f0ea99fa5743f22361e4261d88780b9",
+    "sourceAggregateSha256": "fb05e4412a81f921bcc7d5d8f6903fbf9e110fcf71134a75da1894fe4f62a2c2",
     "sourceFiles": {
       "src/adapters/browser/achievement-guard-settings.ts": "4bc357f61d1d696d1b872f56434eba0f23aafc744c430626c2caa919ee88639a",
       "src/adapters/browser/arpa-toggles.ts": "cb5bb8025ffb6ceb06a2ade495b2bd0595dddfbd9aa2b3e02784a5b91debd729",
@@ -261,7 +261,7 @@
       "src/adapters/evolve/economy/resources/captured-ejector-settings-catalog.ts": "c5efe050ec8861995d08f5268b16068bb5b6ce1c1506c68e84180600a305290c",
       "src/adapters/evolve/economy/resources/captured-ejector-settings.ts": "07a22195b871f359228530af185d2acb25055043d239a7c0ef1635b9e72d1bad",
       "src/adapters/evolve/economy/resources/captured-ejector.ts": "c34070a5862c430cb6e3e4a3371ea95aa629d9f4b233f7b69b1397ba89fba7cf",
-      "src/adapters/evolve/economy/resources/captured-gather-resources.ts": "6b72c8d4e88af15d319de889b88d3b0d6a2119bc87985414c5cea26d6e33f4eb",
+      "src/adapters/evolve/economy/resources/captured-gather-resources.ts": "3397e89ca158ff7ebbb67dc1b838b8ac2609e37534957c145f1cd0d945f5fb88",
       "src/adapters/evolve/economy/resources/captured-inflation-assist.ts": "60a2aed1f296c3826722e1ebc47552c02c61b1a3913ac7fda6f265afed3d7fd7",
       "src/adapters/evolve/economy/resources/captured-nanite.ts": "e9b98f56bfa3841170e55115278bae0e2be8921e9cfb57a3b67effcf52d12924",
       "src/adapters/evolve/economy/resources/captured-production-ratios.ts": "7ce2a4f8038a9d19ddc0704d9c18e18b42387c85fbeaa0fb6cc971635e8d28b0",
@@ -535,7 +535,7 @@
       "src/domain/economy/resources/demand-prioritization.ts": "15237edcdb00036fb7961f8c00f5cf2370f72d5fa7c6c231a4b6b346953e6e7e",
       "src/domain/economy/resources/eject-toggles.ts": "b60f7057a1800d77d250aa52649bd284e737aaa8b6cb0660d72c782917501247",
       "src/domain/economy/resources/ejector-settings.ts": "6ffe0df1bdd2eb333cca78817c6cce1d1dd34540ba0834fb9073d7b30e35e037",
-      "src/domain/economy/resources/gather-resources.ts": "90bda10a64b9241259b3f1e1acbfe451af4b15514c893e8722feecb88a2ed00c",
+      "src/domain/economy/resources/gather-resources.ts": "e1e3cf2bce0e64454f4665f699facef30b3e20dd4de0bc1ab3b70e9e1e1956c4",
       "src/domain/economy/resources/inflation-assist.ts": "106fce7ad315eaecb94b6b7f3e03e629eb3037489237908546cead05add8623d",
       "src/domain/economy/resources/reservation.ts": "75d28e4d74d706dc72bd33b69008f134cf13899da4157806e3dd20ccec5ec8cb",
       "src/domain/economy/resources/resource-claim-lifecycle.ts": "ce79d3079262b68db6622ce8f95e2a172b3d464e6b583a75b0b58e7b0ec76faf",
@@ -790,7 +790,7 @@
       "src/validation/records.ts": "f1c47f397c27c9dd0bd9417f6ef73e155af6c31ce6d0a0e161cd14d9bd982b14"
     },
     "productionBundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
-    "testSurfaceBundleSha256": "d412aefb65b6a17c16024d3dfdb18b3474e00ed85cf46ab1947d5c224825f439",
+    "testSurfaceBundleSha256": "0c2a10953a6217f8db47d41cccc506bb7fcabbf8be28fea552143d3486b7aab6",
     "currentBundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
     "gameSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
     "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
@@ -39277,7 +39277,7 @@
   "productionBundleParity": {
     "requiredSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
     "currentSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
-    "testSurfaceBundleSha256": "d412aefb65b6a17c16024d3dfdb18b3474e00ed85cf46ab1947d5c224825f439",
+    "testSurfaceBundleSha256": "0c2a10953a6217f8db47d41cccc506bb7fcabbf8be28fea552143d3486b7aab6",
     "byteIdentical": true
   }
 }
