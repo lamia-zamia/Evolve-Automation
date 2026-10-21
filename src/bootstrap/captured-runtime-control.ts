@@ -2238,6 +2238,7 @@ export function startCapturedRuntime({
               ? gatherTestHooksValue
               : Object.freeze({});
             let standardResearchTarget: unknown;
+            let standardConstructionTarget: unknown;
             const targetActionId = readProperty(
               gatherTestHooks,
               "standardResearchTargetActionId",
@@ -2480,6 +2481,327 @@ export function startCapturedRuntime({
                 );
               }
             }
+            if (
+              readProperty(gatherTestHooks, "standardCompostTargetEnabled") ===
+                true &&
+              Number(
+                readProperty(
+                  readProperty(pageCapture.rootState.readRoot(), "tech"),
+                  "axe",
+                ),
+              ) >= 1 &&
+              Number(
+                readProperty(
+                  readProperty(
+                    readProperty(pageCapture.rootState.readRoot(), "city"),
+                    "compost",
+                  ),
+                  "count",
+                ) ?? 0,
+              ) === 0 &&
+              (readProperty(hooks, "p17FirstConstructionBoundary") ===
+                undefined ||
+                readProperty(
+                  readProperty(hooks, "p17FirstConstructionBoundary"),
+                  "status",
+                ) === "current-compost-target")
+            ) {
+              const compostRoot = pageCapture.rootState.readRoot();
+              const compostRootGeneration = progression.readRootGeneration();
+              const compostProgressionGeneration =
+                progression.readProgressionEpoch();
+              const compostDemand = readDemand("pre-Gather");
+              const compostSavingTarget = compostDemand.savingTarget;
+              const compostCost = buildCosts.readCost("city-compost")?.cost;
+              const compostControl =
+                pageCapture.controls.resolve("city-compost");
+              const compostManagedTarget = progression
+                .readManagedBuildTargets()
+                .find((building) => building.key === "city-compost");
+              const compostResourceControlGenerations = Object.freeze({
+                Lumber: pageCapture.controls.resolve("city-lumber")?.generation,
+                Stone:
+                  pageCapture.controls.resolve("undefined-stone")?.generation ??
+                  pageCapture.controls.resolve("city-stone")?.generation,
+              });
+              const queueState = (queueId: "queue" | "r_queue") => {
+                const entries = readProperty(
+                  readProperty(compostRoot, queueId),
+                  "queue",
+                );
+                return !Array.isArray(entries)
+                  ? "unavailable"
+                  : entries.length > 0
+                    ? "active"
+                    : "empty";
+              };
+              const constructionQueue = queueState("queue");
+              const researchQueue = queueState("r_queue");
+              const rawProtectedClaims = readProperty(
+                gatherTestHooks,
+                "resourceClaims",
+              );
+              const hasProtectedResourceClaim =
+                (Array.isArray(rawProtectedClaims) &&
+                  rawProtectedClaims.length > 0) ||
+                readProperty(gatherTestHooks, "resourceClaim") !== undefined;
+              const costIdentity = (cost: unknown) =>
+                isRecord(cost)
+                  ? JSON.stringify(
+                      Object.entries(cost).sort(([left], [right]) =>
+                        left.localeCompare(right),
+                      ),
+                    )
+                  : undefined;
+              const compostNativePriceIdentity = costIdentity(compostCost);
+              const compostSavingPriceIdentity = costIdentity(
+                compostSavingTarget?.cost,
+              );
+              const compostValidDecision =
+                compostRoot !== undefined &&
+                progression.observations.hasCompletedOrdering() &&
+                compostSavingTarget?.name === "city-compost" &&
+                compostNativePriceIdentity !== undefined &&
+                compostNativePriceIdentity === compostSavingPriceIdentity &&
+                compostManagedTarget?.elementId === "city-compost" &&
+                compostControl?.methods.includes("action") === true &&
+                compostResourceControlGenerations.Lumber !== undefined &&
+                compostResourceControlGenerations.Stone !== undefined &&
+                readProperty(settingsStore.readRaw(), "autoBuild") === true &&
+                constructionQueue === "empty" &&
+                researchQueue === "empty" &&
+                !hasProtectedResourceClaim;
+              const compostTargetIsCurrent = () => {
+                try {
+                  const currentRoot = pageCapture.rootState.readRoot();
+                  const currentSettings = settingsStore.readRaw();
+                  const currentSavingTarget =
+                    readDemand("pre-Gather").savingTarget;
+                  const currentManagedTarget = progression
+                    .readManagedBuildTargets()
+                    .find((building) => building.key === "city-compost");
+                  const currentControl =
+                    pageCapture.controls.resolve("city-compost");
+                  const currentResourceControls = {
+                    Lumber: pageCapture.controls.resolve("city-lumber"),
+                    Stone:
+                      pageCapture.controls.resolve("undefined-stone") ??
+                      pageCapture.controls.resolve("city-stone"),
+                  };
+                  return (
+                    currentRoot === compostRoot &&
+                    progression.readRootGeneration() ===
+                      compostRootGeneration &&
+                    progression.readProgressionEpoch() ===
+                      compostProgressionGeneration &&
+                    readProperty(currentSettings, "autoBuild") === true &&
+                    queueState("queue") === "empty" &&
+                    queueState("r_queue") === "empty" &&
+                    currentSavingTarget?.name === "city-compost" &&
+                    Number(
+                      readProperty(
+                        readProperty(
+                          readProperty(currentRoot, "city"),
+                          "compost",
+                        ),
+                        "count",
+                      ) ?? 0,
+                    ) === 0 &&
+                    costIdentity(currentSavingTarget.cost) ===
+                      compostSavingPriceIdentity &&
+                    costIdentity(buildCosts.readCost("city-compost")?.cost) ===
+                      compostNativePriceIdentity &&
+                    currentManagedTarget?.elementId === "city-compost" &&
+                    currentControl?.methods.includes("action") === true &&
+                    currentControl.generation === compostControl?.generation &&
+                    currentResourceControls.Lumber?.methods.includes(
+                      "action",
+                    ) === true &&
+                    currentResourceControls.Lumber.generation ===
+                      compostResourceControlGenerations.Lumber &&
+                    currentResourceControls.Stone?.methods.includes(
+                      "action",
+                    ) === true &&
+                    currentResourceControls.Stone.generation ===
+                      compostResourceControlGenerations.Stone
+                  );
+                } catch {
+                  return false;
+                }
+              };
+              const queueSummary = Object.freeze({
+                construction: constructionQueue,
+                research: researchQueue,
+                constructionEntries: Array.isArray(
+                  readProperty(readProperty(compostRoot, "queue"), "queue"),
+                )
+                  ? (
+                      readProperty(
+                        readProperty(compostRoot, "queue"),
+                        "queue",
+                      ) as unknown[]
+                    ).length
+                  : undefined,
+                researchEntries: Array.isArray(
+                  readProperty(readProperty(compostRoot, "r_queue"), "queue"),
+                )
+                  ? (
+                      readProperty(
+                        readProperty(compostRoot, "r_queue"),
+                        "queue",
+                      ) as unknown[]
+                    ).length
+                  : undefined,
+              });
+              const compostCity = readProperty(compostRoot, "city");
+              const compostStructure = readProperty(compostCity, "compost");
+              const compostResources = readProperty(compostRoot, "resource");
+              const readPeriod = readProperty(hooks, "readPeriodForTest");
+              const firstBoundary = readProperty(
+                hooks,
+                "p17FirstConstructionBoundary",
+              );
+              const constructionAdmissionOpen =
+                firstBoundary === undefined ||
+                readProperty(firstBoundary, "status") ===
+                  "current-compost-target";
+              const compostHoldings = Object.freeze(
+                Object.fromEntries(
+                  ["Food", "Lumber", "Stone"].map((resourceId) => {
+                    const resource = readProperty(compostResources, resourceId);
+                    return [
+                      resourceId,
+                      Object.freeze({
+                        amount: readProperty(resource, "amount"),
+                        max: readProperty(resource, "max"),
+                      }),
+                    ];
+                  }),
+                ),
+              );
+              const compostCommitments = Object.freeze(
+                Object.fromEntries(
+                  ["Lumber", "Stone"].map((resourceId) => [
+                    resourceId,
+                    Object.freeze({
+                      requested: compostDemand.requestedQuantity(resourceId),
+                      excludingMech:
+                        compostDemand.requestedQuantityExcludingMech(
+                          resourceId,
+                        ),
+                      maxCost: compostDemand.maxCost?.(resourceId),
+                    }),
+                  ]),
+                ),
+              );
+              const boundary = Object.freeze({
+                period:
+                  typeof readPeriod === "function"
+                    ? Number(Reflect.apply(readPeriod, hooks, []))
+                    : undefined,
+                rootGeneration: compostRootGeneration,
+                progressionGeneration: compostProgressionGeneration,
+                boardControlRevision: pageCapture.controls.readRevision?.(),
+                constructionOrderEstablished:
+                  progression.observations.hasCompletedOrdering(),
+                savingTarget: compostSavingTarget,
+                nativePrice: compostCost,
+                compostControlGeneration: compostControl?.generation,
+                resourceControlGenerations: compostResourceControlGenerations,
+                resourceControlIds: Object.freeze({
+                  Lumber: "city-lumber",
+                  Stone:
+                    pageCapture.controls
+                      .resolve("undefined-stone")
+                      ?.methods.includes("action") === true
+                      ? "undefined-stone"
+                      : "city-stone",
+                }),
+                constructionPermissions: Object.freeze({
+                  masterScriptToggle: readProperty(
+                    settingsStore.readRaw(),
+                    "masterScriptToggle",
+                  ),
+                  autoBuild: readProperty(settingsStore.readRaw(), "autoBuild"),
+                  autoARPA: readProperty(settingsStore.readRaw(), "autoARPA"),
+                  autoResearch: readProperty(
+                    settingsStore.readRaw(),
+                    "autoResearch",
+                  ),
+                  autoJobs: readProperty(settingsStore.readRaw(), "autoJobs"),
+                  buildingAlwaysClick: readProperty(
+                    settingsStore.readRaw(),
+                    "buildingAlwaysClick",
+                  ),
+                }),
+                protectedResourceClaimPresent: hasProtectedResourceClaim,
+                queues: queueSummary,
+                commitments: compostCommitments,
+                holdings: compostHoldings,
+                compost: Object.freeze({
+                  count: readProperty(compostStructure, "count") ?? 0,
+                  on: readProperty(compostStructure, "on") ?? 0,
+                }),
+                status: compostValidDecision
+                  ? "current-compost-target"
+                  : compostSavingTarget?.name === "city-compost"
+                    ? "compost-target-authority-incomplete"
+                    : "compost-not-current-saving-target",
+              });
+              if (isRecord(hooks)) {
+                const prior = readProperty(
+                  hooks,
+                  "p17FirstConstructionBoundary",
+                );
+                const constructionTrajectory = readProperty(
+                  hooks,
+                  "p17ConstructionTargetTrajectory",
+                );
+                if (
+                  Array.isArray(constructionTrajectory) &&
+                  typeof boundary.period === "number" &&
+                  boundary.period % 100 === 0
+                )
+                  constructionTrajectory.push(boundary);
+                if (
+                  prior === undefined &&
+                  Number(
+                    readProperty(readProperty(compostRoot, "tech"), "axe"),
+                  ) >= 1 &&
+                  progression.observations.hasCompletedOrdering()
+                )
+                  Reflect.set(hooks, "p17FirstConstructionBoundary", boundary);
+              }
+              if (
+                compostValidDecision &&
+                constructionAdmissionOpen &&
+                Number(
+                  readProperty(readProperty(compostRoot, "tech"), "axe"),
+                ) >= 1 &&
+                costIdentity(compostSavingTarget?.cost) !== undefined &&
+                Object.entries(
+                  compostSavingTarget!.cost as Record<string, number>,
+                ).every(
+                  ([resourceId, price]) =>
+                    typeof price === "number" &&
+                    Number.isFinite(price) &&
+                    price > 0 &&
+                    Number(
+                      readProperty(
+                        readProperty(compostResources, resourceId),
+                        "max",
+                      ),
+                    ) >= price,
+                )
+              )
+                standardConstructionTarget = Object.freeze({
+                  actionId: "city-compost",
+                  cost: Object.freeze({ ...compostSavingTarget!.cost }),
+                  resourceClickBudget: 5,
+                  controlGeneration: compostControl!.generation,
+                  isCurrent: compostTargetIsCurrent,
+                });
+            }
             const resourceClaim = readProperty(
               gatherTestHooks,
               "resourceClaim",
@@ -2572,6 +2894,9 @@ export function startCapturedRuntime({
               ...(standardResearchTarget === undefined
                 ? {}
                 : { standardResearchTarget }),
+              ...(standardConstructionTarget === undefined
+                ? {}
+                : { standardConstructionTarget }),
               resourceClaimLedgerObserver: (ledger: unknown) => {
                 ledgerStatusForGatherCycle = String(
                   readProperty(ledger, "status") ?? "unavailable",

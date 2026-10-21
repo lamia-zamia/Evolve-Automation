@@ -720,4 +720,85 @@ assert.equal(root.resource.Lumber.amount, 20);
 assert.equal(root.resource.Stone.amount, 5);
 assert.equal(materialGatherCalls, 8);
 
+root.resource.Lumber.amount = 20;
+root.resource.Stone.amount = 5;
+root.city.compost = { count: 0, on: 0 };
+let compostTargetCurrent = true;
+let compostStoneClicks = 0;
+const compostControls = {
+  resolve(elementId) {
+    return ["city-compost", "city-lumber", "undefined-stone"].includes(
+      elementId,
+    )
+      ? { elementId, generation: 9, methods: ["action"] }
+      : undefined;
+  },
+  invoke(handle, method) {
+    assert.equal(method, "action");
+    assert.equal(handle.elementId, "undefined-stone");
+    compostStoneClicks += 1;
+    root.resource.Stone.amount += 1;
+    return { ok: true, value: true };
+  },
+  capturedElementIds: () => ["city-compost", "city-lumber", "undefined-stone"],
+};
+const compostGatherAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls: compostControls,
+  readSettings: () => settings,
+  readTestIntervention: () => ({
+    standardConstructionTarget: {
+      actionId: "city-compost",
+      cost: { Lumber: 12, Stone: 12 },
+      resourceClickBudget: 5,
+      controlGeneration: 9,
+      isCurrent: () => compostTargetCurrent,
+    },
+  }),
+});
+const compostTargetInput = compostGatherAdapter.reader.read();
+assert.deepEqual(compostTargetInput.testOnlyMaterialTarget, {
+  Lumber: { quantity: 12, clickBudget: 5 },
+  Stone: { quantity: 12, clickBudget: 5 },
+});
+const compostTargetPlan = planGatherResources(compostTargetInput);
+assert.deepEqual(
+  compostTargetPlan.operations.map(({ actionId, amount }) => ({
+    actionId,
+    amount,
+  })),
+  [{ actionId: "stone", amount: 5 }],
+  "a funded Lumber side of the Compost target must not trigger extra Lumber clicks",
+);
+compostTargetCurrent = false;
+assert.equal(
+  compostGatherAdapter.executor.execute(compostTargetPlan).status,
+  "stale",
+);
+assert.equal(compostStoneClicks, 0);
+compostTargetCurrent = true;
+const compostFirstBatch = planGatherResources(
+  compostGatherAdapter.reader.read(),
+);
+assert.deepEqual(compostGatherAdapter.executor.execute(compostFirstBatch), {
+  status: "succeeded",
+});
+assert.equal(root.resource.Stone.amount, 10);
+assert.equal(compostStoneClicks, 5);
+const compostFinalBatch = planGatherResources(
+  compostGatherAdapter.reader.read(),
+);
+assert.deepEqual(
+  compostFinalBatch.operations.map(({ actionId, amount }) => ({
+    actionId,
+    amount,
+  })),
+  [{ actionId: "stone", amount: 2 }],
+);
+assert.deepEqual(compostGatherAdapter.executor.execute(compostFinalBatch), {
+  status: "succeeded",
+});
+assert.equal(root.resource.Stone.amount, 12);
+assert.equal(compostStoneClicks, 7);
+
 console.log("captured-gather-resources ok");
