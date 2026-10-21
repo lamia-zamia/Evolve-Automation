@@ -4,6 +4,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
+import {
+  allocationClickBudget,
+  allocationDenialReason,
+} from "./p20-allocation-budget.mjs";
 
 import {
   createChromiumRunner,
@@ -26,11 +30,11 @@ const fixturePath = path.join(
 );
 const evidencePath = path.join(
   root,
-  "experiments/p20-standard-human-sustained-allocation-evidence.json",
+  "experiments/p20-1-construction-allocation-authority-evidence.json",
 );
 const interimEvidencePath = path.join(
   root,
-  "test-artifacts/benchmark/tmp/p20-candidate-replays-v13.json",
+  "test-artifacts/benchmark/tmp/p20-1-candidate-replays.json",
 );
 const productionBundlePath = path.join(root, "evolve_automation.user.js");
 const testBundlePath = path.join(
@@ -308,6 +312,7 @@ async function replay(
       hooks.constructionAllocationOwnerCycles = 0;
       hooks.constructionOwnerEvidence = [];
       hooks.researchOwnerEvidence = [];
+      hooks.constructionPublicationAuthority = undefined;
       hooks.readPeriodForTest = () => window.__EA_RUNNER__?.periods?.() ?? null;
       Object.defineProperty(hooks, "captureResearchOwnerEvidenceForTest", {
         configurable: true,
@@ -360,6 +365,12 @@ async function replay(
                     hooks.constructionOwnerEvidence.push({
                       period,
                       ...contract,
+                      publicationConsumedByGather:
+                        hooks.constructionSavingTargetObservations.findLast(
+                          (entry) =>
+                            entry.workCycleId ===
+                            contract.publicationWorkCycleId,
+                        ) ?? null,
                       resources: Object.fromEntries(
                         ["Money", "Lumber", "Stone", "Food", "Knowledge"].map(
                           (id) => [id, resource(id)],
@@ -395,6 +406,25 @@ async function replay(
                       }),
                     });
                   }
+                  if (
+                    typeof contract.targetId === "string" &&
+                    (contract.publicationCurrent !== true ||
+                      contract.requestMatchesPublication !== true ||
+                      contract.targetId !== contract.publishedTargetId ||
+                      JSON.stringify(contract.requestPrice) !==
+                        JSON.stringify(contract.publicationPrice) ||
+                      JSON.stringify(contract.requestPrice) !==
+                        JSON.stringify(contract.nativePrice) ||
+                      contract.requestPool !== contract.publicationPool ||
+                      contract.requestPool !== contract.nativePool) &&
+                    !hooks.constructionAllocationEvents.some(
+                      (entry) => entry.phase === "authority-disagreement",
+                    )
+                  )
+                    record({
+                      ...contract,
+                      phase: "authority-disagreement",
+                    });
                   const requestIsCurrent =
                     typeof contract.targetId === "string" &&
                     contract.requestMatchesPublication === true &&
@@ -473,21 +503,22 @@ async function replay(
                   }
                   let episode = episodes.get(key);
                   if (!episode) {
-                    if (
-                      seenRequests.has(authorizationKey) ||
-                      episodes.size >=
-                        value.constructionAllocation.maxEpisodes ||
-                      total.clicks >=
-                        value.constructionAllocation.maxTotalClicks
-                    ) {
+                    const denialReason = allocationDenialReason({
+                      targetAlreadyAuthorized:
+                        seenRequests.has(authorizationKey),
+                      episodeCount: episodes.size,
+                      maxEpisodes: value.constructionAllocation.maxEpisodes,
+                      totalClicks: total.clicks,
+                      maxTotalClicks:
+                        value.constructionAllocation.maxTotalClicks,
+                    });
+                    if (denialReason !== undefined) {
                       if (!deniedTargets.has(contract.targetId)) {
                         deniedTargets.add(contract.targetId);
                         record({
                           phase: "authorization-denied",
                           targetId: contract.targetId,
-                          reason: seenRequests.has(authorizationKey)
-                            ? "same-target-already-authorized"
-                            : "episode-or-total-budget-exhausted",
+                          reason: denialReason,
                         });
                       }
                       return undefined;
@@ -508,6 +539,13 @@ async function replay(
                     record({
                       phase: "authorized",
                       targetId: contract.targetId,
+                      workCycleId: contract.workCycleId,
+                      phaseIdentity: contract.phase,
+                      publicationWorkCycleId: contract.publicationWorkCycleId,
+                      publicationCurrent: contract.publicationCurrent,
+                      rootGeneration: contract.rootGeneration,
+                      progressionGeneration: contract.progressionGeneration,
+                      controlGeneration: contract.controlGeneration,
                       price: contract.price,
                       stock: contract.stock,
                       pool: contract.pool,
@@ -522,12 +560,14 @@ async function replay(
                   episode.progressionGeneration =
                     contract.progressionGeneration;
                   episode.controlGeneration = contract.controlGeneration;
-                  const remaining = Math.min(
-                    value.constructionAllocation.maxEpisodeClicks -
-                      episode.clicks,
-                    value.constructionAllocation.maxTotalClicks - total.clicks,
-                  );
-                  if (remaining <= 0) {
+                  const clickBudget = allocationClickBudget({
+                    episodeClicks: episode.clicks,
+                    maxEpisodeClicks:
+                      value.constructionAllocation.maxEpisodeClicks,
+                    totalClicks: total.clicks,
+                    maxTotalClicks: value.constructionAllocation.maxTotalClicks,
+                  });
+                  if (clickBudget <= 0) {
                     episode.active = false;
                     record({
                       phase: "budget-exhausted",
@@ -538,13 +578,14 @@ async function replay(
                     return undefined;
                   }
                   return {
-                    clickBudget: Math.min(5, remaining),
+                    clickBudget,
                     onClick(event) {
                       episode.clicks += 1;
                       total.clicks += 1;
                       record({
                         phase: "gather-click",
                         targetId: contract.targetId,
+                        workCycleId: contract.workCycleId,
                         actionId: event.actionId,
                         resourceId: event.resourceId,
                         episodeClicks: episode.clicks,
@@ -708,6 +749,15 @@ try {
       "utf8",
     ),
   );
+  const historicalP20 = JSON.parse(
+    await readFile(
+      path.join(
+        root,
+        "experiments/p20-standard-human-sustained-allocation-evidence.json",
+      ),
+      "utf8",
+    ),
+  );
   const fixture = await verifyRetainedHumanFixture();
   const productionBundleSha256 = await sha256File(productionBundlePath);
   const metadata = await readFile(metadataPath, "utf8");
@@ -718,7 +768,7 @@ try {
     bundle: true,
     write: false,
     banner: {
-      js: `${metadata.trimEnd()}\nwindow.__EA_TEST_HOOKS__ = { ...(window.__EA_TEST_HOOKS__ ?? {}), constructionSavingTargetObservations: [], civilizationBootstrapEvents: [], civilizationHandoffEvents: [], constructionAllocationEvents: [], captureConstructionSavingTargetForTest(target) { this.constructionSavingTargetObservations.push({ period: window.__EA_RUNNER__?.periods?.() ?? null, target }); } };`,
+      js: `${metadata.trimEnd()}\nwindow.__EA_TEST_HOOKS__ = { ...(window.__EA_TEST_HOOKS__ ?? {}), constructionSavingTargetObservations: [], civilizationBootstrapEvents: [], civilizationHandoffEvents: [], constructionAllocationEvents: [], captureConstructionSavingTargetForTest(target, authority) { this.constructionSavingTargetObservations.push({ period: window.__EA_RUNNER__?.periods?.() ?? null, ...authority, target }); } };`,
     },
     platform: "browser",
     target: ["esnext"],
@@ -779,45 +829,38 @@ try {
       ["city-lumber", 10],
       ["undefined-stone", 10],
     ]));
-  const cachedCandidate = await readFile(interimEvidencePath, "utf8")
-    .then((text) => JSON.parse(text))
-    .catch(() => ({}));
-  const candidate =
-    cachedCandidate.candidate ??
-    (await replay(
-      "p20-bounded-current-construction-allocation",
-      false,
-      10_000,
-      [],
-      {
-        authorizationId: "p19-human-candidate-1",
-        constructionHandoffEnabled: false,
-        constructionAllocation: {
-          enabled: true,
-          maxEpisodes: 3,
-          maxEpisodeClicks: 80,
-          maxTotalClicks: 140,
-        },
+  const candidate = await replay(
+    "p20-1-corrected-construction-authority",
+    false,
+    10_000,
+    [],
+    {
+      authorizationId: "p19-human-candidate-1",
+      constructionHandoffEnabled: true,
+      constructionAllocation: {
+        enabled: true,
+        maxEpisodes: 3,
+        maxEpisodeClicks: 80,
+        maxTotalClicks: 140,
       },
-    ));
-  const duplicateCandidate =
-    cachedCandidate.duplicateCandidate ??
-    (await replay(
-      "p20-bounded-current-construction-allocation-repeat",
-      false,
-      10_000,
-      [],
-      {
-        authorizationId: "p19-human-candidate-2",
-        constructionHandoffEnabled: false,
-        constructionAllocation: {
-          enabled: true,
-          maxEpisodes: 3,
-          maxEpisodeClicks: 80,
-          maxTotalClicks: 140,
-        },
+    },
+  );
+  const duplicateCandidate = await replay(
+    "p20-1-corrected-construction-authority-repeat",
+    false,
+    10_000,
+    [],
+    {
+      authorizationId: "p19-human-candidate-2",
+      constructionHandoffEnabled: true,
+      constructionAllocation: {
+        enabled: true,
+        maxEpisodes: 3,
+        maxEpisodeClicks: 80,
+        maxTotalClicks: 140,
       },
-    ));
+    },
+  );
   await mkdir(path.dirname(interimEvidencePath), { recursive: true });
   await writeFile(
     interimEvidencePath,
@@ -886,31 +929,41 @@ try {
     10,
     "bootstrap stops after its ten native Gather clicks",
   );
+  const authorizationEvents = candidate.constructionAllocationEvents.filter(
+    (event) => event.phase === "authorized",
+  );
+  const allocationClicks = candidate.constructionAllocationEvents.filter(
+    (event) => event.phase === "gather-click",
+  );
+  assert.ok(authorizationEvents.length <= 3);
+  assert.ok(allocationClicks.length <= 140);
   assert.ok(
-    candidate.constructionAllocationEvents.some(
-      (event) => event.phase === "authorized",
+    authorizationEvents.every(
+      (event, index) =>
+        authorizationEvents.findIndex(
+          (other) => other.targetId === event.targetId,
+        ) === index,
     ),
-    "the generic native-owner allocation authorizes at least one current request",
+    "repeated unchanged targets cannot reset an exhausted episode budget",
   );
   assert.ok(
-    candidate.gatherCalls["city-lumber.action"]?.returned > 0 ||
-      candidate.gatherCalls["undefined-stone.action"]?.returned > 20,
-    "continued allocation supplies a post-bootstrap material shortage",
+    allocationClicks.every((event) => event.episodeClicks <= 80),
+    "episode click budgets are enforced",
   );
+  const clicksByWorkCycle = new Map();
+  for (const event of allocationClicks)
+    clicksByWorkCycle.set(
+      event.workCycleId,
+      (clicksByWorkCycle.get(event.workCycleId) ?? 0) + 1,
+    );
   assert.ok(
-    candidate.constructionAllocationEvents.filter(
-      (event) => event.phase === "gather-click",
-    ).length <= 140 &&
-      candidate.constructionAllocationEvents
-        .filter((event) => event.phase === "gather-click")
-        .every((event) => event.episodeClicks <= 80),
-    "dynamic Gather clicks stay within their episode and intervention budgets",
+    [...clicksByWorkCycle.values()].every((count) => count <= 5),
+    "per-cycle click budgets are enforced",
   );
-  assert.ok(
-    candidate.gatherCalls["city-lumber.action"]?.returned +
-      candidate.gatherCalls["undefined-stone.action"]?.returned <=
-      160,
-    "dynamic allocation adds at most 140 clicks beyond P19's 20 startup clicks",
+  assert.equal(
+    candidate.checkpoints.at(-1)?.native.civilizationHandoffEvents.length,
+    10,
+    "the P19 Construction handoff remains bounded at ten clicks",
   );
   const candidateAt1000 = candidate.checkpoints.find(
     (checkpoint) => checkpoint.period === 1_000,
@@ -959,27 +1012,44 @@ try {
   );
   const lastConstructionOwnerObservation =
     candidate.constructionOwnerEvidence.at(-1);
+  const ownerAt5000 = candidate.constructionOwnerEvidence.find(
+    (entry) => entry.period === 5_000,
+  );
+  const consumedTargetAt5000 = ownerAt5000?.publicationConsumedByGather?.target;
   const latestPublishedTargetId =
     candidateFinalNative?.currentConstructionSavingTargetObservation?.target
       ?.name ?? null;
   const lateAuthorityMismatch =
-    typeof lastConstructionOwnerObservation?.targetId === "string" &&
-    typeof latestPublishedTargetId === "string" &&
-    lastConstructionOwnerObservation.targetId !== latestPublishedTargetId;
+    ownerAt5000 !== undefined &&
+    (ownerAt5000.publicationCurrent !== true ||
+      ownerAt5000.workCycleId !== ownerAt5000.publicationWorkCycleId + 1 ||
+      ownerAt5000.targetId !== ownerAt5000.publishedTargetId ||
+      ownerAt5000.targetId !== consumedTargetAt5000?.name ||
+      JSON.stringify(ownerAt5000.requestPrice) !==
+        JSON.stringify(ownerAt5000.publicationPrice) ||
+      JSON.stringify(ownerAt5000.requestPrice) !==
+        JSON.stringify(ownerAt5000.nativePrice) ||
+      ownerAt5000.requestPool !== ownerAt5000.publicationPool ||
+      ownerAt5000.requestPool !== ownerAt5000.nativePool);
+  const firstAllocationAuthorization =
+    candidate.constructionAllocationEvents.find(
+      (event) => event.phase === "authorized",
+    ) ?? null;
+  const firstAuthorityDisagreement =
+    candidate.constructionAllocationEvents.find(
+      (event) => event.phase === "authority-disagreement",
+    ) ?? null;
   const additionalCompetingConstructionPurchases =
     additionalConstructionPurchases.filter(
       (entry) => entry.period > 576 && entry.elementId !== "city-rock_quarry",
     );
-  const decision = lateAuthorityMismatch
-    ? "C"
-    : additionalCompetingConstructionPurchases.length > 0
-      ? "B"
+  const decision =
+    lateAuthorityMismatch || firstAuthorityDisagreement !== null
+      ? "C"
       : additionalConstructionPurchases.length > 0 ||
           additionalResearchPurchases.length > 0
         ? "A"
-        : candidate.constructionAllocationEvents.some(
-              (event) => event.phase === "non-material-blocker",
-            )
+        : allocationClicks.length > 0
           ? "B"
           : "C";
   const firstResearchOfferCheckpoint = candidate.checkpoints.find(
@@ -1021,7 +1091,7 @@ try {
     runner: runner.inputs,
   };
   const evidence = {
-    experiment: "P20 Standard Human sustained owner-directed allocation",
+    experiment: "P20.1 Construction allocation authority correction",
     decision,
     runner: "chromium-exact",
     seed,
@@ -1069,6 +1139,52 @@ try {
     nativeStoneTen: stoneTen,
     nativeStarterPacket: starterPacket,
     candidate,
+    comparison: {
+      p19AcceptedCandidate: {
+        evidencePath: "experiments/p19-civilization-bootstrap-evidence.json",
+        decision: previousEvidence.decision,
+        candidate: {
+          periods: previousEvidence.candidate.periods,
+          finalExportSha256: previousEvidence.candidate.finalExportSha256,
+          finalRngState: previousEvidence.candidate.finalRngState,
+          randomCalls: previousEvidence.candidate.randomCalls,
+          gatherCalls: previousEvidence.candidate.gatherCalls,
+          constructionInvocations:
+            previousEvidence.candidate.constructionInvocations,
+          researchInvocations: previousEvidence.candidate.researchInvocations,
+          checkpoints: previousEvidence.candidate.checkpoints.map(
+            ({ period, population, tech, resourceStocks, native }) => ({
+              period,
+              population,
+              tech,
+              resourceStocks,
+              foodProduction: native.foodProduction,
+              starved: native.starved,
+              deaths: native.deaths,
+              jobs: native.jobs,
+              buildings: native.buildings,
+            }),
+          ),
+        },
+      },
+      p20OriginalHistorical: {
+        evidencePath:
+          "experiments/p20-standard-human-sustained-allocation-evidence.json",
+        decision: historicalP20.decision,
+        candidate: {
+          periods: historicalP20.candidate.periods,
+          finalExportSha256: historicalP20.candidate.finalExportSha256,
+          finalRngState: historicalP20.candidate.finalRngState,
+          randomCalls: historicalP20.candidate.randomCalls,
+          constructionAllocationEvents:
+            historicalP20.candidate.constructionAllocationEvents,
+          constructionInvocations:
+            historicalP20.candidate.constructionInvocations,
+          researchInvocations: historicalP20.candidate.researchInvocations,
+        },
+        admissible: false,
+      },
+    },
     duplicateCandidate: {
       finalExportSha256: duplicateCandidate.finalExportSha256,
       controlUsage: duplicateCandidate.controlUsage,
@@ -1137,6 +1253,8 @@ try {
     },
     outcomeClassification: {
       decision,
+      firstAllocationAuthorization,
+      firstAuthorityDisagreement,
       lateAuthorityMismatch,
       lastConstructionOwnerTargetId:
         lastConstructionOwnerObservation?.targetId ?? null,
@@ -1152,6 +1270,22 @@ try {
         firstResearchOfferCheckpoint?.period ?? null,
       firstResearchPurchase: candidate.researchInvocations[0] ?? null,
       firstConstructionPurchase: candidate.constructionInvocations[0] ?? null,
+      publicationChronology: {
+        period5000: ownerAt5000
+          ? {
+              requestPhase: ownerAt5000.phase,
+              workCycleId: ownerAt5000.workCycleId,
+              requestTargetId: ownerAt5000.targetId,
+              requestPrice: ownerAt5000.requestPrice,
+              publicationWorkCycleId: ownerAt5000.publicationWorkCycleId,
+              consumedPublication: consumedTargetAt5000,
+              publicationCurrent: ownerAt5000.publicationCurrent,
+              priceAuthorityValid: ownerAt5000.priceAuthorityValid,
+              moneyStock: ownerAt5000.resources?.Money?.amount ?? null,
+            }
+          : null,
+        firstAuthorityDisagreement,
+      },
     },
     productionBundleParity: {
       requiredSha256:
