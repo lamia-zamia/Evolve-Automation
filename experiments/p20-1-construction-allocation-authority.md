@@ -33,7 +33,7 @@ The exact Chromium runner used the P19 Standard/Human fixture, seed 44, frozen 2
 
 At p5000 / p10000, P20.1 had Food 0/1000, population 0, no assigned jobs, no Farmer production, and cumulative starvation counts 4 / 8 with zero deaths. The corrected replay adds one Cabin purchase but no Farm, Shed, or Research purchase; it has no progression gain over P19. P20's earlier Shed and progression claims are not admissible under the corrected price and publication checks.
 
-The corrected candidate and duplicate matched their final export hash, RNG call count (2,007), final RNG state (2,778,716,633), and native control-usage trace. The exact run recorded 1,242 Construction allocation owner cycles, no authorization event, zero native control failures, and one stale publication-authority disagreement at p8304. Native control, export, RNG and invocation parity checks passed for the corrected candidate replay.
+The corrected candidate and duplicate matched their final export hash, RNG call count (2,007), final RNG state (2,778,716,633), and native control-usage trace. The exact run recorded 1,242 Construction allocation owner cycles, no authorization event, zero native control failures, and one first-recorded stale publication-authority disagreement at p8304. Native control, export, RNG and invocation parity checks passed for the corrected candidate replay.
 
 ## Verification and limits
 
