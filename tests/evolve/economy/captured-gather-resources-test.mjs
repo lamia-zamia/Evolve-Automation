@@ -999,10 +999,267 @@ assert.equal(
   "Construction handoff respects its ten-click total limit",
 );
 
+root.resource.Lumber.amount = 0;
+root.resource.Stone.amount = 0;
+root.resource.Lumber.max = 20;
+root.resource.Stone.max = 20;
+root.resource.Food.amount = 40;
+root.resource.Mana.amount = 0;
+root.tech.primitive = 1;
+let allocationCurrent = true;
+let allocationClicks = 0;
+let cancelAllocationAfterClick = false;
+let allocationControlGeneration = 12;
+let allocationActionMode = "normal";
+let allocationOwnerEnabled = true;
+let allocationQueuesEmpty = true;
+let allocationHasCompetingCommitment = false;
+const allocationBootstrapState = {
+  root,
+  rootGeneration: undefined,
+  authorizationId: "retained-bootstrap-after-handoff",
+  baselineProgress: "",
+  isCurrent: () => true,
+  usedClicks: 10,
+  handoffClicks: 9,
+  handoffLimit: 10,
+  phase: "handoff",
+};
+const allocationControls = {
+  resolve(elementId) {
+    return ["city-shed", "city-lumber", "undefined-stone"].includes(elementId)
+      ? {
+          elementId,
+          generation: allocationControlGeneration,
+          methods: ["action"],
+        }
+      : undefined;
+  },
+  invoke(handle, method) {
+    assert.equal(method, "action");
+    if (allocationActionMode === "fail")
+      return { ok: false, reason: "action-failed", detail: "native rejected" };
+    const resourceId = handle.elementId === "city-lumber" ? "Lumber" : "Stone";
+    if (allocationActionMode !== "no-stock-change")
+      root.resource[resourceId].amount += 1;
+    if (cancelAllocationAfterClick) allocationCurrent = false;
+    return { ok: true, value: true };
+  },
+  capturedElementIds: () => ["city-shed", "city-lumber", "undefined-stone"],
+};
+const allocationAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls: allocationControls,
+  readSettings: () => settings,
+  readTestIntervention: () => ({
+    civilizationBootstrap: {
+      authorized: true,
+      authorizationId: "retained-bootstrap-after-handoff",
+      state: allocationBootstrapState,
+    },
+    constructionAllocation: { enabled: true },
+    standardConstructionTarget: {
+      actionId: "city-shed",
+      cost: { Money: 1, Lumber: 2, Stone: 2 },
+      resourceClickBudget: 4,
+      controlGeneration: 12,
+      isCurrent: () =>
+        allocationCurrent &&
+        allocationOwnerEnabled &&
+        allocationQueuesEmpty &&
+        !allocationHasCompetingCommitment,
+      onClick: () => {
+        allocationClicks += 1;
+      },
+    },
+  }),
+});
+const genericAllocationInput = allocationAdapter.reader.read();
+const genericAllocationPlan = planGatherResources(genericAllocationInput);
+assert.deepEqual(
+  genericAllocationPlan.operations.map(({ actionId, amount }) => ({
+    actionId,
+    amount,
+  })),
+  [
+    { actionId: "lumber", amount: 2 },
+    { actionId: "stone", amount: 2 },
+  ],
+  "a current non-bootstrap Construction request allocates only its material shortages",
+);
+assert.deepEqual(allocationAdapter.executor.execute(genericAllocationPlan), {
+  status: "succeeded",
+});
+assert.equal(root.resource.Lumber.amount, 2);
+assert.equal(root.resource.Stone.amount, 2);
+assert.equal(
+  allocationClicks,
+  3,
+  "remaining P19 handoff clicks are excluded from the dynamic allocation budget",
+);
+assert.equal(
+  allocationBootstrapState.handoffClicks,
+  10,
+  "the final P19 handoff click consumes only its own retained budget",
+);
+
+root.resource.Lumber.amount = 2;
+root.resource.Stone.amount = 0;
+const partiallyAffordablePlan = planGatherResources(
+  allocationAdapter.reader.read(),
+);
+assert.deepEqual(
+  partiallyAffordablePlan.operations.map(({ actionId, amount }) => ({
+    actionId,
+    amount,
+  })),
+  [{ actionId: "stone", amount: 2 }],
+  "a partially funded Construction request gathers only its remaining material shortage",
+);
+assert.deepEqual(allocationAdapter.executor.execute(partiallyAffordablePlan), {
+  status: "succeeded",
+});
+root.resource.Lumber.amount = 0;
+root.resource.Stone.amount = 0;
+
+root.resource.Lumber.amount = 0;
+root.resource.Stone.amount = 0;
+allocationCurrent = true;
+cancelAllocationAfterClick = true;
+const changingAllocationPlan = planGatherResources(
+  allocationAdapter.reader.read(),
+);
+assert.deepEqual(allocationAdapter.executor.execute(changingAllocationPlan), {
+  status: "stale",
+  failure: {
+    code: "gather-construction-target-invalidated",
+    message: "current Construction saving target changed during Gather",
+  },
+});
+assert.equal(root.resource.Lumber.amount, 1);
+assert.equal(root.resource.Stone.amount, 0);
+
+root.resource.Lumber.amount = 0;
+root.resource.Stone.amount = 0;
+allocationCurrent = true;
+cancelAllocationAfterClick = false;
+const repricedAllocationPlan = planGatherResources(
+  allocationAdapter.reader.read(),
+);
+allocationCurrent = false;
+assert.equal(
+  allocationAdapter.executor.execute(repricedAllocationPlan).status,
+  "stale",
+  "a changed native price or target invalidates the current allocation",
+);
+assert.equal(root.resource.Lumber.amount, 0);
+assert.equal(root.resource.Stone.amount, 0);
+
+allocationCurrent = true;
+const reboundAllocationPlan = planGatherResources(
+  allocationAdapter.reader.read(),
+);
+allocationControlGeneration = 13;
+assert.equal(
+  allocationAdapter.executor.execute(reboundAllocationPlan).status,
+  "stale",
+  "Gather control rebinding invalidates a captured allocation",
+);
+assert.equal(root.resource.Lumber.amount, 0);
+assert.equal(root.resource.Stone.amount, 0);
+allocationControlGeneration = 12;
+
+for (const invalidation of [
+  ["owner disabled", () => (allocationOwnerEnabled = false)],
+  ["Construction queue populated", () => (allocationQueuesEmpty = false)],
+  [
+    "competing Construction commitment",
+    () => (allocationHasCompetingCommitment = true),
+  ],
+]) {
+  allocationCurrent = true;
+  allocationOwnerEnabled = true;
+  allocationQueuesEmpty = true;
+  allocationHasCompetingCommitment = false;
+  const invalidatedPlan = planGatherResources(allocationAdapter.reader.read());
+  invalidation[1]();
+  assert.equal(
+    allocationAdapter.executor.execute(invalidatedPlan).status,
+    "stale",
+    `${invalidation[0]} invalidates the current owner-directed allocation`,
+  );
+  assert.equal(root.resource.Lumber.amount, 0);
+  assert.equal(root.resource.Stone.amount, 0);
+}
+allocationOwnerEnabled = true;
+allocationQueuesEmpty = true;
+allocationHasCompetingCommitment = false;
+
+root.resource.Lumber.max = 1;
+root.resource.Stone.max = 1;
+const insufficientCapacityPlan = planGatherResources(
+  allocationAdapter.reader.read(),
+);
+assert.equal(
+  insufficientCapacityPlan,
+  null,
+  "Gather does not target construction resources whose storage cannot hold the requested amount",
+);
+root.resource.Lumber.max = 20;
+root.resource.Stone.max = 20;
+
+root.tech.conjuring = 2;
+root.resource.Mana.amount = 5;
+const manaProtectedPlan = planGatherResources(allocationAdapter.reader.read());
+assert.equal(
+  manaProtectedPlan,
+  null,
+  "Construction-targeted gathering preserves Mana when Conjuring is active",
+);
+root.tech.conjuring = 0;
+root.resource.Mana.amount = 0;
+
+allocationActionMode = "fail";
+const failedNativeActionPlan = planGatherResources(
+  allocationAdapter.reader.read(),
+);
+assert.deepEqual(allocationAdapter.executor.execute(failedNativeActionPlan), {
+  status: "rejected",
+  failure: {
+    code: "gather-click-failed",
+    message: "native rejected",
+  },
+});
+assert.equal(root.resource.Lumber.amount, 0);
+allocationActionMode = "no-stock-change";
+const noStockChangePlan = planGatherResources(allocationAdapter.reader.read());
+assert.deepEqual(allocationAdapter.executor.execute(noStockChangePlan), {
+  status: "stale",
+  failure: {
+    code: "gather-result-changed",
+    message: "gather result differed for lumber",
+  },
+});
+allocationActionMode = "normal";
+
+const rootReplacementPlan = planGatherResources(
+  allocationAdapter.reader.read(),
+);
+root = { ...root, resource: { ...root.resource } };
+assert.equal(
+  allocationAdapter.executor.execute(rootReplacementPlan).status,
+  "stale",
+  "a native root replacement invalidates the captured allocation",
+);
+root.resource.Lumber.max = 200;
+root.resource.Stone.max = 200;
+
 root = { ...root, resource: { ...root.resource } };
 root.resource.Food.amount = 100;
 root.resource.Lumber.amount = 100;
+root.resource.Lumber.max = 200;
 root.resource.Stone.amount = 0;
+root.resource.Stone.max = 200;
 bootstrapAuthorization = {
   authorized: true,
   authorizationId: "human-start-revoked-mid-batch",

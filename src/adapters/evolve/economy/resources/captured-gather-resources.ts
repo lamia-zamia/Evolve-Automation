@@ -104,6 +104,7 @@ interface TestStandardConstructionTarget {
     Partial<Record<GatherActionId, number>>
   >;
   readonly isCurrent: () => boolean;
+  readonly onClick?: (event: Readonly<Record<string, unknown>>) => void;
 }
 
 export interface CapturedGatherResourcesDependencies {
@@ -509,6 +510,12 @@ export function createCapturedGatherResourcesAdapter({
           constructionTarget,
           "isCurrent",
         );
+        const constructionOnClick = readProperty(constructionTarget, "onClick");
+        const allocationEnabled =
+          readProperty(
+            readProperty(testIntervention, "constructionAllocation"),
+            "enabled",
+          ) === true;
         const remainingHandoffClicks =
           storedBootstrapState !== undefined &&
           (storedBootstrapState.phase === "active" ||
@@ -542,8 +549,9 @@ export function createCapturedGatherResourcesAdapter({
           typeof constructionActionId === "string" &&
           constructionActionId.startsWith("city-") &&
           (storedBootstrapState !== undefined ||
+            allocationEnabled ||
             constructionActionId === "city-compost") &&
-          remainingHandoffClicks > 0 &&
+          (allocationEnabled || remainingHandoffClicks > 0) &&
           isRecord(constructionCost) &&
           Object.entries(constructionCost).every(
             ([resourceId, price]) =>
@@ -572,13 +580,20 @@ export function createCapturedGatherResourcesAdapter({
             }),
             resourceClickBudget: Math.min(
               constructionClickBudget,
-              remainingHandoffClicks,
+              allocationEnabled ? 5 : remainingHandoffClicks,
             ),
             controlGeneration: constructionGeneration,
             resourceControlGenerations: Object.freeze(
               constructionResourceControlGenerations,
             ),
             isCurrent: constructionIsCurrent as () => boolean,
+            ...(typeof constructionOnClick === "function"
+              ? {
+                  onClick: constructionOnClick as (
+                    event: Readonly<Record<string, unknown>>,
+                  ) => void,
+                }
+              : {}),
           });
           testIntervention = Object.freeze({
             ...(isRecord(intervention) ? intervention : {}),
@@ -1225,6 +1240,25 @@ export function createCapturedGatherResourcesAdapter({
                 "gather-bootstrap-stale",
                 "explicit bootstrap authorization or native root changed",
               );
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              active.testStandardConstructionTarget !== undefined
+            ) {
+              const expectedGeneration =
+                active.testStandardConstructionTarget
+                  .resourceControlGenerations[operation.actionId];
+              const currentControl = controls.resolve(elementId);
+              if (
+                (expectedGeneration !== undefined &&
+                  currentControl?.generation !== expectedGeneration) ||
+                active.testStandardConstructionTarget.isCurrent() !== true
+              )
+                return stale(
+                  "gather-construction-target-stale",
+                  "current Construction saving target or Gather control changed",
+                );
+            }
             const manaBefore = readResource(
               beforeClickRoot,
               "Mana",
@@ -1319,11 +1353,15 @@ export function createCapturedGatherResourcesAdapter({
                   }),
                 );
             }
+            const isCivilizationHandoffClick =
+              active.testStandardConstructionTarget !== undefined &&
+              active.testBootstrap !== undefined &&
+              active.testBootstrap.handoffClicks <
+                active.testBootstrap.handoffLimit;
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
-              active.testStandardConstructionTarget !== undefined &&
-              active.testBootstrap !== undefined
+              isCivilizationHandoffClick
             ) {
               active.testBootstrap.handoffClicks += 1;
               const observer = readProperty(
@@ -1341,6 +1379,22 @@ export function createCapturedGatherResourcesAdapter({
                   }),
                 );
             }
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              active.testStandardConstructionTarget !== undefined &&
+              !isCivilizationHandoffClick &&
+              typeof active.testStandardConstructionTarget.onClick ===
+                "function"
+            )
+              active.testStandardConstructionTarget.onClick(
+                Object.freeze({
+                  actionId: active.testStandardConstructionTarget.actionId,
+                  resourceId:
+                    operation.actionId === "lumber" ? "Lumber" : "Stone",
+                  clickCount: 1,
+                }),
+              );
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
@@ -1416,7 +1470,7 @@ export function createCapturedGatherResourcesAdapter({
               if (active.testStandardConstructionTarget.isCurrent() !== true)
                 return stale(
                   "gather-construction-target-invalidated",
-                  "current Compost saving target changed during Gather",
+                  "current Construction saving target changed during Gather",
                 );
             }
             if (active.resourceClaimLedger !== undefined) {

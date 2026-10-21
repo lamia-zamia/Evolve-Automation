@@ -2616,6 +2616,254 @@ export function startCapturedRuntime({
                 });
             }
             if (
+              readProperty(
+                readProperty(gatherTestHooks, "constructionAllocation"),
+                "enabled",
+              ) === true
+            ) {
+              const allocation = readProperty(
+                gatherTestHooks,
+                "constructionAllocation",
+              );
+              const root = pageCapture.rootState.readRoot();
+              const rootGeneration = progression.readRootGeneration();
+              const progressionGeneration = progression.readProgressionEpoch();
+              const request = readDemand("pre-Gather").savingTarget;
+              const publishedRequest =
+                progression.observations.readSavingTarget();
+              const targetId = request?.name;
+              const price =
+                typeof targetId === "string"
+                  ? buildCosts.readCost(targetId)?.cost
+                  : undefined;
+              const targetControl =
+                typeof targetId === "string"
+                  ? pageCapture.controls.resolve(targetId)
+                  : undefined;
+              const costIdentity = (value: unknown) =>
+                isRecord(value)
+                  ? JSON.stringify(
+                      Object.entries(value).sort(([a], [b]) =>
+                        a.localeCompare(b),
+                      ),
+                    )
+                  : undefined;
+              const priceIdentity = costIdentity(price);
+              const requestMatchesPublication =
+                typeof targetId === "string" &&
+                publishedRequest?.name === targetId &&
+                costIdentity(publishedRequest.cost) ===
+                  costIdentity(request?.cost);
+              const rawResearchState = readProperty(root, "tech");
+              const researchState = isRecord(rawResearchState)
+                ? Object.freeze({ ...rawResearchState })
+                : Object.freeze({});
+              const queuesEmpty = ["queue", "r_queue"].every((queueId) => {
+                const entries = readProperty(
+                  readProperty(root, queueId),
+                  "queue",
+                );
+                return Array.isArray(entries) && entries.length === 0;
+              });
+              const claimsValue = readProperty(
+                gatherTestHooks,
+                "resourceClaims",
+              );
+              const noClaims =
+                readProperty(gatherTestHooks, "resourceClaim") === undefined &&
+                (!Array.isArray(claimsValue) || claimsValue.length === 0);
+              const autoBuild =
+                readProperty(settingsStore.readRaw(), "autoBuild") === true;
+              const observe = readProperty(allocation, "observe");
+              const getResource = (id: string) =>
+                readProperty(readProperty(root, "resource"), id);
+              const stock = Object.fromEntries(
+                Object.keys(price ?? {}).map((id) => [
+                  id,
+                  Number(readProperty(getResource(id), "amount")),
+                ]),
+              );
+              const capacity = Object.fromEntries(
+                ["Lumber", "Stone"].map((id) => [
+                  id,
+                  Math.max(
+                    0,
+                    Number(readProperty(getResource(id), "max")) -
+                      Number(readProperty(getResource(id), "amount")),
+                  ),
+                ]),
+              );
+              const shortage = Object.fromEntries(
+                ["Lumber", "Stone"].map((id) => [
+                  id,
+                  Math.max(
+                    0,
+                    Number(price?.[id] ?? 0) - Number(stock[id] ?? 0),
+                  ),
+                ]),
+              );
+              const bindings = Object.fromEntries(
+                ["Lumber", "Stone"].map((id) => {
+                  const elementId =
+                    id === "Lumber" ? "city-lumber" : "undefined-stone";
+                  const handle = pageCapture.controls.resolve(elementId);
+                  return [
+                    id,
+                    handle?.methods.includes("action") === true
+                      ? { elementId, generation: handle.generation }
+                      : null,
+                  ];
+                }),
+              );
+              if (typeof observe === "function")
+                observe({
+                  ownerId: "construction",
+                  targetId,
+                  publishedTargetId: publishedRequest?.name,
+                  requestMatchesPublication,
+                  selectionReason: "native-current-saving-target",
+                  researchState,
+                  ownerState: Object.freeze({
+                    orderingComplete:
+                      progression.observations.hasCompletedOrdering(),
+                    autoBuild,
+                  }),
+                  price: isRecord(price) ? Object.freeze({ ...price }) : price,
+                  stock: Object.freeze(stock),
+                  pool: request?.pool ?? "anywhere",
+                  resourceAuthority: "native-gather-owner-controls",
+                  rootGeneration,
+                  progressionGeneration,
+                  controlGeneration: targetControl?.generation,
+                  queuesEmpty,
+                  permissions: Object.freeze({
+                    autoBuild,
+                    controlAction:
+                      targetControl?.methods.includes("action") === true,
+                  }),
+                  competingClaims: !noClaims,
+                  materialShortage: Object.freeze(shortage),
+                  obtainableCapacity: Object.freeze(capacity),
+                  gatherControlBindings: Object.freeze(bindings),
+                  expires:
+                    "target-price-root-progression-control-queue-or-permission-change",
+                });
+              const isNativeRequestCurrent = () => {
+                try {
+                  const now = readDemand("pre-Gather").savingTarget;
+                  const nowPublished =
+                    progression.observations.readSavingTarget();
+                  const nowPrice =
+                    typeof targetId === "string"
+                      ? buildCosts.readCost(targetId)?.cost
+                      : undefined;
+                  const nowControl =
+                    typeof targetId === "string"
+                      ? pageCapture.controls.resolve(targetId)
+                      : undefined;
+                  return (
+                    pageCapture.rootState.readRoot() === root &&
+                    progression.readRootGeneration() === rootGeneration &&
+                    progression.readProgressionEpoch() ===
+                      progressionGeneration &&
+                    now?.name === targetId &&
+                    nowPublished?.name === targetId &&
+                    costIdentity(now?.cost) === costIdentity(request?.cost) &&
+                    costIdentity(nowPublished?.cost) ===
+                      costIdentity(request?.cost) &&
+                    costIdentity(nowPrice) === priceIdentity &&
+                    nowControl?.methods.includes("action") === true &&
+                    nowControl.generation === targetControl?.generation &&
+                    ["queue", "r_queue"].every((queueId) => {
+                      const entries = readProperty(
+                        readProperty(root, queueId),
+                        "queue",
+                      );
+                      return Array.isArray(entries) && entries.length === 0;
+                    }) &&
+                    noClaims &&
+                    readProperty(settingsStore.readRaw(), "autoBuild") === true
+                  );
+                } catch {
+                  return false;
+                }
+              };
+              const otherCostsAffordable = Object.entries(price ?? {}).every(
+                ([id, amount]) =>
+                  id === "Lumber" || id === "Stone"
+                    ? true
+                    : Number(stock[id]) >= Number(amount),
+              );
+              const authorize = readProperty(allocation, "authorize");
+              if (
+                typeof targetId === "string" &&
+                targetId.startsWith("city-") &&
+                priceIdentity !== undefined &&
+                targetControl?.methods.includes("action") === true &&
+                otherCostsAffordable &&
+                queuesEmpty &&
+                noClaims &&
+                requestMatchesPublication &&
+                readProperty(settingsStore.readRaw(), "autoBuild") === true &&
+                progression.observations.hasCompletedOrdering() &&
+                isNativeRequestCurrent() &&
+                typeof authorize === "function"
+              ) {
+                const contract = Object.freeze({
+                  ownerId: "construction",
+                  targetId,
+                  publishedTargetId: publishedRequest?.name,
+                  requestMatchesPublication,
+                  researchState,
+                  selectionReason: "native-current-saving-target",
+                  ownerState: Object.freeze({
+                    orderingComplete: true,
+                    autoBuild,
+                  }),
+                  price: Object.freeze({ ...price }),
+                  stock: Object.freeze(stock),
+                  pool: request?.pool ?? "anywhere",
+                  resourceAuthority: "native-gather-owner-controls",
+                  rootGeneration,
+                  progressionGeneration,
+                  controlGeneration: targetControl.generation,
+                  queuesEmpty,
+                  permissions: Object.freeze({
+                    autoBuild,
+                    controlAction: targetControl.methods.includes("action"),
+                  }),
+                  competingClaims: !noClaims,
+                  materialShortage: Object.freeze(shortage),
+                  obtainableCapacity: Object.freeze(capacity),
+                  gatherControlBindings: Object.freeze(bindings),
+                  expires:
+                    "target-price-root-progression-control-queue-or-permission-change",
+                });
+                const decision = authorize(contract);
+                const cycleBudget = Number(
+                  readProperty(decision, "clickBudget"),
+                );
+                const isCurrent = readProperty(allocation, "isCurrent");
+                if (
+                  decision !== undefined &&
+                  Number.isSafeInteger(cycleBudget) &&
+                  cycleBudget > 0 &&
+                  cycleBudget <= 5
+                )
+                  standardConstructionTarget = Object.freeze({
+                    actionId: targetId,
+                    cost: Object.freeze({ ...price }),
+                    resourceClickBudget: cycleBudget,
+                    controlGeneration: targetControl.generation,
+                    isCurrent: () =>
+                      isNativeRequestCurrent() &&
+                      (typeof isCurrent !== "function" ||
+                        isCurrent(contract) === true),
+                    onClick: readProperty(decision, "onClick"),
+                  });
+              }
+            }
+            if (
               readProperty(gatherTestHooks, "standardCompostTargetEnabled") ===
                 true &&
               Number(
