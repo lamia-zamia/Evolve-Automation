@@ -1,0 +1,2915 @@
+{
+  "experiment": "P18 Standard Human autonomous progression",
+  "decision": "C",
+  "runner": "chromium-exact",
+  "seed": 44,
+  "epoch": "2026-09-21T00:00:00.000Z",
+  "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "fixture": {
+    "path": "test-artifacts/benchmark/slice0/saves/p18-standard-human-fixture.txt",
+    "sha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+    "bytes": 8773,
+    "firstHumanCheckpoint": 9000,
+    "nativeLineage": {
+      "biome": "grassland",
+      "race": {
+        "species": "human",
+        "universe": "standard",
+        "strandGenus": ["humanoid"]
+      },
+      "challengeFlags": {},
+      "challengeCounters": {
+        "cataclysm": 0,
+        "blackhole": 0,
+        "ascend": 0,
+        "descend": 0,
+        "apotheosis": 0,
+        "terraform": 0,
+        "matrix": 0,
+        "retire": 0,
+        "eden": 0,
+        "zappoc": 0,
+        "subjug": 0
+      },
+      "genesChallenge": false,
+      "humanEvolutionMessage": true
+    },
+    "humanoidGenusAction": {
+      "returned": 3,
+      "threw": 0
+    },
+    "saveMutation": "none; debug expose was set only on in-memory replay copies"
+  },
+  "settings": {
+    "path": "experiments/p18-standard-human-settings.json",
+    "sha256": "4badd36cc3e3cad887d09f9710a23599e8f890f53eae286736141b91c8f92e32",
+    "basePath": "test-artifacts/benchmark/slice0/settings/current-full.json",
+    "baseSha256": "f7fd9286607695d8716359f20f1a5f680264832de36879f84a7a67c4bd970042",
+    "configuredOwners": {
+      "autoEvolution": true,
+      "autoResearch": true,
+      "autoBuild": true,
+      "autoJobs": true,
+      "autoMarket": true,
+      "autoSmelter": true,
+      "autoStorage": true
+    },
+    "overrides": {
+      "userEvolutionTarget": {
+        "from": "auto",
+        "to": "human",
+        "reason": "requested Human target"
+      },
+      "firstEvolutionQueueTarget": {
+        "from": "custom",
+        "to": "human",
+        "reason": "the enabled queue is applied before target selection"
+      },
+      "firstEvolutionQueueGenus": {
+        "from": "fungi",
+        "to": "humanoid",
+        "reason": "make the queued Human row select its native Humanoid genus"
+      },
+      "buildingAlwaysClick": false
+    },
+    "queueEnabled": true,
+    "queueRepeat": true
+  },
+  "inputHashes": {
+    "sourceFileCount": 709,
+    "sourceAggregateSha256": "78d1147f1df70124db4582236fa1e0a82ad07045e1d7e7f834793b5b4607ebed",
+    "sourceFiles": {
+      "src/adapters/browser/achievement-guard-settings.ts": "4bc357f61d1d696d1b872f56434eba0f23aafc744c430626c2caa919ee88639a",
+      "src/adapters/browser/arpa-toggles.ts": "cb5bb8025ffb6ceb06a2ade495b2bd0595dddfbd9aa2b3e02784a5b91debd729",
+      "src/adapters/browser/authority-settings.ts": "258ddd1d6dba59ff7aac74d6af1d82bf677290154a47968bcecdf9e43d49fb94",
+      "src/adapters/browser/autocomplete.ts": "fb14d4d299e1918bdcd7a8880d23c63437b1aeaef03d4c90600805f5f46fd3c1",
+      "src/adapters/browser/automation-container.ts": "4acd6c9a7cb2adc56f47d6244a4fcd4867aa2f8939889e6b64cca517bdcb0601",
+      "src/adapters/browser/building-settings.ts": "4370f08d8ae98726ba24c91d50fd4fb1656447ac23aeae9904ebcf52f5592a67",
+      "src/adapters/browser/building-toggles.ts": "3efad270c0b5aa1a6c49a3ac8e742426b1a3102de3ee19ff7eb7bbbdc232f394",
+      "src/adapters/browser/captured-planning-panels.ts": "72b4ff205f9a16ad75f8ce9ec11980dcd82f49eef9b19152158fbbf0acf8963e",
+      "src/adapters/browser/captured-runtime-browser-environment.ts": "9f1b98c4f9208295fbb6b826af2221bf61d18b6650f37aed73a13ff960d90ae9",
+      "src/adapters/browser/challenge-helper-settings.ts": "cfc713717f465de5629c7bff55ff77ab8838837d2d4ec1cad38abc34eed4cd21",
+      "src/adapters/browser/craft-toggles.ts": "4743a59c925796ecb348cc188b6b685327e2f7c684aece0ca60216b9d0c1f239",
+      "src/adapters/browser/diagnostics.ts": "29197af894a776afa94bb0efff6016551c2134ed030e7c87e0a79e38815b7239",
+      "src/adapters/browser/document-ready.ts": "6feb89a09ef67c2e4cd400cae4892baff6b213ffd773c3f03b42a8e9726440dd",
+      "src/adapters/browser/dom-selector.ts": "3401b452a4508efce27fab8e33e8f2c393f30d9911c20ea3eaa0023038ad38c9",
+      "src/adapters/browser/dom.ts": "6901b515052dc913d24532bc10401c3e35b1650080da254309ee4842687212cf",
+      "src/adapters/browser/eject-toggles.ts": "5c0a3d769c1b037dc813a34ef797be327618a8900760a52d5059d662067335b4",
+      "src/adapters/browser/ejector-settings.ts": "5451edede8b7377d8dddf5ca83533bd13a93bbaf129f3804282825efb27cda7b",
+      "src/adapters/browser/evolution-settings.ts": "449685abc0ab6c1794a79e770a041e92205f9109bf7853980e2bf3f9e8aa5105",
+      "src/adapters/browser/factory-tooltips.ts": "fe344bca423c845a2b986c970c44444fe572df017399f7da425d05e673481c99",
+      "src/adapters/browser/file-download.ts": "687f2126d5f96673b83ec7721466727c1aee140ecff9065f55eae40c94a2a03b",
+      "src/adapters/browser/fleet-settings.ts": "5142ddaa29c0a2351f0394d7feefbf76a2f18ead38e9b163011e39bf4d92eb89",
+      "src/adapters/browser/game-custom-race-lab.ts": "4ca67337f36a6612c7b718db21ffc8d5e5cc5bf2066d426f59a6a8908e209390",
+      "src/adapters/browser/game-drawn-actions.ts": "0c94b157382a4e61ad4326fd17602d7c59a99d2df6e323c09e7847535e2f51f2",
+      "src/adapters/browser/game-key-state.ts": "816be9c219e0a4665759f4e4da45b7366b621977d105ff8af676b0ccc50509ba",
+      "src/adapters/browser/game-keyboard-handlers.ts": "c2f6a1f2bae5861c7c489f2548868deff1d7c8ff72e0874366dbe6e3b3e3a8c0",
+      "src/adapters/browser/game-message-log.ts": "5d97d58abfb1a9d46db9f6c96df40218624191e749c0ce0a2eaa1e560566d23a",
+      "src/adapters/browser/game-modal.ts": "83b9f5278a59500db25962f876b2f232ee955ea54727ccd29a23971a4fb57728",
+      "src/adapters/browser/game-panel-workspace.ts": "031f3ba04fc08b9c9fb35953c7e4ae76947108dc9339100cef67cae70ce26d39",
+      "src/adapters/browser/game-terraform-lab.ts": "06d99b170713dbd20fe24812cf7d72e510e98f012a00d7ced0777daa42efac43",
+      "src/adapters/browser/game-tooltip-element.ts": "ac7fd6fec94d346e0084c873483e90ef8515a8762ac877b28a82eade465f8aa4",
+      "src/adapters/browser/general-settings.ts": "d830d0d22243bcc4f6e2b97fc43678e44a581b3f879a7de2f806a35e127fcc8d",
+      "src/adapters/browser/government-settings.ts": "2cdc5c7650627b2c0366735e4b56297047d1d932d25878ea84b5b24b13c7e74e",
+      "src/adapters/browser/hell-settings.ts": "8f0150bb58410ee9c44803a422ba895a8d7729644851bfde6099e43a774c47de",
+      "src/adapters/browser/interface-settings.ts": "5879011c1790fd29d53df1bff74b680e7dc1077ff907813fa56710114a775b51",
+      "src/adapters/browser/job-settings.ts": "711a5a1730aaeaa2e9139d05f24a4d374913d619379eda3219b98d1cfc9a5184",
+      "src/adapters/browser/magic-settings.ts": "a94aa1928f41092713049fa16a88ba94d340972477f7fff72ede7c5522ca929f",
+      "src/adapters/browser/market-settings.ts": "c5b894c9df41c2c8e2b051355bfb215e07a3fcd17772e006737a69e57b354023",
+      "src/adapters/browser/mech-info.ts": "4347437a736208977cb58a0bd4d97cb7068f32f923dd041c5afd771f99683d76",
+      "src/adapters/browser/mech-settings.ts": "cc576b83d1dc74331cbf1efa5bbc86b228c28a4936dbcdb2e45509175a2f53b4",
+      "src/adapters/browser/options-modal.ts": "9fde8116f82679cffd4c4aa944ed9a024384d7b248cad458834dae0a140fa4bc",
+      "src/adapters/browser/override-display.ts": "c5794874bc6141e7ae18cda39de8cd4ba9f35fc43995e4b1a3615e293acfc565",
+      "src/adapters/browser/planet-metadata.ts": "d60c661a2b0c656d8714bda441bc8a5f63be2f5e29f9ec7285b24acb03369a36",
+      "src/adapters/browser/planet-settings.ts": "2066f685595667a58a78c5403a436c601a5f1771befb460cc3cea21aaa4aa43c",
+      "src/adapters/browser/planning-worker.ts": "46ae5a2f77a1bcb9b438b72c4498616cad7af2fcacd5f44929235c461dda966f",
+      "src/adapters/browser/power-warnings.ts": "51aeaae67d0f3fa9dc93cc44c52297134f2e5a42cd49b35ce503b51276432827",
+      "src/adapters/browser/prestige-settings.ts": "b38e6d9ee5f10fd943b5a4d3e0b62c946e4d89fda9c6882345429d635f900fa0",
+      "src/adapters/browser/prestige-top-bar.ts": "d083c575b105f35239fd9e4898fce5e9839313ea056252feb654a5d38c81bcfb",
+      "src/adapters/browser/production-settings.ts": "c76ae7363922479e077f89cfb736b73e2ec8aa0a6c7392e54fefddba6ca4f895",
+      "src/adapters/browser/progression-controls.ts": "30acb902aacb35ea1d9d590cb3cec4bb9d2e5d27b59aa3d35cdc98f93234f02d",
+      "src/adapters/browser/project-settings.ts": "c26c75f25acb2731dc784240ecacbc1df110beebabc20d62cbb694301e35d756",
+      "src/adapters/browser/random.ts": "f384a39d62e6bfafc98912f143eeff40ee20edd56f4566cd5d8f0cb86b072684",
+      "src/adapters/browser/research-goal-candidates-worker-entry.ts": "a9949b8f2aa2844a14abfb5b868dabbb04b8d9f710633d8e67c413c5674bd8a9",
+      "src/adapters/browser/research-goal-candidates-worker.ts": "25deca969ad7c4fd27dbd1dca72871a77c908f237fca238d70b654d5a1e1e20a",
+      "src/adapters/browser/research-settings.ts": "8e7ee3b52ee099855f85fc7aa0de523c3e4e52521fd9b4ba4ba0cd990f15d8b2",
+      "src/adapters/browser/resource-toggles.ts": "cfde08d0794bc813e1dcdfeabf3db94ff381cde75f2922049293a1d7fc02bc93",
+      "src/adapters/browser/settings-editor/override-condition-controls.ts": "8a3dcc7807dad61cc2f32c24fd085e9b1a446214681cf795489419fa9dac3e18",
+      "src/adapters/browser/settings-editor/override-editor.ts": "0d54d2c072de2ae93bab240babd43e7a95ea173767630a4fc8973d39a400a746",
+      "src/adapters/browser/settings-editor/settings-controls.ts": "5909663ed059c3a53661272f248513435ff23d9b0f5d5037f4f4561ead5450a5",
+      "src/adapters/browser/settings-editor/settings-inputs.ts": "bb67a7033059d7ce318f089c76901eadd38a9462073d9d54de47abb3bd467182",
+      "src/adapters/browser/settings-import.ts": "b0caf83d6244dedda3b8362bf705f7b1657eed766c698d07be762a7fd25fc150",
+      "src/adapters/browser/settings-section.ts": "2e2768787ccf21e6a35b5e6ecac62d708f101a487ceaffbcc21ac6ca6edbaaec",
+      "src/adapters/browser/settings-store.ts": "1728875f585d0c4f70bb394012421cb60ddb1c8cff0a0a4728312d083b167f5f",
+      "src/adapters/browser/state-log-export.ts": "f60221ac31daddeefb35fd151504e3ba05eee57e8fbca567ec0c2fdf16bd0af5",
+      "src/adapters/browser/state-log-settings.ts": "da9f2235eb7b6786ecda8283a7ca134b3392cc5dcdd2cfee7a054fd4da9ceab7",
+      "src/adapters/browser/storage-settings.ts": "2848177ec574e4d0425027b02dfddd0671addc26b3351cda6886fa0abfa45d57",
+      "src/adapters/browser/supply-toggles.ts": "4cb44d4208462be5457560bf5d92e1703e2dfc5e4683e9007c936ab2c75091d2",
+      "src/adapters/browser/table-sorter.ts": "541ab4433e56e3f34b3d9f4fe8d172df0ad5239aa2e8336c6682142773f68c4c",
+      "src/adapters/browser/total-days-top-bar.ts": "8ed500ca2f419c6fe2ae7e5ebbff1128cb301d747341a6cd0564dac5961f43b5",
+      "src/adapters/browser/trait-settings.ts": "29923f25b996a74a8017ae13290091bb91d23a347a0f4ba07a42c60ce99930d6",
+      "src/adapters/browser/trigger-settings.ts": "a71005199ed5a94e7c86df361269df17965b493cf7abea74834c11a9e31ee15b",
+      "src/adapters/browser/war-settings.ts": "99e6c43b642ad2ae17c15738ebe246df31284c34c0b19ae48ff9f9fc69c34807",
+      "src/adapters/browser/weighting-settings.ts": "aecca3dd6357146f744872e2344d4be1debd8481ab343526793685649e054e10",
+      "src/adapters/command-outcomes.ts": "3a208977f7d16749c287567d9bf9a6aa9f71a1057aa4c0702a669ecaab08740d",
+      "src/adapters/evolve/ascension-level.ts": "804195618fd627a8597231f4b71c8e7e22d3a0ca19e0df99b666db2efc944ae2",
+      "src/adapters/evolve/captured-achievement-state.ts": "884e3b274b77d7c5006c1f7090703ff0516226ae3b5e8b03cc1a89a1b9666fad",
+      "src/adapters/evolve/captured-achievements.ts": "491c06140743c2ef757c75f3c69659f5c4de289e72d9ebc43205d520461c3943",
+      "src/adapters/evolve/captured-action-costs.ts": "d86fb0cc3e791dc7159703c7562517a114472a1b710f1c8b17a535e101984ef3",
+      "src/adapters/evolve/captured-affordability.ts": "3c5dea18fa03895b9d7287b5b85457be0a4312fcda9dc4ed1906c3527c0d3200",
+      "src/adapters/evolve/captured-build-capacity.ts": "30501a11a20ca0de78503fc0f5da63b836d265b0f45fc0332ce88a7f9b8e8171",
+      "src/adapters/evolve/captured-condition-context.ts": "50506dbf1e84d1c74971fbea61ad82743013352db617efbbcaa642ec06208740",
+      "src/adapters/evolve/captured-conditions.ts": "4273b3d91d7a7d59474cb01356f4c54dede1dbfafe072a72a41a6b41f7e59e05",
+      "src/adapters/evolve/captured-control-label.ts": "25aff6f42789f8918b9d26250e00998c69f530298d6144a74cbe9ca7d3ff67bd",
+      "src/adapters/evolve/captured-cost-conflict.ts": "9c53ba1163e773fa967fa39f03474e8e65a52ebe35ee172938db780e406bd034",
+      "src/adapters/evolve/captured-game-mechanics.ts": "dcf8cd8cd3247629ec1c8ce444cff75db0626b47768044678262fd7a4df3b9bb",
+      "src/adapters/evolve/captured-multiplier-keys.ts": "1da2a8c54b5f6822eedac740dce6496664196f53f3d8e0487dbd4e1ea640b407",
+      "src/adapters/evolve/captured-override-evaluation.ts": "bfc5cf37d4d9d66130a5d11a1657295b97282a4a00618089394c3c7a6b7fc4ec",
+      "src/adapters/evolve/captured-queue-reservations.ts": "b1c776e97531519b2d5a358a763653795ff60286bb7a6d8143b5c41f26bcb59b",
+      "src/adapters/evolve/captured-resource-metadata.ts": "571dd3e6c2e5ebfcca0ef5a35410e10eb742fe4436c6a4802c6cd71a6793f0c7",
+      "src/adapters/evolve/captured-settings-defaults.ts": "53db3ab448075fa96c4e0fec85eae8154a2db01996653a8dacbcb81d27f06a4f",
+      "src/adapters/evolve/captured-space-region-mechanics.ts": "7ef7c2d5aac4d06a695f065de92c5b2094ca62c5905e0cfa08014f4449e4a56a",
+      "src/adapters/evolve/captured-state-log.ts": "8ca7f6347020c87b88a8df23e2fff7303d5be62d1a1e2cb631f1b3ceeea8025e",
+      "src/adapters/evolve/captured-syndicate-mechanics.ts": "7ffb69387f0fda1ba18a332d108e4871e8cf562d785f3af5801af31d6ba60e1c",
+      "src/adapters/evolve/captured-tab-discovery.ts": "1a0a592bde17b68febbbb6c119958d81273fe900a4a7c7815e981666e2c2b3bb",
+      "src/adapters/evolve/captured-tech-state.ts": "2178bdcab6de6cee1629832c2dfc19a41cdedd0ad2df9cf69d2e3a438d2f7993",
+      "src/adapters/evolve/captured-tick-rate.ts": "556e8b11dc8c4a112cbcd356c1e97454dd9ac363e163fabbda2bbdce610716af",
+      "src/adapters/evolve/captured-world-state.ts": "84d3919ff40b3be4ea7005a0cd460414d78d58cc1e0b788838fe1c2675dd33cd",
+      "src/adapters/evolve/civic/authority.ts": "dc53a6addd2a657846ef7180a5be1e94d4bf664173bf396dbdcbc73d77a18eb1",
+      "src/adapters/evolve/civic/banana-republic.ts": "26187aa705511a0ba04ad5d7921d2485bdb53740ff1abdb2eabb6a8c525ee65f",
+      "src/adapters/evolve/civic/captured-banana-republic.ts": "5a0128255549570d00eff70a2655f96cbf0170f361fa0cff41adc2e417eff156",
+      "src/adapters/evolve/civic/captured-crafting-controls.ts": "eabd342211bba4e7475945a0dd9fab5e5f5ecbeb15a02e60278ac11840e59f73",
+      "src/adapters/evolve/civic/captured-craftsmen.ts": "70e5f3ed482318bb60fe9f5fca9a63ec4ef1b95ba701a4519836772c55cade00",
+      "src/adapters/evolve/civic/captured-government-modal.ts": "c4954a589793476dc78390926a1f158c95dc35fea18ea720526b7254ca4cf9ab",
+      "src/adapters/evolve/civic/captured-government-settings-catalog.ts": "c15229371d7c7a382f458c22c7e7f418a13012732f023078ca404206665447eb",
+      "src/adapters/evolve/civic/captured-government-settings.ts": "e67609f0c17f3861f92775e711ef2fdcf055c2f521454ae1d2ef9df2c9b10687",
+      "src/adapters/evolve/civic/captured-government.ts": "04d07f1d719d32b6c149981e7e31e62284f45b589fe9e1e94c1dea0af6e1c938",
+      "src/adapters/evolve/civic/captured-job-catalog.ts": "37d12292167090b9888392ce5898db020d67b203882e149e2d5c91d323465588",
+      "src/adapters/evolve/civic/captured-job-controls.ts": "dd99a1e5063cba05929098b652fcf096de59f0cc93412dd248659812ce02dab3",
+      "src/adapters/evolve/civic/captured-job-strategy.ts": "0b30dc973c07937c6c1b868e8aa4a40afe84336d1b214c2caace6e17b10344c0",
+      "src/adapters/evolve/civic/captured-morale.ts": "a62941addb02c87f4b242d8a0b097399ee8cee287d44b27a1ce0ea68ad7c6fbb",
+      "src/adapters/evolve/civic/captured-ordinary-jobs.ts": "1837a2726122028ca80f9726aed3b056d2b05acc20c3ad3a79503fc45d095268",
+      "src/adapters/evolve/civic/captured-tax.ts": "9d174b31792e7ac0874c3ed24109a3161e5af265099e04749b129e5c3ac11d8d",
+      "src/adapters/evolve/civic/government-panel-draw.ts": "922e93d5970691803e361f5aa53ce478da040022546e946039bd9d11c2e31a73",
+      "src/adapters/evolve/civic/tax-command-executor.ts": "2b57797fa4c56d695afd5d617ffb8009401799aa6a43c8405d7824fa21dea373",
+      "src/adapters/evolve/civic/tax-reader.ts": "c82c0361e92de8f2b4299f7b90b63770c97a5342b6912744bed4656ecb0cc6da",
+      "src/adapters/evolve/combat/battle.ts": "0c87faa0bd97a8095576fddfa4a589aaa598ddc18f3e1cbb20036baa998e02aa",
+      "src/adapters/evolve/combat/captured-city-garrison.ts": "71b2cbabb5e97d264bdb3815515b2823ffe5d20b05c5bc6f5fe63e4910231211",
+      "src/adapters/evolve/combat/captured-espionage-capture.ts": "a448f799c0cc0e399fd9942b782ee0c588273a498fa5fd5ed33b75be38a57ed2",
+      "src/adapters/evolve/combat/captured-espionage.ts": "77f4f336bc4834cdf9e7adb69f1174cd24cb944506cfa5f443ce2e1de6feb711",
+      "src/adapters/evolve/combat/captured-fleet-controls.ts": "c85f3566f208241db047585576b47bfa7691a5187e43b63208ecdb8da8a0f92e",
+      "src/adapters/evolve/combat/captured-fleet-demand.ts": "0f0577c2ddae7a4edd83abed57acc084aadd41f7cc0570b7c057f05202d62119",
+      "src/adapters/evolve/combat/captured-fleet-outer.ts": "ee4a47286c4488452b36a3adfe874e641af8713cb77f21c21746a78166184ce4",
+      "src/adapters/evolve/combat/captured-fleet-settings-catalog.ts": "ddc35b63d3a1ece9ab88b291b1b780c7e873e8575a42fd24c9b64aeacbefac8d",
+      "src/adapters/evolve/combat/captured-fleet-settings.ts": "6340b77b3b9b270bd47e8c3e19183a13e96e035e14163422046f005c70f8cf6b",
+      "src/adapters/evolve/combat/captured-fleet.ts": "424e2e952d89fcc1ae2c07496f3c32d0c9e09f4f3f1a43dc009812788fc0eca5",
+      "src/adapters/evolve/combat/captured-foreign-state.ts": "06a75210c6ae0eec10346cc7ee870a62adc1cf80af86b43dd3b351155118b761",
+      "src/adapters/evolve/combat/captured-hell-garrison.ts": "da864645d7dd39765ef93bc7d072bd74a192c2d9d1e12d9cf80e289de114b900",
+      "src/adapters/evolve/combat/captured-hell.ts": "e6e146c077a809802288de2fb224f478632ce06f789356274b96814509ac9a26",
+      "src/adapters/evolve/combat/captured-mech-control-ids.ts": "8dd102fe9b43d9cbc4cb6facd3a4418f911d9b1e1c1578b05e9aa0f3bc584740",
+      "src/adapters/evolve/combat/captured-mech-demand.ts": "1bcfa0f4fdf6b43be2b1c3f6aa7ca7a8ef2e0d17a62fa0803149c3ecce541422",
+      "src/adapters/evolve/combat/captured-mech-info.ts": "c40dff3627260e232c39a9e30b49342d97538bc81ebdc84ca236329ff5645437",
+      "src/adapters/evolve/combat/captured-mech-reservations.ts": "b7e1c6c73dae90339764773ba0b4373385f0f92cbf68fd76d80dd0deb193649c",
+      "src/adapters/evolve/combat/captured-mech.ts": "ea2f7d859274bbe8fe18db3e5cec792d73bc565020d393c68068a33d87b898d0",
+      "src/adapters/evolve/combat/captured-mercenary.ts": "33847bbb023b5dd72099e455919e83b1269b292e0516e4d297a896f1ed5f7b4f",
+      "src/adapters/evolve/combat/captured-outer-fleet-blueprint.ts": "db79eb11a2dfe3fc4ae78618dd8b6645b2372a9abd6a4f6f0ae67a0f57eea1f4",
+      "src/adapters/evolve/combat/captured-outer-fleet-costs.ts": "ed4c133a83cda40893ad49f413282a44f7a80f3f87c3e4b23ad01c6dba90baf1",
+      "src/adapters/evolve/combat/captured-outer-fleet-dispatch.ts": "d49ad1af07bb95b132ea88185a13be7ece52f2eb4f81a1389d916ce2bdbe10cf",
+      "src/adapters/evolve/combat/captured-outer-fleet-parts.ts": "e60556da4765573821ccdabc02c178733804ede21d43190aa58fa5dd1c717918",
+      "src/adapters/evolve/combat/captured-outer-fleet-shipyard.ts": "685b3e589854850a49771013467d37196317c8401c1a11d26d908a9cdf73c420",
+      "src/adapters/evolve/combat/captured-ship-route.ts": "4fa1cdbb8fd6aba5d1f91f422edc517ae501a67ae209e76ef2cb64b4135546c7",
+      "src/adapters/evolve/combat/captured-spy-training.ts": "a13338db6abfe48f885e65d7edcd1b70c4a6d052a4dee43a40b06a58b38e91e9",
+      "src/adapters/evolve/combat/foreign-achievements.ts": "0235c1496e16a5029c53dc7649e51a5bdc9eac32382faaa5022f1eabac9f4339",
+      "src/adapters/evolve/combat/foreign-panel-draw.ts": "72ea38899ded5d8cc8743fada4496465a6f80b5a331f32b41077ad1719dd8fbf",
+      "src/adapters/evolve/cost-conflicts.ts": "10ba9005c5f11c7213722ca61ad0ed99f5aea79a144d620fc7ab1cf654fea86e",
+      "src/adapters/evolve/custom-expression.ts": "71745fd835d224eab57babe0d2b7e753b5a4afffc26e2a459c88e442dca8c22d",
+      "src/adapters/evolve/discovery-scope-cache.ts": "453d7099a829ff4e7cc7c8103d5ef6189d504865c38d7b69cf2c80803070e937",
+      "src/adapters/evolve/economy/market/captured-galaxy-market.ts": "95ef72248505276bb33dab058559987545344a9ebec7f15141f54eddafb7a792",
+      "src/adapters/evolve/economy/market/captured-instant-market-price.ts": "23a61daeada91309e85ca3a2d6d20059133600c989baffa5728301e8eb3582ed",
+      "src/adapters/evolve/economy/market/captured-market-board.ts": "7eb04edfdaab75aa6eddc16796735bbbe502b24adf741df2de8bb648c80fb311",
+      "src/adapters/evolve/economy/market/captured-market-settings-catalog.ts": "432a540f53701cc55b747e9cfb82ee7401999e10ccdd440e7887268c19227f02",
+      "src/adapters/evolve/economy/market/captured-market-settings.ts": "8f0aecf4d6618ee88e5ab26e292d399d76c4f74d2bab60fd124a5496df4d2bb9",
+      "src/adapters/evolve/economy/market/captured-market-toggles.ts": "58387a15d8f4d8bbbf80acb24819bc75a5d9bbec0c962ad877482980f89972a3",
+      "src/adapters/evolve/economy/market/captured-market.ts": "ef433adac4b2293f8533945d422add4138ebfa6e1e031e87f0429787019dcd6b",
+      "src/adapters/evolve/economy/market/captured-route-multiplier.ts": "f44af1eadd98d09402c035e71a448a12daefad1d5230c5426d79447e5e1b6c52",
+      "src/adapters/evolve/economy/market/captured-trade-quote.ts": "d85a0f4ee66cf99954a3fa977b09c020b82d9f6e3e2852566b135a365ecfb8c4",
+      "src/adapters/evolve/economy/market/captured-trade-routes.ts": "da1534354a891126b457f41240bd2111749880f20b08e716c9217f4c9f24331a",
+      "src/adapters/evolve/economy/production/captured-alchemy.ts": "1990efd90521ff33f92c8a009d1988a6853de193c8318747ddaf9869aeafbbed",
+      "src/adapters/evolve/economy/production/captured-craft-costs.ts": "64f92953af3a34b4a0dcdf52ff765f35ef86b98151d953b086945fa21a400bc1",
+      "src/adapters/evolve/economy/production/captured-craft-toggles.ts": "306abc5930b704dd99ff6bfd0a476c2e69bdad630477786c40b0d5f3156d30e3",
+      "src/adapters/evolve/economy/production/captured-crafting.ts": "62614f122fca7d7628405ccce63bc7724c323981fd9a2318a39eb8fcbe495cc4",
+      "src/adapters/evolve/economy/production/captured-factory-capacity.ts": "c7dbdf370b7a59beac1906f73c4c4a912207f714beb5b68ec6484d3098807ee2",
+      "src/adapters/evolve/economy/production/captured-factory.ts": "3c9863fd9a50a6ed524e2a8977a3c2f17fa6d0c4e437187451a7d2c0e4816fb4",
+      "src/adapters/evolve/economy/production/captured-graphene.ts": "1a985adb5055242928049bb310860045fd0425af400703de5954bcecc10f1f21",
+      "src/adapters/evolve/economy/production/captured-magic-settings-catalog.ts": "e6629c0dec6360714d9c7a4d05f22de59520d4269181ffea603771b0f42305d6",
+      "src/adapters/evolve/economy/production/captured-magic-settings.ts": "5ad5135510d5e4a78a622689b1822500cb61a3205ea419b185612adf4fd82e2b",
+      "src/adapters/evolve/economy/production/captured-mining-droid.ts": "2557b2d34a182e1f5775ece0adf7606707a35d0f826eac936bb40ccb38982cff",
+      "src/adapters/evolve/economy/production/captured-power-consumption.ts": "8c667efe4a63651bf70b2519240899c52480d6afd9390261a003257144c1c7cd",
+      "src/adapters/evolve/economy/production/captured-power-executor.ts": "61e1728969762b5137ba0db38e1847e5d4544afc1446173a071a122b87b05227",
+      "src/adapters/evolve/economy/production/captured-power-metadata.ts": "c39182e4bfd4f686821b2164da342c3cc2c2fb06d6df4f2351bd92cf67788573",
+      "src/adapters/evolve/economy/production/captured-power-producer-capability.ts": "4155f88e542ed72424035ffee25f68bfad82af55daf12e3058ab2174de9553de",
+      "src/adapters/evolve/economy/production/captured-power-reader.ts": "d62d1dac39540c20038bf8f277b60ccaa3f731d0ddbea5eb863ee0733ed4b9ad",
+      "src/adapters/evolve/economy/production/captured-power-warnings.ts": "3c21f72f7dd7eb358c1f27a40fab375e69afc699c1f792ab661e08caf30cb299",
+      "src/adapters/evolve/economy/production/captured-production-settings-catalog.ts": "3e222be9a7f33e56484d11e2325f66012f8876878eb3f0fadb4d936fb453f2e2",
+      "src/adapters/evolve/economy/production/captured-production-settings.ts": "b8d7ad2e4ce4c2434bdd7b0663dec4e12b6b3486dae43d8fde184eb8c12713a8",
+      "src/adapters/evolve/economy/production/captured-pylon.ts": "141eb5869eb887768544e35336c90d4d90c23cd2f10c7ce8b7663fb49d659802",
+      "src/adapters/evolve/economy/production/captured-replicator.ts": "f59396f0a89a855b8f575548ff99883da4b6dd5696724ea235b6e00e45b6cafc",
+      "src/adapters/evolve/economy/production/captured-smelter.ts": "892c4b9610fa6cfb616b58769ba884b859ceabc701089d6a9397da379aaf90c7",
+      "src/adapters/evolve/economy/production/craft-toggles.ts": "0aa011abd82f1d389d12291f839fb0cec3d0ea15220c077e712fc0b048ce5d2e",
+      "src/adapters/evolve/economy/resources/captured-demand-prerequisites.ts": "ef545c62f7dbdbba9797313887e91d82748bf63be1dd57d21fe9912aa3d6bad2",
+      "src/adapters/evolve/economy/resources/captured-eject-toggles.ts": "4d1fd17d6c3d89d717c08b2036c32c4ad2305058fbdec694bd09504dff772328",
+      "src/adapters/evolve/economy/resources/captured-ejector-settings-catalog.ts": "c5efe050ec8861995d08f5268b16068bb5b6ce1c1506c68e84180600a305290c",
+      "src/adapters/evolve/economy/resources/captured-ejector-settings.ts": "07a22195b871f359228530af185d2acb25055043d239a7c0ef1635b9e72d1bad",
+      "src/adapters/evolve/economy/resources/captured-ejector.ts": "c34070a5862c430cb6e3e4a3371ea95aa629d9f4b233f7b69b1397ba89fba7cf",
+      "src/adapters/evolve/economy/resources/captured-gather-resources.ts": "a67d764bf9f0e7d356ca2edc8cf608f10978a1f3f3ebbb570082a8c9dc5ebb9d",
+      "src/adapters/evolve/economy/resources/captured-inflation-assist.ts": "60a2aed1f296c3826722e1ebc47552c02c61b1a3913ac7fda6f265afed3d7fd7",
+      "src/adapters/evolve/economy/resources/captured-nanite.ts": "e9b98f56bfa3841170e55115278bae0e2be8921e9cfb57a3b67effcf52d12924",
+      "src/adapters/evolve/economy/resources/captured-production-ratios.ts": "7ce2a4f8038a9d19ddc0704d9c18e18b42387c85fbeaa0fb6cc971635e8d28b0",
+      "src/adapters/evolve/economy/resources/captured-resource-demand.ts": "f007262b75470459ac0550f93481858a941b93184e4b8a3bdc471d1155436e4c",
+      "src/adapters/evolve/economy/resources/captured-supply-toggles.ts": "f961eda36ab0536a49aaa4cb8ae270f8827cb10dceabe96d2568d4b21974a68f",
+      "src/adapters/evolve/economy/resources/captured-supply.ts": "790935602e7029be4a9d487b8911a2c2336e9b85ddddf16f93dd1318afff78f7",
+      "src/adapters/evolve/economy/resources/gather-resources.ts": "b5711eb6ea26406a5c5b54b2ac3c074fbb59d062acf7e343dbd6b8912b6d3f41",
+      "src/adapters/evolve/economy/resources/inflation-assist.ts": "325b0b26917ca544efe993b9b789bb9598d71665a691aa594f85d09cab7a9c0f",
+      "src/adapters/evolve/economy/resources/truepath-ai-demand-actions.ts": "a4520bad7c0cf8f867c7f9b4b3d23a77b6795ba2dd7ea0c3525b42dfe9660ec7",
+      "src/adapters/evolve/economy/storage/captured-storage-settings-catalog.ts": "b77dc46fc0c84af01349d4684dc616f122981dcbc8359a75b673a7a0a8323499",
+      "src/adapters/evolve/economy/storage/captured-storage-settings.ts": "de258977ffc60268bd209eb10d0b2e2f58880f05abc2c5f6f930f6f6541ea7a7",
+      "src/adapters/evolve/economy/storage/captured-storage-toggles.ts": "90bf4682f516674a5aa4f7c853a6f58fe6e6d24ac0d038273b56ecf6a2924974",
+      "src/adapters/evolve/economy/storage/captured-storage.ts": "5ad216392532b93201d71fb746dfaf2e8f16498eada9842b14ea79a653797120",
+      "src/adapters/evolve/override-evaluation.ts": "2d338516f9d3e3e1d27ae764a918baa6df05e37cb2f45f2c55790c139f478670",
+      "src/adapters/evolve/override-failure-log.ts": "58d1d38b2d798d24b5e760d9ce48f4d2bd61e72ef96887ef6984d0c9c1bad56d",
+      "src/adapters/evolve/page-capture.ts": "8d1e9492dc14e1393957662a3135c96dddb5a3920e561a841717ea87c69a7ddf",
+      "src/adapters/evolve/progression-epoch.ts": "4673a6d15c2af723944273980eacd2df28d97e9dd9c8a9b4704389a8755c2897",
+      "src/adapters/evolve/progression/build/captured-build-control-coverage.ts": "3523ed3671431361a5e308ee218ce62f99757d70134c92d3c39f98e8046efaf9",
+      "src/adapters/evolve/progression/build/captured-build-policy.ts": "6c9e597647dcd7d66d9f3b01dfc5a128a7c06b33f62e517cea86f43f99c2ba31",
+      "src/adapters/evolve/progression/build/captured-build.ts": "0a8901ce80ac09c8bfe3958f20bce4a245fa4384a1e78005e7af35056d9cc116",
+      "src/adapters/evolve/progression/build/captured-building-availability.ts": "26292f2b272af8b297f7f744962aad3aab93400cf09eb07eb214ad8b458fc981",
+      "src/adapters/evolve/progression/build/captured-building-bindings.generated.ts": "a50508eb3383bd1c031c70ea526ec971280bd0f276f9a616f92b17d266545dec",
+      "src/adapters/evolve/progression/build/captured-building-catalog.ts": "09eef4425e3597121810584c1c5b2896332206fc96302d81bbd1b46d0b323939",
+      "src/adapters/evolve/progression/build/captured-building-generation.ts": "de26cfd2abd04cb1f07ca4c74dd5ac18cd9be11d055ec6059e37de45af88cc02",
+      "src/adapters/evolve/progression/build/captured-building-metadata.ts": "54acd4cbd9932f353774e351b212bac8939bb52f1fc3a3f423fa09557fc29a22",
+      "src/adapters/evolve/progression/build/captured-building-settings.ts": "9ebfdf587215338d344a4b5afe1c67d45f88000957d4ecf1690fae5d9dc4c686",
+      "src/adapters/evolve/progression/build/captured-building-state.ts": "f43aa29a02cdce0c1bcaca993741824086440dcbcfb5d623d8439ba9c4c2c288",
+      "src/adapters/evolve/progression/build/captured-building-switch-states.ts": "2945c8584f5556d34918748bc34e7f55ad853a1cb9cc74ed6eee5200c3708be6",
+      "src/adapters/evolve/progression/build/captured-building-toggles.ts": "c82df158e8f257f622e20019c34a597960be3821b137aa9bbd2d95a511af3301",
+      "src/adapters/evolve/progression/build/captured-building-unlock-observation.ts": "88d4d041354ff84cff17bf1df991957ceccd02ee22925b13e4262668775d980f",
+      "src/adapters/evolve/progression/build/captured-building-unlocks.ts": "ec066c2afa3e39735d47879f05f84adac68a1c8e43a6c627b3f6240afbda9a62",
+      "src/adapters/evolve/progression/build/captured-grant-action.ts": "1783d9e257c568b5ed00058c7bb2897b1dc21acaf91ba8b38c30db71bfb04355",
+      "src/adapters/evolve/progression/build/captured-grant-actions.generated.ts": "58113b0f8d216732b43f0e448059e1a13cc17433966891eae7d768ca81c2573c",
+      "src/adapters/evolve/progression/build/captured-knowledge-gate.ts": "2eb76a9d4ab10bb98515f6b607599148c27270e988198554cd0a01e7890d9f97",
+      "src/adapters/evolve/progression/build/captured-trigger-actions.ts": "4dc2751157a71fef7759269310dd7c5f3be8acc6b736f758c024e7103642ab3f",
+      "src/adapters/evolve/progression/build/captured-trigger-settings-catalog.ts": "d8c8ed46539cc53bf280823b1e91a8f472601470b284a613d6b90eca4f0a0dfe",
+      "src/adapters/evolve/progression/build/captured-trigger-settings.ts": "537f21141d7b8ee87170859836061b5bf664979453b1fb1700a9fcbb7ce88726",
+      "src/adapters/evolve/progression/build/captured-triggers.ts": "9124125292f387240f41599e55ec6207037246814753ba9c4a7df5348c9e9588",
+      "src/adapters/evolve/progression/build/script-build-policy.ts": "fa0b9578bc37136fe00c3678bdedd25e8e90364e9717d7274a94bae616e1654a",
+      "src/adapters/evolve/progression/build/trigger.ts": "118da961f15cac36a322dbfd9cab4c6c2898d592541b83eb6df22a42ffed440f",
+      "src/adapters/evolve/progression/build/weighting-candidate.ts": "7d28b47d0051aef03d8dcfab3a50185ec2e7ec9f729390b1db77b3399ca2265e",
+      "src/adapters/evolve/progression/construction/captured-construction.ts": "05324d6fcf4b709d56dda98bef8390c5e91cfa731f3a9f9a63b5b7e370810a32",
+      "src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts": "3990092e3d132d073aeb14ca6af8db6ee6b2cdd6b3639a74f42c01c9f51d06d6",
+      "src/adapters/evolve/progression/evolution/captured-evolution-race-catalog.ts": "811a50f9310c6b101e3e8ac5a47982890b3bae8a441e3b6d55d61152226f72d9",
+      "src/adapters/evolve/progression/evolution/captured-evolution-result-check.ts": "240965eaf763538739cd648d4bfdc32871642bcbbb6b5fc77f37b321b61a98b3",
+      "src/adapters/evolve/progression/evolution/captured-evolution-result.ts": "d1343296eafbc71ec68593a2722ed9e6223313f1a40dcb7583451a737c119335",
+      "src/adapters/evolve/progression/evolution/captured-evolution-settings.ts": "bb1ae4a4b23f290f62e9649149e1418776cd13e2406279834b6fa27f760547e2",
+      "src/adapters/evolve/progression/evolution/captured-evolution.ts": "ddf5f456ce17511bc4f0d3a6718b57003cee4bd1f568e4b8ff4a1673e7c99219",
+      "src/adapters/evolve/progression/evolution/captured-planet-labels.ts": "2e921f2e333ca6a34900e6380e43b62ff60fc6014370c21f407568235bf20c88",
+      "src/adapters/evolve/progression/evolution/captured-planet-metadata.ts": "c2b439b26600c5726de957fb4881b6d22b6cecabe2d4534f7d11a4376419e554",
+      "src/adapters/evolve/progression/evolution/captured-planet-selection.ts": "0a9462744ec6e37a3d5db671f5471ec6b69d3499c18e6dbc353b8667a653a3aa",
+      "src/adapters/evolve/progression/evolution/captured-planet-settings.ts": "278ee89f4a9a8b19a2b644615f7ee525f6bf4b74a525afe4a47a07127640a715",
+      "src/adapters/evolve/progression/evolution/captured-queued-settings.ts": "3d9c4c03ce07963fc762a85708cee4c5335dbc67426043e38881aeab425e1f39",
+      "src/adapters/evolve/progression/evolution/evolution-settings.ts": "fd14c2df6b44d0247fe2f3238233ed4027407852d6ed95f50830d3b21f2db0d8",
+      "src/adapters/evolve/progression/evolution/evolution.ts": "f3a9f1a0dfcae4921a5f5db71aeb96a84475e61112af27fb30d35a8b99bcc63e",
+      "src/adapters/evolve/progression/evolution/planet-settings.ts": "a0089281863b0a69fad87e4b13d97ad9e595f701f8b8d69884005d968e92e8dc",
+      "src/adapters/evolve/progression/evolution/universe-selection.ts": "0a374663283127166f4232a7a0759852208a46e700d75bce17c1cedac15cfb55",
+      "src/adapters/evolve/progression/prestige/achievement-guards.ts": "9edf715315c12a5296f5a6632b072d1e73aac265b6bba2eaa2f6930c2da2428b",
+      "src/adapters/evolve/progression/prestige/captured-achievement-guards.ts": "86445d6bb43377a820a12ec815d54f716d98e8592731bd04b267049684293dec",
+      "src/adapters/evolve/progression/prestige/captured-mad.ts": "ace82deea0279d78cf9dc69e99c8d1b8a9c9f2b39f75bc723a2f206d16616413",
+      "src/adapters/evolve/progression/prestige/captured-prestige-settings.ts": "fff50fd7969e16be2265b15cfe123d4a47834266194169eae9bbfa87838afe94",
+      "src/adapters/evolve/progression/prestige/captured-retirement-prep.ts": "8963e97fa4b2e3315a1012bd21a067fc1ba0eed21835f8198c83c94a3a65ef65",
+      "src/adapters/evolve/progression/prestige/prestige-settings.ts": "fddd8c39298a96ec70eb5e1a524edb6ba80df352b91f5cc2c3e671da7689be95",
+      "src/adapters/evolve/progression/prestige/prestige-top-bar.ts": "ff6ec12cdad97c8b8499d21a80c20c96656828843f3686af6bda5442be87986c",
+      "src/adapters/evolve/progression/prestige/retirement-prep.ts": "589ea2a3d54c93f804948db5b139c5907bd414533f7f5a3ec4924451cd695e89",
+      "src/adapters/evolve/progression/research/arpa-project-identity.ts": "512eb3eac87e62de127b9be58fa0e1921d2cd9870a8c4a1e74d0a7e45e0c5e71",
+      "src/adapters/evolve/progression/research/captured-arpa-mechanics.ts": "ead839e7324d21e5743d65b42a9248e3f33dcc79d931a77d27e3ebd39147c28d",
+      "src/adapters/evolve/progression/research/captured-arpa-toggles.ts": "8acd8a906177f23e2ce6026bbeeeb8a8de0e749638e8f905410b2b321cb53257",
+      "src/adapters/evolve/progression/research/captured-project-catalog.ts": "3ae043e4961de640ba45526a8bf409f038180b4164103f56fa2abe2edc185540",
+      "src/adapters/evolve/progression/research/captured-project-context.ts": "3464f063e4fa3238e0699b9fd79820761c2250dee0b522ef19a5acbc9193d815",
+      "src/adapters/evolve/progression/research/captured-project-settings-catalog.ts": "428bc853d96a0ed13238d05ecfb1c91cb0818c94dcf45adea0f22753458fdd8c",
+      "src/adapters/evolve/progression/research/captured-project-settings.ts": "9446b8ad719e038a592af0fddbbce578b8ad2636a48ae18c2bb7b8acf581ab66",
+      "src/adapters/evolve/progression/research/captured-project.ts": "970f0b023fb46bbe472c9767b15dbc8e5a794379f0e8c64195d3314494778442",
+      "src/adapters/evolve/progression/research/captured-research-settings-catalog.ts": "4fc45d55f2069512b128a002d4c799eedb67e5ac6441ba7e4c829cd26a1469dc",
+      "src/adapters/evolve/progression/research/captured-research-settings.ts": "07e9a72bfc70f9455f7b66ebe7f607839c17fabd2e998e1bdf14b6810d5094d6",
+      "src/adapters/evolve/progression/research/captured-research.ts": "79983e64ec4e6238546bff31b8074b791f6ea951d3f5902d4e6f0a3f1cda8581",
+      "src/adapters/evolve/progression/research/captured-tech-applicability.ts": "d7fe0be46e23d7c74b40ddf0369a114a0a8f187ccdec7104dd5f397c1ff9e8ab",
+      "src/adapters/evolve/progression/research/captured-tech-catalog.ts": "d8c560fca44bd6e6a45be525f335b82eb27e5e2a69d1120d67ad0e5c2389391f",
+      "src/adapters/evolve/progression/research/captured-tech-conflicts.ts": "3949943dbca87a2f8f866ddefa8d3445ca7a158279f946480fad0c9074e7f82e",
+      "src/adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts": "3b6b510d44bfd09b5297816d7ece4a7b6f29f27496b6f503c2abd187ecab3975",
+      "src/adapters/evolve/progression/research/research-settings.ts": "5ceef00817d413a321f8aec1d77e20d6c756f2387555e497bd2e4c9263d5f37a",
+      "src/adapters/evolve/progression/research/tech-conflicts.ts": "f9710dfc91e6eb8eb4ca1990e27f92f876e69a2db1e40c17d80ae1836d33ab30",
+      "src/adapters/evolve/runtime-catalogs.ts": "384c0dec489aa82f1349cbe51cb1901b25257b6525638cdb8d41c76839fb97db",
+      "src/adapters/evolve/scoped-localized-numbers.ts": "9b0b0e35d8f64d2eda860310e5b968b1797f39352c476b6d22cfd84b58fbc388",
+      "src/adapters/evolve/scoped-math-round.ts": "6733300ddbcb0b564e35f0bc3939bb4bc7d86781e80cd44ced51e495a50ec731",
+      "src/adapters/evolve/scoped-number-to-fixed.ts": "6250d4d433fdef4650e7bbc429ca68aeabf16d9ee9f9780ccd5881b850c193dd",
+      "src/adapters/evolve/scoped-object-keys.ts": "e14d3ece6575a127864ec27a8b6d659a04b510e716dee1abacc4087468fedba6",
+      "src/adapters/evolve/script-build-gates.ts": "dadac6a54e052c02fa71268765c7bd703f0f45b8a0ece71415ee53fddb9edeaa",
+      "src/adapters/evolve/script-cost-reservations.ts": "b505ffdd427d7daed7d29ce808fc54e17f0f42e1ce3c48526f5a8b9f4be69415",
+      "src/adapters/evolve/target-timing.ts": "13de9055928d7a68db35942a69d6b459a44849ddfe3f412c8d3401920ae04433",
+      "src/adapters/evolve/total-days-top-bar.ts": "040cbf7fd0161d9b4d81b33a61128d30422545587a8934cd87dcf172eaf1b915",
+      "src/adapters/evolve/traits/captured-genetics.ts": "31207c4dfa2854a8e1675b055949b9f3fc3f91b07324c9d926a493b35a69bed8",
+      "src/adapters/evolve/traits/captured-mutation-cost.ts": "448d01c319bc85e3fb6e4eb366d581efe9fca5e8ac786e936844e166dfcc1d4f",
+      "src/adapters/evolve/traits/captured-ocular-power.ts": "b3c56ddfaaed1f8758c7e348d5d53663724630ad48fef1af1ac3ca507a6b7089",
+      "src/adapters/evolve/traits/captured-psychic.ts": "6276fb2d1a6519564d5bc93235835e3c12c49d6e39bac3ff027a8c52db8d224d",
+      "src/adapters/evolve/traits/captured-shapeshift.ts": "0035638ddc9fc7676b36a307148838d8470343e393365a5d99809ca310bad834",
+      "src/adapters/evolve/traits/captured-trait-automation.ts": "dca45378d7fda153194a12563e2836d4d6f4eeca2c3ca8330933b62b44db53cc",
+      "src/adapters/evolve/traits/captured-trait-recessive.ts": "eed4407ed6e148da175c9e7e62514e3eccd938375cc8308ccbf715f4c3e8994c",
+      "src/adapters/evolve/traits/captured-trait-settings-catalog.ts": "e00f06e0c78c74811abf8ece345adccfadb19c14ac6f1edb14addae97fb591d8",
+      "src/adapters/evolve/traits/captured-trait-settings.ts": "a161a06954c0f8e089e24d5aa794a23afb7f82749d161eb0f9c8f313ce8150b2",
+      "src/adapters/evolve/traits/captured-wish.ts": "0abbadc957fcf552b60f185f1f5ebe1ecf7efd763211c16ac63aef84d736b4f1",
+      "src/adapters/evolve/traits/genetics.ts": "cc9f6a1ec4b3d7a655d75e2fd9a8036e513498fed2972722e3901b2d16860d7a",
+      "src/adapters/evolve/traits/ocular-power.ts": "3714385516388b9a50fdb4c95410da06ebc1148207d48585537ed2f10ec25bee",
+      "src/adapters/evolve/traits/psychic.ts": "1bd0758afe647ba37a6650b4fd9b0b8b03268f9b054d220d5832d85a91501c4d",
+      "src/adapters/evolve/traits/shapeshift.ts": "004d7d496f5a4003373a7b13e025e70fbd969577ee18fdd8cb4e22b3ce1668fd",
+      "src/adapters/evolve/traits/wish.ts": "060d24b88f0cb479f821e9672da700cfd03fe94f2da7a1b58504a14ff22093ab",
+      "src/adapters/evolve/vue-capture.ts": "442df75b73b33f08e03089467a108557cc63d02b8d9683ca86e5992fb7561bf2",
+      "src/adapters/evolve/worker-capture.ts": "48d2187ba18d125e341f79dc36a973d47b03d8937cb8b8f9172989fa407ec196",
+      "src/adapters/storage/planner-stats.ts": "1db457bdee7dbdaaa86bfad40b3af7ac940c70188aac101db073026b8e089734",
+      "src/adapters/storage/settings-store.ts": "9704b36a1b8d601e4909a3a8a94efdf461ddb1ddde520d7b61327065ea79e22f",
+      "src/adapters/storage/state-log-store.ts": "d56c0c5d2cca1060ed5625eb74c30b3d96c76de3d576007418c3e991d722d7d4",
+      "src/adapters/storage/tax-settings-reader.ts": "dec566c3c54c0cdd72f9add33f69685fcb7aaea2a9d1f743c77e00f99452597b",
+      "src/adapters/userscript/environment.ts": "2ad19f141f012bc6983cc49bb95446ecb563edf90c3ecc96e75412a0f28633ba",
+      "src/adapters/validation.ts": "5a8883df305b130fe585261caf1d0c478e6df7d180ae0ab885850c6ff79a8bd1",
+      "src/application/achievement-guard-settings.ts": "657c517ca5209d5f6c9e39448f9844a7eb0af04862f5617ac1e3f6d9bf0b3fc8",
+      "src/application/application-runner.ts": "3bec6cb3440a70bc57a9ad235200bcea8da3dedb0236dfb09efdc22fc5ebe9d7",
+      "src/application/authority-settings.ts": "8e7e892b0b444a2839ac59cfdd34c416c2130db97920b44d015d20eca1b9d091",
+      "src/application/battle.ts": "e6c4da825f363410f5d801549ea8fdee3c2ff07aceb1453266e879b3c852966a",
+      "src/application/build.ts": "a3b2486e4b5520c08c5e68ec743c528b10f537a7d407b7d6db06691982a9f0c0",
+      "src/application/building-settings.ts": "f8e6c1399857f365f0d25a6b79e49c10710d72b64cca416a436296bf59de8a94",
+      "src/application/captured-espionage.ts": "321e22112bdd5a5a9417051e9caa18b0499a9ee07981c3c117239d3290257308",
+      "src/application/captured-mech.ts": "324525805870c9aaf1f4cc40ec418110cd504e18dbd80bdf6a5cbddd973e9ba8",
+      "src/application/captured-planet-selection.ts": "bcc4d432fd70544afc9410a9ab62fc10f61b73cafc61613d5de186e7a1ccd8de",
+      "src/application/captured-settings-lifecycle.ts": "1478c2c4d3386daa1d08128b1e00aa9a483e13fe46f6e4bea7b3b7513d22eccd",
+      "src/application/captured-spy-training.ts": "67a43aeba24715a28b1ee1eba82edba0d06adab49e9328c07d0d8825d1fc06ac",
+      "src/application/challenge-helper-settings.ts": "c49733e0f065a852d74e4515ba0df2a855e6ade6c0cb73c7969ef18509130690",
+      "src/application/craft.ts": "fe0b2af65b87d8a59e3c3cea0f00e8fb59c8c33e89f392da48520a3c0de05d70",
+      "src/application/cycle-runner.ts": "9344549947c5a5d17ef4a9ab027176fe63d6f44f6c5737c745a6a2dd8e6fa279",
+      "src/application/ejector-settings.ts": "68b7e9ec09f530997fb867f0cfddb71e6ad6ac972e7be1e883b2361c7138ee7c",
+      "src/application/evolution-result.ts": "c3378732743158e9fba34ba8e62666382e85146a3c00eb94e78500f2488ff30a",
+      "src/application/evolution-settings.ts": "0b341acf61fe0a1e537148b1add8e89cb69679181bd3beb0661bf4dd09a10433",
+      "src/application/evolution.ts": "678506267500ca94e61dacdcac3a03f663ed114e526f1ae0092d7a49fa3d41e1",
+      "src/application/factory.ts": "54b5ba05d28c9967a70bc52753dcd3dcac042815d6ef477059b6239d19bde57b",
+      "src/application/fleet-outer.ts": "20c118f48f20772fc731575c0b779ccb742a6d1542a64af38bb135e0975b4b75",
+      "src/application/fleet-settings.ts": "e60198b3ff064a3c4530d870c05fb7f605634f6649d03614d80ecb6b7d0b6f8d",
+      "src/application/fleet.ts": "b561633e63c14b48630e661f205b116b63e5414b27986888c172d59894f7a064",
+      "src/application/galaxy-market.ts": "cbe38a44a586d2a6fd25a7571d7974153efe224aa892b4757dea754786b2daac",
+      "src/application/gather-resources.ts": "57b9e59aa183ba3c03e09f3a08a6d6fab461f25f8ee8bf9daa5944cd43df1a3c",
+      "src/application/general-settings.ts": "7e6c927bd62787f95d17f23166d6adfeda16d8ccdda4a7c4c4b3a41b6c8e2a7c",
+      "src/application/genetics-traits.ts": "e556856605f73312798a9a7232e51fe5601c54642ac1836ab5f385bc04381e2a",
+      "src/application/genetics.ts": "83c83cfcf56ccb412dbb930147294fdbaa3f308e2f11e6ab7eb59cf2b551cc38",
+      "src/application/government-settings.ts": "3154e0f58f347043d6ce63d05f39df9fe34992dce18abb76fd5a929ca1e0d352",
+      "src/application/government.ts": "ad0333b0e945f0c458ab5d072d2c05266dc52127b74d5c18886befd2005526d5",
+      "src/application/hell-settings.ts": "b4fefe178f9dae11afaaa5ec2f355dc10c6c2404a84682b5246217d9b26a58c0",
+      "src/application/hell.ts": "28c8f3e8b42ebee1deee958f5767909c499a4a1146a9f57860ca4d5b78c231f5",
+      "src/application/interface-settings.ts": "ceb08236286645ffa70445b0727afc565b3133b0cebef483084dd6109d77c71a",
+      "src/application/job-settings.ts": "989ca2c722af6a99c31f33fee88aa95c256e3e92678b1e5669b5041a6ac6cb6a",
+      "src/application/jobs.ts": "012545a56a4293d0c6065e6bec4cfe7a6855288eeed47409d0bb5b8ec5162489",
+      "src/application/magic-settings.ts": "1643479f2841f192d19959267e5aacbf2e492d66351ab216016545eafa93ae61",
+      "src/application/market-settings.ts": "ab59e436d685557ae9ef60753571bffa6d123281ef464a09f2d5fc9983bf2a81",
+      "src/application/market.ts": "6959111d9b261fafc924ed61119cab1db574f0b6aed0093c64f9f10e22f9029d",
+      "src/application/mech-settings.ts": "cc44a776af3dcbb907ef565f363a0634e04a4dc40e003759d2d6465a4347d0ff",
+      "src/application/mech-supply-reservation.ts": "a26c686ef946835771ed75acdfbda1c72092fc430eefa87f2959d687547c1f6a",
+      "src/application/mech.ts": "0fccfd1e69c038efe01c598937695e669ba30857248639c18480f2fb81ab879b",
+      "src/application/mercenary.ts": "f02f24c8b1b9b700d1732d76b638a4bb5e7ac5b265598504a2972e8b33b93712",
+      "src/application/mining-droid.ts": "52327a6f6e4027c940fdd7852e6c2a4aa7ad673fd4dd991e288c624546d8c5b3",
+      "src/application/minor-trait.ts": "9cc645b9abb81725e947b95f272dfec76662876b206d7a16de2f2b74acec9c3c",
+      "src/application/ocular-power.ts": "5016990ebb4446f922e384a5001721085270f063e5c234e23c7daa041b88fec0",
+      "src/application/override-editing.ts": "1c32cbb2d9a53c0b9d141a67734d3fed5087fcbaa143a458f2bbe2075b3e4f9a",
+      "src/application/override-settings.ts": "9a4339707221ea04c2854ac4eda6e0dd74d70a7a8d40f6c7d952aac134131f0c",
+      "src/application/planet-selection.ts": "92d61f7d6ac6cea028ddfebc13219fe88bb7b8a7379b4b397c81cd6864b25e96",
+      "src/application/planet-settings.ts": "2c7c5204d1ce8e32d56ea61920c84702cbc05a8d69b19ef9edee0a336fadb728",
+      "src/application/planner-stats.ts": "33f358ac3cd20e79d8fcec3b7f14449f05255d8e2f4d64bb83e3db7e9becd23b",
+      "src/application/planning-worker.ts": "a00a55cd75041969e51271972f9ab1fa30fed4eaf1e39d205feb02930a4293eb",
+      "src/application/power.ts": "2ff40530d0cb21a7c0f1e406352d181d6f95e14996b8b4dc1cafe96818885c53",
+      "src/application/prestige-settings.ts": "a9b042d1a816703cf8562ce012e27ebca108ade5856970d00292459353e60c90",
+      "src/application/prestige.ts": "bef40dc34f5e715aca615352eafef079fcc24578c1170514f24a0e432549b019",
+      "src/application/production-settings.ts": "3e2ab7a8b0b6c182b193e88b5c360b2e45a1fe4f6e6418b187ff2ef1604420b2",
+      "src/application/project-settings.ts": "15b50ae3d8b196793cdb6e09ab4e0be769f230e416f697f6f8e67c0cf28395c4",
+      "src/application/psychic.ts": "f44cb61731072466d245695220b13a53d2ac1ee235804711548691eeb00257a7",
+      "src/application/research-settings.ts": "35b6acace650f503a6f43717bfdbb0b0e88922e1c54d927114d3aaa5a3291c1e",
+      "src/application/research.ts": "36e790879d2d8cc87694920f0e2b9c7f8de6fc8c6ca9114873077d92212f696f",
+      "src/application/retirement-prep.ts": "8aaf70544ccc9bf690e79d16043729d2acc8425217076527b72dd70081ba3aed",
+      "src/application/settings-reset.ts": "6fde28af5b61124723c8517f6e5bec4e5f3c8f4c6829fbea33bdbd17426e0b5f",
+      "src/application/shapeshift.ts": "ce47456dd00bc6fd0e32242afe266e3bb1c7ec7647a3f31bc2239e052e4eb2f3",
+      "src/application/spy.ts": "70ad0591bdb14c4eff22d6c65bef429c303ed0e3ccfc6b02113f48adc5e0910e",
+      "src/application/state-log-settings.ts": "e7dffdc8b0ff7a119be891b411579d9cfef16fb593380372c9378f22e27521cb",
+      "src/application/state-log.ts": "eb4c291de961a7a5531d437fb03af85ee8aa073520a6d5d36b12e0fa7806ce94",
+      "src/application/state-update.ts": "29f70a2d85dbd357840f0700669174b6e440f6481856ccbaa3ae6007ed38326c",
+      "src/application/storage-allocation.ts": "416dc87df97808a9e786b46e7fc8d926c889875e2a02a6d1c71e003fad9b06d9",
+      "src/application/storage-settings.ts": "eba3b044162f173fd3c526a38d24d387fe66dd21348e4d4538ec123da1c36232",
+      "src/application/tax.ts": "d0436be013f5eee6574b0fbe43d7f963773e4655c8e81741bc292d6e32197936",
+      "src/application/tech-conflicts.ts": "e50460ab9ebe457ad7e5f2c6d1104a0816186382a88fa5e256f8f11513c39063",
+      "src/application/tick.ts": "fa1fd8166bc8275747988b610aa2bbad27b095de3e8a18236ba2e749de9e2e74",
+      "src/application/trait-settings.ts": "54b98ce0ebb8f8626b8e289412fc663a79d95290072d3bec3ae1764f206e0355",
+      "src/application/trigger-settings.ts": "baa6bc81dc1dca3f7377551d70f5b9b101aa64916381009fa7f7074b3111a42e",
+      "src/application/trigger.ts": "ec5758d074beef05a256865cbddb434066c57803d29807a9716a3288fde7aae9",
+      "src/application/war-settings.ts": "2c2e27be8d511ecd706658379917d819f42179ef285819132a27d148b6e713e4",
+      "src/application/weighting-settings.ts": "b13d9ed559609f4610917da7e031c0937d44fd85072a6dbdff54b3c8aaa7c38b",
+      "src/application/wish.ts": "7cc172992bcde4d03084ce4dfe4d18f94716a5f1e8d34c254d509d1e9af2229a",
+      "src/bootstrap/captured-construction-control.ts": "c605a7d4c98a40d723c2e6edf178d7e8fc47251dc11ce989ba8554ddc470d0eb",
+      "src/bootstrap/captured-diagnostic.ts": "10fb2dc1d8ce3b95f480bb2eb42fafd9f08ff389d5e5da64acba818d3026dd33",
+      "src/bootstrap/captured-fleet-outer-control.ts": "14669bc1e7802f9712010f6010184bfec7baba3b58a9682dbc515e8d02fac4b4",
+      "src/bootstrap/captured-gather-resources-control.ts": "aaf9de71b6daa8b2cc0b41f44f3f9f9aae08358db09a151b410779402a8785f9",
+      "src/bootstrap/captured-override-editor-catalog.ts": "606b7d1c5cb9f5909465ae9891eb34830b85a8bed1b0a18122eaddea4587ce26",
+      "src/bootstrap/captured-prestige-control.ts": "3622b07b4366ac7880a21ce33d7bd13d2f2f3dac77eae244583e53b79cf28ef9",
+      "src/bootstrap/captured-progression-control.ts": "5ace24f248374650419c5ad06fdd5a7b69305dacd8736755f37f10e1339e4b5f",
+      "src/bootstrap/captured-research-control.ts": "5640d481492dc79eefaf70240a40eba36ca17effcc82e7db21f936bb2967e8a1",
+      "src/bootstrap/captured-runtime-control.ts": "1e0447f0fe06b85659a9f313a7aac55f58de0d23dfa29b232d0ba8a4bf7fab5b",
+      "src/bootstrap/captured-settings-panel-control.ts": "5b27c38fcde91b729c99ba0622cdf022bf7afef168691328ba36f8fb28045b91",
+      "src/bootstrap/captured-tax-control.ts": "9093c2c0ea692743f725dd245491ef600b3e0d20c54332f7b180c0dac50424c6",
+      "src/bootstrap/captured-trait-companion-control.ts": "b6596b41dc38d4c79d44276fa59c86775002d09f8fa0c7a9eb255152b075b2d9",
+      "src/bootstrap/captured-trait-control.ts": "c3446e77571f59d6a7ea5234205804c7b720ef11e01ae4dff6f20ecce27320d7",
+      "src/bootstrap/discovery-attempts.ts": "f4d02d9dd5e1b1ece095c0df1063da144a02c6369667915121d9e66a59c05f72",
+      "src/bootstrap/settings-editor-control.ts": "bc0cc60efd7f308d9553768d4d725176e3687504415af6c76382756c0817f6b9",
+      "src/config.ts": "47543cb8aa444d6050e186427c62e6fa232bde663af8a6e429beaf0fc5c2dbc4",
+      "src/domain/civic/authority-settings.ts": "b4054adf2d390252285d5ec2938a272938eec7f49683638f0d030f3ee700975d",
+      "src/domain/civic/authority.ts": "a06095b2b4c8c12378d200b3a8d48bd2fe9e77897b4202f23b613c606b74e4b8",
+      "src/domain/civic/banana-republic.ts": "b54ad76a29c30576eabf41d0aa2c04523000dfe10180bcd024957a0278c36d4c",
+      "src/domain/civic/goal-directed-workforce.ts": "a3026a27e2c34ca20de56cab7faa52f5b7c722c30d5736d3f38a63c21ec0f337",
+      "src/domain/civic/government-settings.ts": "83a1c9685ebec30a40e11ed5734086a2c318c75691aa4901c4d469d45b64ef40",
+      "src/domain/civic/government.ts": "11f74c8186f30d9f051f0f3c3b8484b3cef8459887911bb032e656e132695e18",
+      "src/domain/civic/job-settings.ts": "8222b37f657baa0deebb960c2e7a9161d93f64d9a0d3b9fa1f6cf7c8a19e5913",
+      "src/domain/civic/jobs.ts": "900342c30e389c0d8c1ee6eba89f26356d2247b55d3937fcb479cdcb35fdd5e3",
+      "src/domain/civic/tax.ts": "f1a0f2e985850f8de9a46d4af897f27e6f573489601618cdbf2f3f28a2f3e987",
+      "src/domain/combat/battle.ts": "38f581ebb4a2802e745a6ec07461c101f4c3849fc1401561c7b5d0f5e25b9f5d",
+      "src/domain/combat/captured-espionage.ts": "ea31d1c74c7054d54300c1f53fa59aa01502f007c2c87aa09cb456ab508afc3c",
+      "src/domain/combat/captured-foreign-policies.ts": "77067f332a286a5f450470337eaa057b2425522cfa3af5396eeb0d452f2300a7",
+      "src/domain/combat/captured-mech.ts": "3cf5733e6899499afa8b7550673d9802fe78877fc7eaeef51c01521c4b925e7d",
+      "src/domain/combat/captured-spy-training.ts": "b1ba81f13897a93b9f9cb2a39e24ff7227bd0e477517e5a09fd05b4b3ac50775",
+      "src/domain/combat/fleet-outer.ts": "8eab8adf7248b8a75ce91bbfd0e7e086a3f7baaa040926f2dde2f3f472da027e",
+      "src/domain/combat/fleet-settings.ts": "7d043775d9f4e79ae7540eedf552af291a8974f0b33d6ee329765bc2783be303",
+      "src/domain/combat/fleet.ts": "dbd0f76476c35f6dcc21a44b70c73f085b46af812fa72bdc87fc67b71db99ea2",
+      "src/domain/combat/foreign-achievements.ts": "afd7a11487722122efcd02dbc31b92b186360b9eeeb3018635f10a12b50ce506",
+      "src/domain/combat/galaxy-piracy.ts": "26ff91856ffcc867162690007ad5878b86a7e5bb31478c706980f3b9989c1a4b",
+      "src/domain/combat/hell-settings.ts": "9df6f45cf92f1766d4500ba166ccb88245747f5752379330d0288c9c1875c9e2",
+      "src/domain/combat/hell.ts": "5900427db031ac28b951f611255160815a2b7f6bae1f6d733e9b6802de7f141c",
+      "src/domain/combat/mech-auto-choice.ts": "57a4de9c6e89be4e3208ebaf4b5b5c0c6c8a478a01e281d870692a27cefb4ddd",
+      "src/domain/combat/mech-boss-armory.ts": "cb3137055c603cf3b54f1677ecf9da84b138ab2db9e35ee850a904d86797cc60",
+      "src/domain/combat/mech-costs.ts": "e5e85944a6b9988b1cab0a042d9206876181b360c317efbb7376c34c69645456",
+      "src/domain/combat/mech-design.ts": "927d95cd4c55294a629723f20359bc58a5d1a9302ab2b0e8757777dbc35c6114",
+      "src/domain/combat/mech-info.ts": "707a6a13dd480961baa92d8bdfd250965eb7b3fec5b6fa6b93d52e3bc37e5e6f",
+      "src/domain/combat/mech-settings.ts": "0c26ae88db405009aa10e605c736be0a92880f0b26774b18b7d711d1987d40fa",
+      "src/domain/combat/mech-state.ts": "864c580e8af3c03917cdc35a7c0057b05928f2c90a61afa35ddc997ff3298f4a",
+      "src/domain/combat/mech-supply-saving.ts": "86d6a670fd756383786c6af8615064d73c625fb0a6c26672f822058aeae1c30b",
+      "src/domain/combat/mech.ts": "0ec3f0bee67183944ee949726fb79c78e42d089bda35c9af8fb1406f9ebd518f",
+      "src/domain/combat/mercenary.ts": "b8bd9888d01c1bc476d9aa00bb74efc906e745e9d330abb58488ce9fbdfde69c",
+      "src/domain/combat/outer-fleet-regions.ts": "c9412e7f60e7264b6507dc29ea8a518ac02651188d54ac2d7483167cd3860e6c",
+      "src/domain/combat/spy.ts": "6f9ba305fa7c51a01f7afe5168b185730b39f666489fc93225ff76dbe224df11",
+      "src/domain/combat/war-settings.ts": "b94f4d2b04938e3885fcf78b0c050d8b7c5c9b85a1bf185dcd124f3c5e21bf05",
+      "src/domain/commands.ts": "28cd8cb16b031d098363cfa2639afca48969fac3573b83b907efcf8074702617",
+      "src/domain/cost-affordability.ts": "3996475e420af500644a9e8f2af553be09c5d979782d15ed9580e7670935026e",
+      "src/domain/cost-conflicts.ts": "486fc769ba7223248506dbb14da7d651f7532e61a51d82e572be0d8d8bd60cfe",
+      "src/domain/economy/arpa-project-costs.ts": "35417a6f750fa8fa92079232f445baad1102fb8e54bd42e399e39e8962aa79c1",
+      "src/domain/economy/goal-feasibility.ts": "a6bca10ad42218ba95ca2dc70c34835147fe70a3133cf9e2b2ad2f3c0e8e982b",
+      "src/domain/economy/goal-resource-signal.ts": "dff5ff62a5df1232982570138b3c9b1020c70fba1224871d2206cfe0bb7ee1e9",
+      "src/domain/economy/market/galaxy-market.ts": "f632e6ec9b591c4a977f344469bf12e9df2e8b4a1e36395ce1106cde47a72872",
+      "src/domain/economy/market/market-settings.ts": "142df0b8b130392a38bffaf3575785d092bfce581ff6991437ba206c32b2ad16",
+      "src/domain/economy/market/market.ts": "69c329d01c3d50cccc375e8faa9a9cc01d91a4d2bb334d40001c58cf03f2c230",
+      "src/domain/economy/market/regional-trade-routes.ts": "bd33d288d84d52f9a4ebaf6f211d12161fe139e1ba86fa84fddfda66fd362454",
+      "src/domain/economy/market/trade-routes.ts": "f39ff471f976e8b08fa7dd7ed5a5f1d1e49571369bc633ce3a29a653d1e0d33a",
+      "src/domain/economy/owner-coordination.ts": "e01dda6d08ccbe8d8b112f0c11685aee4e1102c7dd77b9ddbe3bc49fb6af198f",
+      "src/domain/economy/production-intervention-evidence.ts": "2e80a4117848305cac98d80dbb429693bd00682a53b5b28f9776c4900310f434",
+      "src/domain/economy/production/alchemy.ts": "93063365ff9cbbee0e06dd5c011958cbab2bc3cb01df55917eb4acb0aaf023cd",
+      "src/domain/economy/production/captured-factory.ts": "cca22c97c3aa39281278af368e0bd27a444f808705b5dec41a3eef0c55659d54",
+      "src/domain/economy/production/craft-toggles.ts": "8a355ebf8c47b8fb42ea07c2d98cea914fd1b2d354445894852f391d5d6fff55",
+      "src/domain/economy/production/craft.ts": "35e93da08aa34ea447ef065e90887bc0c3f4eea1ce85906d20be4012b98c5dba",
+      "src/domain/economy/production/crafter-resources.ts": "450f57e47075565185a82ec91a4ee3e4c65bcb8aafd15addfc4f65830a9c4744",
+      "src/domain/economy/production/factory.ts": "5954a7cfc848a388385a077b61c3a52b90ecf5e7e8ddb57c0ffc6f71414cbc4a",
+      "src/domain/economy/production/goal-resource-intent.ts": "791d7b8b439184259781826564a01912e792d46866daaccbf2e874f970921acc",
+      "src/domain/economy/production/graphene.ts": "f319dc18ae6ae58140912ceafd1bc57f3bb1e054a2b326721fe06bb64950ed2e",
+      "src/domain/economy/production/magic-settings.ts": "f66911d61fcc8a8fe35f5f2f235dbaa051ba11952d5981f60fd3731b5e2e902b",
+      "src/domain/economy/production/mining-droid.ts": "31d45ccc97e579a47d7edc4e180d21647a0893f2135ae51bbd4faec3a57298c8",
+      "src/domain/economy/production/power.ts": "3c0d9ed709122152d348a89cd92d9776912c6bff6d10d3b7032aaac890b47442",
+      "src/domain/economy/production/production-settings.ts": "70759aa80d85816752460bd12959e6f1631a5597003cfb6bbf8bc38c0d770632",
+      "src/domain/economy/production/pylon.ts": "bb1d8825edf36b2a0bf2ba2f3c0a76bdfbb2b8cb6426d7386f1cd06d2310092b",
+      "src/domain/economy/production/replicator.ts": "7e2f6f258dc09ceec11fb4fffcd1c2b4a4cd661a3351ec6b182c6d86a38a7b9f",
+      "src/domain/economy/production/smelter.ts": "2e05c503ba18786c52a0c918895dd59df18250c15b4816d4050eb577a49965ed",
+      "src/domain/economy/research-bottleneck.ts": "ef1bc1b2d0aee518c260f42bfeebc9e900f1619bb26511edeb8a8f74ee4de2b7",
+      "src/domain/economy/resources/consume.ts": "cc9076b1f791187927a885e87c62aeec4bd5125b74f86698f616fdbf7a9ad1a1",
+      "src/domain/economy/resources/demand-prioritization.ts": "15237edcdb00036fb7961f8c00f5cf2370f72d5fa7c6c231a4b6b346953e6e7e",
+      "src/domain/economy/resources/eject-toggles.ts": "b60f7057a1800d77d250aa52649bd284e737aaa8b6cb0660d72c782917501247",
+      "src/domain/economy/resources/ejector-settings.ts": "6ffe0df1bdd2eb333cca78817c6cce1d1dd34540ba0834fb9073d7b30e35e037",
+      "src/domain/economy/resources/gather-resources.ts": "d47f24af1587d69db5b5325ab2653631c8ed8555b88afbdbba0d6de508a122c9",
+      "src/domain/economy/resources/inflation-assist.ts": "106fce7ad315eaecb94b6b7f3e03e629eb3037489237908546cead05add8623d",
+      "src/domain/economy/resources/reservation.ts": "75d28e4d74d706dc72bd33b69008f134cf13899da4157806e3dd20ccec5ec8cb",
+      "src/domain/economy/resources/resource-claim-lifecycle.ts": "ce79d3079262b68db6622ce8f95e2a172b3d464e6b583a75b0b58e7b0ec76faf",
+      "src/domain/economy/resources/resource-claims.ts": "d735d27481717cb0d1d6fbeaae3c40e352058dfbf6aab765b33c95b2409310f4",
+      "src/domain/economy/resources/resource-ratios.ts": "d9c935c56fe0e9131c8616ad5952b6ac196e8735a66c819e13befd91b8ecc1b7",
+      "src/domain/economy/resources/resource-toggles.ts": "fe3ca19b133d0550cf8086a2aa8b82422c505c52c1cb0941f89db26f2cf09403",
+      "src/domain/economy/resources/resource-weighting.ts": "2704515bddf2ae2964cd0b5db4ed516b6fd7493c80e1f94056bdad70f80f1ac1",
+      "src/domain/economy/resources/shared-spending-budget.ts": "a59ed287c2c3fdfbb26abe273a1f01bf14dd67ce040efec80e1fd56353057e5b",
+      "src/domain/economy/resources/supply-toggles.ts": "9d7a29546403bcc42d7f654dd9d1b549ab1f9558718f49732d80821084ac8fd7",
+      "src/domain/economy/resources/weighting-settings.ts": "1594b2b3887c8ec7b0b4f3edf153299c9a75cd914601c906e6f6202c6f844189",
+      "src/domain/economy/storage/crate-cost.ts": "9649f1bdccfaf9dafe00644393bb3ea949d0cd054a3add587471b58ec03840e2",
+      "src/domain/economy/storage/fuel-depot-demand.ts": "5c01681c586c85c70c9b583a856aa27ddf3125750fd47c13bff8f18e3b36f33f",
+      "src/domain/economy/storage/storage-allocation.ts": "1f4962278593a248cddd3350bd075108aaf57c81f1880dea1e7e04942672be13",
+      "src/domain/economy/storage/storage-expansion.ts": "3288a01b0a61fb15596d74e7bf52bf718022fd90afb492d20ca933383b8390ea",
+      "src/domain/economy/storage/storage-requirements.ts": "ad9fe78a52dd4d18131c99e8506656085dbd190172ef314e3ec6350e94864d08",
+      "src/domain/economy/storage/storage-settings.ts": "f4dc31d3efdef3bbe0ca908e2c6e86926c771eb39a814bda7d2f22e6655f0b6f",
+      "src/domain/game-achievements.ts": "d5bf7454c3215eacb919f0f617a533c15b0e5177f8546f448e91b7362af7d4d8",
+      "src/domain/game-world.ts": "d70a7e9d1693ee2f73226fa39ecea5482de1427a315c0c7a1aede3bbe52512c3",
+      "src/domain/general-settings.ts": "89b7ec103c57375ebf9df23705786928cae631bdc6a0294ca5e6c51a5cdea710",
+      "src/domain/identifiers.ts": "997dbc9de8005156434775ef7055a9c7e73f217eba8a2e34bccd37d4c48da3f7",
+      "src/domain/interface-settings.ts": "676f17259f635a8b6aadb27f43b4c7fc99a8574c5218477560004f2cc477f155",
+      "src/domain/knowledge-requirements.ts": "40836d2c87d8f2d65f3720aebabf419c97362a9a66b1a15c3aaf9e01cc6ba7f9",
+      "src/domain/options-modal.ts": "fb59c03643656f369a5a0fa52f2e4c4e141fec81c11c3639117970579c005afc",
+      "src/domain/override-comparators.ts": "4c1287328bc32356c33213c27b7acc564ec2f98bde193a29fe0aab9138b08ee3",
+      "src/domain/override-editing.ts": "fd48d2d15bd9048374231bb4b12180f63d2bddfa65e6f29e710c672bf0f30ca7",
+      "src/domain/override-resolution.ts": "a5e91862aee51b5d92765da55bae587a49da5f858a48947c37d3d5955e430d19",
+      "src/domain/planner-analysis.ts": "88933be4857a8cd680d493d2e21d5c20fb69e769336ecec312fc4aa54f20fe85",
+      "src/domain/progression/advisory-resource-projection.ts": "b08baaee3cf81065afc7b43ab65fa9d8151484f9f142d13fb5bfbbfa2e6b3cbd",
+      "src/domain/progression/build/build.ts": "540b7009246999a22de14eca38784ccfe9a44ed2f4a059d62ffe0eddd95703e4",
+      "src/domain/progression/build/building-settings.ts": "9aade2617c432b09de5a2b3eb61d390aec5ff2f88933d16ff78c370d32b4177f",
+      "src/domain/progression/build/building-toggles.ts": "6bc311453c46678bfec4c355e21a6903d973ca2033f1790e3513ecc83d1088f3",
+      "src/domain/progression/build/building-weighting-decision.ts": "f2677d56932c806b7de74ca06e5268300ff1da8ff41213b5c89a3b876f9c61d7",
+      "src/domain/progression/build/building-weighting-rules.ts": "b76d6728c997c4efcd1cbef97b2f5d3150b8af312ee3af9fa9a48311f7c81e12",
+      "src/domain/progression/build/building-weighting.ts": "3f481f8369fcd66c830f4e692a20eacbdb61b9cf3ea5822d8a10b45fdeea2ec5",
+      "src/domain/progression/build/trigger-settings.ts": "719e1c46384ff3e2672510400c1115f053c9491bd2a2b9fdb4e4ebde40c48909",
+      "src/domain/progression/build/trigger.ts": "51dd81b8f33535d09ee53ecacb11cbdc7d4cec03200e5f060470720a3e87ccc8",
+      "src/domain/progression/evolution/evolution-result.ts": "71f73842b56d26854024bd57533ce226edc7aece7f991fa7ae98ffce57e496d3",
+      "src/domain/progression/evolution/evolution-settings.ts": "d4fc074a6012912f8ede1ec99dd65601ef458be240af09798afd230317c1f2de",
+      "src/domain/progression/evolution/evolution.ts": "02f4ff56b40d4f3e637f122e9f7748d22cbf5a15c2997506ee4e5da49ac5526f",
+      "src/domain/progression/evolution/planet-selection.ts": "8a8374b00160c9dca0bc67c8589e6d7bd900213ef836fba4b498a2a83f12a5fb",
+      "src/domain/progression/evolution/planet-settings.ts": "5f216d262ee38dada6d3b6783476e41fe00b521f45ad579dcf8215a9cc0ba156",
+      "src/domain/progression/evolution/queued-settings.ts": "7a6dcc31002050f7c2b58deeb1048cd539a7bee8f9740fd6c26ecd3992a7036a",
+      "src/domain/progression/evolution/universe-selection.ts": "11ad00711630806ac6c3bbf0d3e29a8282a6de571c7aa4eeb4ac375eb549de46",
+      "src/domain/progression/goal-planning.ts": "44d7913d23a7ab57b461dc6a06b158c82e246b78b2bac8c55efe04ccedce9f78",
+      "src/domain/progression/prestige/achievement-guard-settings.ts": "5332345c6d644bc86c6237bb71540ec085dae595a2ec1e6715aa8c8aff521232",
+      "src/domain/progression/prestige/achievement-guards.ts": "deb2b78795a3259d50f7d65c92b04921fb461ec4dfee1236feec60659591374a",
+      "src/domain/progression/prestige/challenge-helper-settings.ts": "9c67a3a269cb7ac7b6463e36aa6a7ee7b46dc6638bf8bfdf9e43f4793c784aeb",
+      "src/domain/progression/prestige/custom-race.ts": "09982834d9176cedc0087cf90aa7b21b7039810ebd71c02e1b7151f42d273863",
+      "src/domain/progression/prestige/prestige-eligibility.ts": "b0f0fab2a7620b382929c7221147be5c3c783756c4f31ef4db9c7ebe78d9db53",
+      "src/domain/progression/prestige/prestige-settings.ts": "9f6d874e5e1caa8103378c01ac21f24173f944bb3a1244a39569247536d314ff",
+      "src/domain/progression/prestige/prestige-top-bar.ts": "65cd770974436ba42cb2eed9117cfadcd7e1742be2975b90db3d78595d9bc10b",
+      "src/domain/progression/prestige/prestige-types.ts": "52692903089f40c0bce290e6855a0c6a65a21442d42865bff5fcf4d023751541",
+      "src/domain/progression/prestige/prestige.ts": "df5656d5c7efedba5671bac76567f4e8850e847bbe52297aa816516ce7c508d3",
+      "src/domain/progression/prestige/retirement-prep.ts": "d442ea7ae9b0200c98c20e22411e21f61ec9659d30e9bbcce1590eb25b7daef5",
+      "src/domain/progression/prestige/vacuum.ts": "5cac21a3b45efd279521f2379479d4516bddf7b32601c11c271d0def76c19af3",
+      "src/domain/progression/research-advisory-routes.ts": "ae14f560022deae990baaee2fb1aaef91bf69c64646cd8d25a33c188fd3f9864",
+      "src/domain/progression/research-goal-candidates.ts": "7bb08d915e74f59507388d6402631c93bb9720af5558451523429244d93bcbfd",
+      "src/domain/progression/research-mana-attestation.ts": "21b8e62ab6fe4d1dba591b111c0295f4de3d0288c078415f3356b4fb3a74e3e8",
+      "src/domain/progression/research-prerequisite-obligations.ts": "b2cfa82b6ea28acda576a1911fe4f4ee94bb1aae584f791bc2a0a22011855c73",
+      "src/domain/progression/research-prerequisite-planning.ts": "e18dd6996182987cb8d047d12eefdeafa309bd298c5f79f1320876e076522fd7",
+      "src/domain/progression/research-spending-decision.ts": "bb7c8452c5544f9eaebf20e78bda26c386703be01db31aec9ab9b4c3e1195d12",
+      "src/domain/progression/research/arpa-toggles.ts": "8d8246daefa36d7f2845b595e217083d1ce68997c4cc02a50e52f0354515987e",
+      "src/domain/progression/research/project-settings.ts": "5cd61e41381ddf8aa80e0f0c2bb90f104cf6f5f2f0912f9715ff8842478ed5c0",
+      "src/domain/progression/research/project.ts": "f721ad9c2a188d9f236b4903cda7e550ec120f3c51b0ee3c49f2305290b05238",
+      "src/domain/progression/research/research-settings.ts": "20ef76de928bcc65533b3a9c5393fcd4d33c5528f25d4181b4f31f81d803ca37",
+      "src/domain/progression/research/research-spending-authorization.ts": "1aa457c6bd425104109a937e9891a0162b304242c22f02df195745fe734d82cc",
+      "src/domain/progression/research/research.ts": "f6c2f06885b260c6cf664c2c1f55c11b2b3f7cdf93d92d15562af1ecc5dc6285",
+      "src/domain/progression/research/tech-conflicts.ts": "3a0fa1cbd512c091725db5b6ffbb8c0f6818f6db42f56adaf48a5ccba9561037",
+      "src/domain/progression/truepath/ai-apocalypse.ts": "f104599787d8609d6d05e27c1d70fd846c54d3d91e69a244b3115c14678912c7",
+      "src/domain/settings-defaults.ts": "c0cf564f2404feb9bb74f4c4fa0fcb0ffb518b04faf0c8c4a2e3381faf9c750a",
+      "src/domain/settings-layer.ts": "9358b8183476f26c87ae321989b334c44a1c9e7d3e3c5451b073a691952b9a76",
+      "src/domain/settings-migration.ts": "d1c996ff243949b65b65da095e400f9475fadfc3d141d6f23b35a33e246f32b7",
+      "src/domain/settings-priority-order.ts": "8a25c38c917984f3daf56c7f8bcb3ca4fe8a4a29b6e01fe5a0ca6a9ff3fdc64c",
+      "src/domain/settings-sections.ts": "43d689c29c23d72eea0a6afd48d1db51a8b58a5c0ddab70f79d6aed39ca23dc5",
+      "src/domain/snapshot.ts": "3a3d9f89dc0760b726198211659157d61ff0172ce8358a28d08a0a040757b430",
+      "src/domain/state-log-settings.ts": "a2292455950494e1d70074dcea1ea8382bde4dbf3788e6cd4a54c7aa4a6ef850",
+      "src/domain/state-log.ts": "8138acf681496d626463a00581090b27c8b6b3d43a471d4b78eae48a8a6c7176",
+      "src/domain/state-update.ts": "8574aadf030e1b76eb04abee4d4656c28f9def4263e20b1318a2090a2c180a90",
+      "src/domain/target-timing.ts": "32cd93f52a69b376aee748c67f5ce9698ca14bb533ac93d8b0971ffab671299c",
+      "src/domain/tick.ts": "849484ce6bd991d607574e57480594238027394a32ae341203c639cd35890510",
+      "src/domain/traits/genetics.ts": "763baebc304c560907176feacd87086383bbd09feaab55ed6a8febae3ba79c28",
+      "src/domain/traits/minor-trait.ts": "c54e3566375b861d97a4ca39de2fb31ba367a9b008ef1c14979b225bd36729db",
+      "src/domain/traits/mutation.ts": "3327adaa0284b0f95f50baf315c1daf0c75b4904e003d82a0ad5abee17f2b92d",
+      "src/domain/traits/ocular-power.ts": "636712e0098e7c58b0f7e13f20a1ba9bc588cf74a05e869113fde02bf460cea4",
+      "src/domain/traits/psychic.ts": "37ba60096cb690505a9c3c5c6bfe6cc441a2480f9d5a8232771a80ff87657d7b",
+      "src/domain/traits/shapeshift.ts": "72d3fb613d31286a78d1d1e0c6d145d96d7f6695ac9b8b572a6bf55a84220cc1",
+      "src/domain/traits/trait-settings.ts": "1dcde91e137a64caae8f4f67bcc886038dce6a4bd4e02e46c5626b8626ab337c",
+      "src/domain/traits/wish.ts": "0814dd35cbcdecb5865762042f945625838b716ad15ca3ada18aabd1eda79823",
+      "src/formatting/game-duration.ts": "bcfa4274a2f194322fcdae195cf637ce2a63df18e439ee52d0bc5564d84e5f84",
+      "src/formatting/numbers.ts": "327a51a28a968d083c2d2bd5ef06ddd1866158314e6900723e0607a22f22e8ca",
+      "src/main.ts": "ef3655b62f26c559b79944549c035d33679da91bb1d260e18ff1a93483e23dbc",
+      "src/ports/achievement-guard-settings.ts": "ebfa526b32e810eaedbe93ba0f684e2cc510a2ac356b8ab471e5b3efa01c86a5",
+      "src/ports/arpa-toggles.ts": "5460a0cbc894d8601062bce9ff6a27f934bdda5029fe25837a9998eeab3c37ed",
+      "src/ports/authority-settings.ts": "cb4ae9ddee13885d87a3b97d4b4237d841b765a4d7ec09773d1a5acb3f8c9145",
+      "src/ports/battle.ts": "6311b6efe54cd32c71c1b84e0fab7a65321c85152661e56b2720fb072d3df0ea",
+      "src/ports/build.ts": "03ce17e0e6da9461c537c3dd555dbeb3c41f764895c64722e830daeba4c500ea",
+      "src/ports/building-settings.ts": "8f2312f8be568aead1cb13ab98d373c8570049799eca7809b34676365a9bab15",
+      "src/ports/building-toggles.ts": "aabeba1e32bd66e04246dd4fa37c8b4f3ae5446bba8dcddcac0c537b063a8707",
+      "src/ports/captured-arpa-mechanics.ts": "ec7f8f7585dd38226c41720044ffcf4f5b478a856738fd058a9e278cd30ede48",
+      "src/ports/captured-espionage.ts": "4adeb70a35cd4fc1fda313af5b2ad5fae39e4b6cda4a312ba0629de953cd20f6",
+      "src/ports/captured-game-mechanics.ts": "883840e6f0b8b62358f434390472fce714112caff073edaf49c9fcaa871cd588",
+      "src/ports/captured-mech.ts": "66387fbd905cfde4fc99d16a93366d7504cd87039babd94bea3cd467c4802e66",
+      "src/ports/captured-outer-fleet-dispatch.ts": "e82cfb1d7f24959d6f9cf3b96cf674bd56e24c3b0083bb0e435e9c7e2a2ecccc",
+      "src/ports/captured-planet-selection.ts": "46806caef0145297972a70baeabb7436b7ac802134c68853f84c32856660866e",
+      "src/ports/captured-settings-defaults.ts": "095d0c030527549f3d92c9a4dea777d842ee12c0981daaeca8a001812b3079d1",
+      "src/ports/captured-settings-store.ts": "c479967efd22983fd0d1cac70a2855b0ceb9a3098516cf1db97e95c6c9e8093e",
+      "src/ports/captured-spy-training.ts": "e8834327b4001cf961a58cef2dcf2619aefe59900bf394440be4a0f518b858bc",
+      "src/ports/challenge-helper-settings.ts": "5151e50b09b553aaa173ee9d9a269c5fc30319c83cbbbd2ed281d87bf1808fb2",
+      "src/ports/clock.ts": "669b25c45ded69258180dcdbb73a1ef22660831e4c26e36b4aae928f13e6987d",
+      "src/ports/construction-candidates.ts": "0cbccfc8d97c8a2c9ddef77cb88e5046050836ccb6b97ac7b83ee61d6fada920",
+      "src/ports/consume.ts": "df7844fc71c5da9c196645f27ba5fc19b91374960b715191cf03d53882932470",
+      "src/ports/craft-toggles.ts": "a720a836b915c38954458dc851f31c35d113c6d7e42efcf4fc902e48f0f139bf",
+      "src/ports/craft.ts": "a5a0f82579d4e15788b21235b7f9f8e73240e169e7dc715e6788441cbb7b838d",
+      "src/ports/decision-executor.ts": "1ffe774eb7bf69fe25f7ea60b05f025de5ae116b38b98d68127d03d981fad761",
+      "src/ports/eject-toggles.ts": "b3737205f349fea44ff3a8e300fb081e656cc49c5a4ccf99e987b209cb82a952",
+      "src/ports/ejector-settings.ts": "d61e326bc457e989594c5048025540d3586e6826cb7d1e33b611f0356308629a",
+      "src/ports/evolution-settings.ts": "09555be10fe6d68440fc865d5afbde20a10d67ddaf1d9ec33ed5b52d177b6b1d",
+      "src/ports/evolution.ts": "03508ea8e2bebb685229fecd2d9a689a63b05473a38abb9bc69d94d7d1ac3f50",
+      "src/ports/factory.ts": "8d77584a887bfc53b396d353cf70ad80d042902736ca66b8c7d75244a7fd2731",
+      "src/ports/file-download.ts": "79d6179a9fd02b0f5e659af59d1d53d0a47ce4e0502c49d270aaa64920b0f579",
+      "src/ports/fleet-outer.ts": "576e8ab15116c1ecf82b205450f3c3ae31feb7b39fedf943e56541c3e52de7fa",
+      "src/ports/fleet-settings.ts": "839c68d60b530f5e40433b95d3f09779b5ac05c6a03f88a0c71ce47a09eee0d5",
+      "src/ports/fleet.ts": "4cc0ef5727a917c8c79bbf3bfa8b42c8cf6d615db72c1405d1973aa8aee4b612",
+      "src/ports/galaxy-market.ts": "ab4c7c08572c12b83ef51899fde5192511ef0f4db1935d17b942fd5ce5470527",
+      "src/ports/game-achievement-state.ts": "9896b18987fdbf73bc28c6740eea26f5efb0b5280acc86a55448a5d6fec49f3b",
+      "src/ports/game-action-controls.ts": "21f386a7cc4c74fbf68a0ac733d6c53082cf9e32dfcb2fb31ca6e50aeb1a9d7a",
+      "src/ports/game-action-costs.ts": "b74f6adda66b4dabba9779227b3701cffaa29e2d522cca26e827cea5c4eb2dd9",
+      "src/ports/game-build-capacity.ts": "7aef2a3bd67f5011fd16eeb38c5722040e8473e5443874c7af4488a821e1ac3d",
+      "src/ports/game-build-targets.ts": "fae21ab3e248209882c1100fdc1577e57abbcd5929a19f7447cd2819b7b33619",
+      "src/ports/game-building-unlocks.ts": "9ee203f567bf4ec5267f0d6c4e2b0fde8c20d11f054f4f0cd156f74bb20ba527",
+      "src/ports/game-celestial-lab.ts": "ca4605346c2df6b8bfe84e7aff2b2ba12b0a20b7c14cf8e18d1e2f091fc54eaf",
+      "src/ports/game-click-multipliers.ts": "723bcb93e9a2accc7ddcec6e98e7e789d332b2eaa757c30e4fa19ad9edd9200d",
+      "src/ports/game-command-executor.ts": "39bea57faa37c985998410b88e698e88e91e7bca39b20ae85f4a34b2d945dc0a",
+      "src/ports/game-construction-observations.ts": "4e6e04470ec0b475a4a01a4bcfb411ae796eb3caf8ea334b80b11726d298b7b1",
+      "src/ports/game-control-registry.ts": "894f00e1b82f53b139ecd0fbecc68b10de869443c80d330623134ae0c51d8355",
+      "src/ports/game-control-synthesis.ts": "2d6360d650c8c313e52248f4eb61b5c36122d32a1d3f2d934dd92807a22481be",
+      "src/ports/game-control-usage.ts": "437e0e99238b4f08a4584d73b52486afedbd99676eab2a3cc975eff6a1d9175a",
+      "src/ports/game-cost-reservations.ts": "c3b76e4e03b36290cdbd98e6e58723b789262cb3660211208710e46949dedf6a",
+      "src/ports/game-crafting-controls.ts": "64a49dcd9c30ccc86cf41050352410a9fb41c2285d9f371781913ce0d0d34888",
+      "src/ports/game-custom-race-lab.ts": "c535ceabf39100f7dcd6a6695a4c1f8ab3366d22a1c3965bc5b72a5d604ac295",
+      "src/ports/game-disposal-controls.ts": "05ee81824fcfaee3e65ce5dfa592e8935ea9ad52741c01fbf8f9139ef0765040",
+      "src/ports/game-drawn-actions.ts": "9c483accad2776e9e84ef7bd4429e6f962bbb58045a4d729b15579138802de49",
+      "src/ports/game-espionage-controls.ts": "9c751bd0a7d34ca7ec8e85858a5ed2a5f2577f6e4aced14b8b931105985eaee6",
+      "src/ports/game-feature-visibility.ts": "b2f4109d23c59a249694b3fe5ba290bc8fbc7eeed62aa5717f1126ae1262eeb2",
+      "src/ports/game-fleet-controls.ts": "c79f6e61837d079c4b519d6bb5cda16cbe756dc8d26ea0723a61f07092e8fa1e",
+      "src/ports/game-foreign-controls.ts": "267a0702f04af967023547b6c10c1ba48f06f08f9ac5a7012f330f36bfab1a5a",
+      "src/ports/game-garrison-controls.ts": "a548829e3123fcb6a198180aaedc2ed175007ccebe0c4a89e9105dac2cd3dbd5",
+      "src/ports/game-government-selection.ts": "ef947e4ad51d5329b0d1ad27721d0300b8822617e0a0c316d57ec79bed9c71b6",
+      "src/ports/game-industry-controls.ts": "8b5333bbcae4074d2038edc8c97f0dc393c4cc567db16f67aa4387db997267d8",
+      "src/ports/game-job-controls.ts": "3070a09da143e8f48c9aeea102bd427d92cddd19b822513b744fb6dc672c40e4",
+      "src/ports/game-key-state.ts": "734f181358dd6db3599163a192aee864ef0d1cb4b9539dbe6f63bbcbae0c5253",
+      "src/ports/game-keyboard-handlers.ts": "e0afc15c19b0294834f8e6c128a7f64fc7de2d740062dfbd9532a18df7c518e8",
+      "src/ports/game-market-controls.ts": "b5eca2c825fb1e7b0b6d15329f74f82a1bd1c103e39cf35f10286228be6968b1",
+      "src/ports/game-mech-controls.ts": "9ff57ab0233a764f111ba48a7d3258ee32b4d8c0c612678a7f9328cdd71c1e50",
+      "src/ports/game-mech-list-controls.ts": "409275212a5f0ed84a8b982e7aecf98fa15bbea22fe1bde35106d73cea0d7f27",
+      "src/ports/game-message-log.ts": "31daf33e194280ce7ed291f2dd01e11a57c61752b7f1022824b5af1c4e89282b",
+      "src/ports/game-modal.ts": "1855a6c07c67b42d2b888db646c7403ac044da1f2ed8175f0f948af6e2356398",
+      "src/ports/game-mount-suppression.ts": "1cd1dc21a8c66f240ed9c6732cbc5d0943b4cbd5859e2cf44059ac5373f0da3a",
+      "src/ports/game-page-shell.ts": "79549279924e8d4eaf1647fa664ffebe8c7ffe66b08dd1a33e827af272afeda1",
+      "src/ports/game-panel-workspace.ts": "41e81bffda64ffaaed7fce64a772b8e476efb0d3b4820f7de4178c0279c56eae",
+      "src/ports/game-period-source.ts": "18178a656c2184e3db22aaffb398702677703306d9a7e1137da95e5377f58091",
+      "src/ports/game-project-catalog.ts": "1e642b773ba7b80c674c3ecacfd0cafd524787caa70682392fda9adf46e4181f",
+      "src/ports/game-project-controls.ts": "95110a770b2260c6a89dc292f61576c164f0a2a99ffda6f7a76cf2d3d8ee7939",
+      "src/ports/game-queue-readout.ts": "619a9782b8ab256a0d4d4dc3a7a03d23ca31a177dc6566be4b8fe382bce19e7e",
+      "src/ports/game-reader.ts": "5206f8d25c6b717d6f4a7e9153968cc305fa77262f3696400b1f9cb94960d44c",
+      "src/ports/game-research-controls.ts": "45ce337a21b358cf6ca32fbd343af8925cbb5e01cd7a55ab5d373cf06578086c",
+      "src/ports/game-root-state.ts": "ca9ea263d5a50d42425633cd0f0aa6b437a621028f89ab87ec78d6a3a9b69722",
+      "src/ports/game-shipyard-costs.ts": "790f46f837835e304f02e6086277dd76f6462c7a3a7054084ab95ec298ca596d",
+      "src/ports/game-shipyard-parts.ts": "0aa718c7b86d19e46541815f3b61b4cd605dd716c78adc3bd683bc1234eb47cb",
+      "src/ports/game-space-region-mechanics.ts": "ffb4cfe3d2fe0a5b2ad623e51b0ce0cdf11e6746bc250cf3e234818116bc4917",
+      "src/ports/game-storage-controls.ts": "ef2d0e69430246afcca325b4edc2419f7cb03c02ec1d0784f4687ed80672c911",
+      "src/ports/game-syndicate-mechanics.ts": "b14fa6f590ef7fc701439ca5060ee32e1ac1f37040cf0686b2ec6b71e3b88d9f",
+      "src/ports/game-tab-discovery.ts": "83022010c05c79c72810280869bdf07c98dca1c91f3333e1b8570e05789157f5",
+      "src/ports/game-tech-catalog.ts": "8a677b970b7b59d311a1323ef7e5a1157454ad482fe170274be8d4764eb1fa9a",
+      "src/ports/game-terraform-lab.ts": "12b5965393cbcbdbde809143f660d841ac38d371afbc864013a991fe7317e929",
+      "src/ports/game-trait-controls.ts": "fd584fa8a9da6ef4d76dbc702cfb2989b9083d1136c2f4c1752792055c6ad888",
+      "src/ports/game-world-state.ts": "73716f85078eae9af7b7f0a98cdaeb3d1d11735da0f487e068b62d49a4554358",
+      "src/ports/gather-resources.ts": "9e999f237e9536f72f7a69e6cdd2e0934ceffdd2488485cf3dbdc5b9f27a0c7b",
+      "src/ports/general-settings.ts": "3bbdfde84cc352d1d7d12343be9cdf59bfe8ac97dfc5a194b4273b38d39976d9",
+      "src/ports/genetics.ts": "44174fecab80966d4574be0eaefd861a45ab539d908ff6a0d8f91703881b7f20",
+      "src/ports/government-controls.ts": "f4658de6c9f0cdd89d8bf2d0d89b0a75a700fbb38f4756b00e7adcdad2556f92",
+      "src/ports/government-modal-control.ts": "9dab1e27c9e0c0419e1bf08c6ca47f9b684cfddd8d256fd156a6a6af34410000",
+      "src/ports/government-settings.ts": "d495acd3f8f87d9ca13f6bd5e7bf3b548c198794754855de89695b1efdf9e1a0",
+      "src/ports/government.ts": "a6a3e69e72db4161b3f4f4aa94a888f462a5ac52d36e0eca6e7f852c5343b177",
+      "src/ports/hell-settings.ts": "e82aa483b76c7913e9baef0aed24f3fef4f3e27b674542ce4b3f9dbd23a7afe2",
+      "src/ports/hell.ts": "8792e65db431f2e0d1f4cf44157265e7367e2610a4964fffcb31487fe42d46df",
+      "src/ports/interface-settings.ts": "1b486c75cfc0f7e859e6ad8cbbdab9d84b58c2acaf78a43b012f89c1fe277c24",
+      "src/ports/job-settings.ts": "8c524e6da87c37deecefc3fc6a6504ce58fe97dca2c1b0f80f4b007a1300c687",
+      "src/ports/jobs.ts": "d669da5bfe2b361c5644c9db34e256e6eb7dd10c08c1e095cba207916c6d7aa3",
+      "src/ports/logger.ts": "e6ad6f49c08442e1ca7a70edd0636ffed4e742b7a53b91460a75e9a660eeea90",
+      "src/ports/magic-settings.ts": "8c4094e6a797b55efd46a682f2ca1c30650bf2f78896afe84ff078d4fe9d5e57",
+      "src/ports/market-settings.ts": "d0b95ef5f9bb9ed9398aca560474c3038528dc7323fbdd12bb50b15f2a5b8135",
+      "src/ports/market.ts": "47b54d78f048a93d0afad102ac9b3626310e566407ba0b3d4594843acbe7d117",
+      "src/ports/mech-info.ts": "6e563fcb376d3df051239b8ffb5fc6a33f82e60df08db26df433525e1f5b93b4",
+      "src/ports/mech-settings.ts": "57088dca8aaca97e48344a3e622ced1de91788ea7e7bd19e399cde263762a0b5",
+      "src/ports/mech.ts": "4b8c4b3cfb0165a201d439bc4382eacc7c0c0acc9eea5f1863f878ef25997ec4",
+      "src/ports/mercenary.ts": "bf67eb63b77dfc6738ebda10b860bcf20e13da3f534ff74550996d0bcec95f6f",
+      "src/ports/mining-droid.ts": "a22168915c511a7fd4ac7246e1addcc130a6062f1dd34a685c93af5124af69ab",
+      "src/ports/minor-trait.ts": "95f79f656cdd91fe8ec86fca34cc5fc06e3a450358fe24320ae4001ef41fd0bd",
+      "src/ports/mutation.ts": "79a784262cd8152363b8fe51335568fa2faf390ccddd2f05f80a2c566e7a80fb",
+      "src/ports/ocular-power.ts": "9fccecaac9904395f2f42e41aa0e32f08117fd64047b53e6ebff85d135b12ad5",
+      "src/ports/options-modal.ts": "531cc327b9e4586262184774c7af995121735496aa578779e16a2c6ab0178f4a",
+      "src/ports/override-editing.ts": "097bf9109f9f0ffb606cffd1096926e52b7aaeb67a939dae7c72ebe9fdf8165f",
+      "src/ports/override-settings.ts": "208eff02cc9def9538f159fa6b447848945ae190ede5c433423916ab42bdc0d9",
+      "src/ports/planet-metadata.ts": "6a394ed5eaf8ad255ff96474e7bdbae10c0aa23fe1b8dac8e4d207ead9589aad",
+      "src/ports/planet-selection.ts": "cac95e0b61611b282966b9407d8ddcac821ef9035d1ec0657eab9b6ef6ce45c8",
+      "src/ports/planet-settings.ts": "02e7974f74a39c4ee6535f412a1d2d4c34ca89c852d54fbcdb6d443f76583d55",
+      "src/ports/planner-stats-store.ts": "169758880d70d001937372a825c7e0a79867d9eb40c28e1fe55a522122174bf5",
+      "src/ports/planning-worker.ts": "371cac5dce1841d6dca9c7b298608646bfa9e499e8a84bf695323a94ab52d2d1",
+      "src/ports/power.ts": "87de2a75fa66903e7e51e5aa716c5d50dfdd091669502cbe508fcad71eb39052",
+      "src/ports/prestige-settings.ts": "19a09675f8cc4d577b28c4ecfece673cad60e711aa584849d3b887e2ffb5c45d",
+      "src/ports/prestige-top-bar.ts": "2900feda412cac4c80e0550ae2027d1ae3bbd82f8562962f5cf8ae5616da093e",
+      "src/ports/prestige.ts": "a64fc96acbbc776cf9238364f3135778fb1aecf2fb93779dc25f329d93048507",
+      "src/ports/production-settings.ts": "81855be4a12db27f11ca56e6404ad56d019cd47e71fc1f1541219f141a867a95",
+      "src/ports/progression-controls.ts": "766324b2a78762bd8371cc7c2b00df408656e5e90ba9e9414cdfe00b30dd521a",
+      "src/ports/project-settings.ts": "b6d69b273ed12a053bf7b9953d54da73beda27ea21b329d80426113f5f842b7d",
+      "src/ports/psychic.ts": "343a4406308994a1325ee3d1bd1635f3f223db6a295472f027fb1a7eb2e454da",
+      "src/ports/publisher.ts": "e285a5461fa51caf5494b599e014dc5a55f160cd8676008679a0eb0f5878ee0a",
+      "src/ports/randomness.ts": "bf1c3d481c273f2f0e4acb0301e54783b3c5d10800585473bda894b03ba6051f",
+      "src/ports/replicator.ts": "d4cee60d29fe8f54ac33f47f154b02c264187731e943676e080f47967c2e274b",
+      "src/ports/research-settings.ts": "660d1b1beb2c853de894e0d8ee87428defa7f2978e931917f381a3e67675a369",
+      "src/ports/research.ts": "3c0e2f537c700ee37976c5db46e00c22527763d19d4bdc09b972d4e30a88c6cf",
+      "src/ports/resource-toggles.ts": "83816c4267a28013cfe22cb1a2f5fa60ce383f6a22087ff2b343cc4322d115f9",
+      "src/ports/settings-persistence.ts": "16cdbf523dd0407998f5e8b4a0741054ba1f26705ac227314fb0a705b7f714de",
+      "src/ports/settings-reader.ts": "a0c0f9158964b179747c379c943a09be104c22c643c96efa36775e09700afb70",
+      "src/ports/settings-reset.ts": "e2ea54509acecc57adf809d76059f04a70b36e0fa4cb6819143808a3cf10364e",
+      "src/ports/settings-store.ts": "f798862ea7a2ac8555e5ffb05cfdc54927cecfd8915e58cd025249ae332c5c4f",
+      "src/ports/shapeshift.ts": "1bf1fdeaac3e21f2df8529209284f13141b985075514b6dd10354a31b0f6e411",
+      "src/ports/spy.ts": "8257482d96b8e92ab6f68e26645e7e145c85d5184124b829e75f57ff5ea7efa8",
+      "src/ports/state-log-settings.ts": "bff78565b5f4607abebfd73108f373763196dbfadeeb8b9f2bb5227253d1053f",
+      "src/ports/state-log-store.ts": "51874b0cae53f97261cc2e00dc4fbd387e750b473c4a53cabe625bc1a8a4d032",
+      "src/ports/state-log.ts": "80c695faf8b8499efe1f7efddac4026c419b4ef2218d82776dbee19337cd12d5",
+      "src/ports/state-update.ts": "0ecc42dfba066921d930c23e7f217ae49eb7fcfea985566bc9f3c417b5f06d3a",
+      "src/ports/storage-allocation.ts": "9c393ee2dabeb83dae0532e83c1a1cc08de6cc8b95b5387bda5d2e7fa0c25475",
+      "src/ports/storage-settings.ts": "49a8fd14bb312a7842c5c4397a307a683471628bf697073daf5c41147594ca8f",
+      "src/ports/supply-toggles.ts": "14176d3e5b93b0115997e06d55f48c81823472703cf8a29c4be192137d1f0583",
+      "src/ports/tax-controls.ts": "0482fbb9f9a7a1f2352589c8ee98df4dd1783487c227ab9ebaee64530b4ccec7",
+      "src/ports/tick.ts": "63d3dd6f3ea7a6f37138fc706a2036a8d4f2fb62e1ce59e4de4c6458d73222dc",
+      "src/ports/total-days-top-bar.ts": "8afb010d2c13d158ab00ea9e2a4cde8b31a9d912204065c9328153ec6681ee3f",
+      "src/ports/trait-settings.ts": "ad9d75b5540e50767ae1cff98f2631dac5584b0d15fa4aa6286c766bab2cabc4",
+      "src/ports/trigger-settings.ts": "c751a27d3d51d7d848c5783761ea2744d2b7f1f6c7164573451e82712b4c8403",
+      "src/ports/trigger.ts": "ea846d275cf2b70da57c72453f234a76f47c849404393fd20fc9bc2ed1fd6d79",
+      "src/ports/war-settings.ts": "25d4138ce593bc8fce0385c4203b1a07d7bfc2845a320871c74da78cb144d533",
+      "src/ports/weighting-settings.ts": "e8be1aa03ad8487067cc941e695f690c0eaa4d66431885db8034f500a3b07c52",
+      "src/ports/wish.ts": "01a2c3c1f1910b4db0e00aeaeb4a663230aa2892c605cdd5ade3c4e478180e8c",
+      "src/ui/custom-race-ui.ts": "4118e99b9d767dc8119d3ff9bc0c993b153037fdbd9df5e9e317ebedad365aec",
+      "src/ui/settings-shell.ts": "e08c3c9d7df334633529cdbe6985223caaff4838a0687f5db541316b68a06afd",
+      "src/userscript.meta.js": "8ac2d25d94cd6d7ffd45cd18b356bbe3c0f418b4b971e4a05c50aae1ec885ac7",
+      "src/utils/performance.ts": "9aea84dcf3c74b1e217454f4f822b22c360929243f28c31965263181f8d700b6",
+      "src/utils/properties.ts": "4d3d6d709bd3fead06f215377279c10879968ebeac5dea07f6f247845c95b98b",
+      "src/validation/game-actions.ts": "4c06fecf5ad8213b4d406df80b46899c618eaff2bdcb98030df13c7f0750c1e2",
+      "src/validation/records.ts": "f1c47f397c27c9dd0bd9417f6ef73e155af6c31ce6d0a0e161cd14d9bd982b14"
+    },
+    "productionBundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+    "testSurfaceBundleSha256": "97f946d398ebd4a7d2e42bbbf1c551b642023e05075b03a5a07b69e7408a3b34",
+    "currentBundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+    "gameSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+    "baseSettingsSha256": "f7fd9286607695d8716359f20f1a5f680264832de36879f84a7a67c4bd970042",
+    "settingsSha256": "4badd36cc3e3cad887d09f9710a23599e8f890f53eae286736141b91c8f92e32",
+    "runner": {
+      "gameSnapshot": {
+        "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+        "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+        "commit": "db38e2af",
+        "builtAt": "2026-10-16T20:57:30.273Z"
+      },
+      "upstream": "D:\\work\\Evolve-DeadSpace",
+      "libraries": {
+        "vue": "3.5.22",
+        "buefy": "3.0.10",
+        "@popperjs/core": "2.9.2",
+        "sortablejs": "1.10.2",
+        "chart.js": "3.8.2"
+      },
+      "runner": "dddb85b6306907904512a31dc4e9a96da82b26178b9e5bf9f9e683a6bc00ffc8"
+    }
+  },
+  "normalBaseline": {
+    "name": "normal-baseline",
+    "buildingAlwaysClick": false,
+    "periods": 1000,
+    "checkpoints": [
+      {
+        "period": 250,
+        "workCycles": 31,
+        "tech": {
+          "primitive": 2,
+          "wsc": 0
+        },
+        "population": 0,
+        "resourceStocks": {
+          "Food": {
+            "amount": 40,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 95,
+            "max": 200
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200
+          },
+          "Money": {
+            "amount": 0,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 0,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 32,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 31,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 0,
+          "resources": {
+            "Food": {
+              "amount": 40,
+              "max": 1000,
+              "diff": 0
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200,
+              "diff": 0
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200,
+              "diff": 0
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000,
+              "diff": 0
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100,
+              "diff": 0
+            }
+          },
+          "foodProduction": {},
+          "foodConsumption": {},
+          "lumberProduction": {
+            "Lumberjack": "0v",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "days": 0,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {},
+          "buildings": {},
+          "researchOffers": [],
+          "constructionOffers": [],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 31,
+          "currentConstructionSavingTargetObservation": {
+            "period": 248,
+            "target": null
+          }
+        }
+      },
+      {
+        "period": 500,
+        "workCycles": 62,
+        "tech": {
+          "primitive": 2,
+          "wsc": 0
+        },
+        "population": 0,
+        "resourceStocks": {
+          "Food": {
+            "amount": 40,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 95,
+            "max": 200
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200
+          },
+          "Money": {
+            "amount": 0,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 0,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 63,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 62,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 0,
+          "resources": {
+            "Food": {
+              "amount": 40,
+              "max": 1000,
+              "diff": 0
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200,
+              "diff": 0
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200,
+              "diff": 0
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000,
+              "diff": 0
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100,
+              "diff": 0
+            }
+          },
+          "foodProduction": {},
+          "foodConsumption": {},
+          "lumberProduction": {
+            "Lumberjack": "0v",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "days": 0,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {},
+          "buildings": {},
+          "researchOffers": [],
+          "constructionOffers": [],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 62,
+          "currentConstructionSavingTargetObservation": {
+            "period": 496,
+            "target": null
+          }
+        }
+      },
+      {
+        "period": 750,
+        "workCycles": 93,
+        "tech": {
+          "primitive": 2,
+          "wsc": 0
+        },
+        "population": 0,
+        "resourceStocks": {
+          "Food": {
+            "amount": 40,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 95,
+            "max": 200
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200
+          },
+          "Money": {
+            "amount": 0,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 0,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 94,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 93,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 0,
+          "resources": {
+            "Food": {
+              "amount": 40,
+              "max": 1000,
+              "diff": 0
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200,
+              "diff": 0
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200,
+              "diff": 0
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000,
+              "diff": 0
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100,
+              "diff": 0
+            }
+          },
+          "foodProduction": {},
+          "foodConsumption": {},
+          "lumberProduction": {
+            "Lumberjack": "0v",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "days": 0,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {},
+          "buildings": {},
+          "researchOffers": [],
+          "constructionOffers": [],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 93,
+          "currentConstructionSavingTargetObservation": {
+            "period": 744,
+            "target": null
+          }
+        }
+      },
+      {
+        "period": 1000,
+        "workCycles": 125,
+        "tech": {
+          "primitive": 2,
+          "wsc": 0
+        },
+        "population": 0,
+        "resourceStocks": {
+          "Food": {
+            "amount": 40,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 95,
+            "max": 200
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200
+          },
+          "Money": {
+            "amount": 0,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 0,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 126,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 125,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 0,
+          "resources": {
+            "Food": {
+              "amount": 40,
+              "max": 1000,
+              "diff": 0
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200,
+              "diff": 0
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200,
+              "diff": 0
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000,
+              "diff": 0
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100,
+              "diff": 0
+            }
+          },
+          "foodProduction": {},
+          "foodConsumption": {},
+          "lumberProduction": {
+            "Lumberjack": "0v",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "days": 0,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {},
+          "buildings": {},
+          "researchOffers": [],
+          "constructionOffers": [],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 125,
+          "currentConstructionSavingTargetObservation": {
+            "period": 1000,
+            "target": null
+          }
+        }
+      }
+    ],
+    "finalExportSha256": "efc4c6ddef7ea5945ae7e180d0325bfa3ef0f3eb1a89bce53ed5d95906e66ea4",
+    "nativeControlInvocations": {},
+    "constructionSavingTargetObservationCount": 125,
+    "constructionSavingTargetObservations": [
+      {
+        "period": 8,
+        "target": null
+      }
+    ],
+    "gatherCalls": {},
+    "nativeFailures": [],
+    "staleOrThrewControls": {},
+    "controlUsage": {
+      "#mainColumn div.content.swapTab": {
+        "returned": 126,
+        "threw": 0
+      },
+      "civ-unemployed.setDefault": {
+        "returned": 125,
+        "threw": 0
+      }
+    }
+  },
+  "alwaysClickDiagnostic": {
+    "name": "always-click-diagnostic",
+    "buildingAlwaysClick": true,
+    "periods": 1000,
+    "checkpoints": [
+      {
+        "period": 250,
+        "workCycles": 6,
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "agriculture": 1,
+          "housing": 1,
+          "currency": 1
+        },
+        "population": 5,
+        "resourceStocks": {
+          "Food": {
+            "amount": 1000,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 200,
+            "max": 200
+          },
+          "Stone": {
+            "amount": 200,
+            "max": 200
+          },
+          "Money": {
+            "amount": 33,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 16.5,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 37,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 927,
+            "threw": 0
+          },
+          "city-lumber.action": {
+            "returned": 286,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 252,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 6,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-agriculture.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 234,
+            "threw": 0
+          },
+          "city-farm.action": {
+            "returned": 3,
+            "threw": 0
+          },
+          "civ-farmer.setDefault": {
+            "returned": 25,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 5,
+          "resources": {
+            "Food": {
+              "amount": 1000,
+              "max": 1000,
+              "diff": 2.99
+            },
+            "Lumber": {
+              "amount": 200,
+              "max": 200,
+              "diff": 0
+            },
+            "Stone": {
+              "amount": 200,
+              "max": 200,
+              "diff": 0
+            },
+            "Money": {
+              "amount": 33,
+              "max": 1000,
+              "diff": 2
+            },
+            "Knowledge": {
+              "amount": 16.5,
+              "max": 100,
+              "diff": 1
+            }
+          },
+          "foodProduction": {
+            "Farmer": "7.26v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -5
+          },
+          "lumberProduction": {
+            "Lumberjack": "0v",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1,
+            "currency": 1
+          },
+          "days": 12,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {
+            "farmer": 5
+          },
+          "buildings": {
+            "farm": 3,
+            "basic_housing": 5
+          },
+          "researchOffers": [],
+          "constructionOffers": [
+            {
+              "id": "city-basic_housing",
+              "text": "Cabin 5 Cabin description5",
+              "title": ""
+            },
+            {
+              "id": "city-farm",
+              "text": "Farm 3 Farm description3",
+              "title": ""
+            }
+          ],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 31,
+          "currentConstructionSavingTargetObservation": {
+            "period": 248,
+            "target": {
+              "name": "city-farm",
+              "cost": {
+                "Money": 115,
+                "Lumber": 50,
+                "Stone": 25
+              }
+            }
+          }
+        }
+      },
+      {
+        "period": 500,
+        "workCycles": 6,
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "agriculture": 1,
+          "housing": 1,
+          "currency": 1,
+          "storage": 1,
+          "axe": 1
+        },
+        "population": 5,
+        "resourceStocks": {
+          "Food": {
+            "amount": 995,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 536.5,
+            "max": 1000
+          },
+          "Stone": {
+            "amount": 500,
+            "max": 500
+          },
+          "Money": {
+            "amount": 83,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 14,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 70,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 987,
+            "threw": 0
+          },
+          "city-lumber.action": {
+            "returned": 786,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 675,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 6,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-agriculture.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 694,
+            "threw": 0
+          },
+          "city-farm.action": {
+            "returned": 3,
+            "threw": 0
+          },
+          "civ-farmer.setDefault": {
+            "returned": 49,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-shed.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-stone_axe.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-lumber_yard.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-farmer.sub": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.add": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.setDefault": {
+            "returned": 7,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 5,
+          "resources": {
+            "Food": {
+              "amount": 995,
+              "max": 1000,
+              "diff": -5
+            },
+            "Lumber": {
+              "amount": 536.5,
+              "max": 1000,
+              "diff": 5.5
+            },
+            "Stone": {
+              "amount": 500,
+              "max": 500,
+              "diff": 0
+            },
+            "Money": {
+              "amount": 83,
+              "max": 1000,
+              "diff": 2
+            },
+            "Knowledge": {
+              "amount": 14,
+              "max": 100,
+              "diff": 1
+            }
+          },
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -5
+          },
+          "lumberProduction": {
+            "Lumberjack": "5v",
+            "ᄂLumber Yard": "10.000000000000009%",
+            "ᄂWoodcutter's Hut": "0%",
+            "ᄂEcosystem": "0%",
+            "ᄂSawmill": "0%",
+            "ᄂPower": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1
+          },
+          "days": 24,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {
+            "lumberjack": 5
+          },
+          "buildings": {
+            "farm": 3,
+            "basic_housing": 5,
+            "shed": 1,
+            "lumber_yard": 5
+          },
+          "researchOffers": [],
+          "constructionOffers": [
+            {
+              "id": "city-basic_housing",
+              "text": "Cabin 5 Cabin description5",
+              "title": ""
+            },
+            {
+              "id": "city-farm",
+              "text": "Farm 3 Farm description3",
+              "title": ""
+            },
+            {
+              "id": "city-shed",
+              "text": "Shed 1 Shed description1",
+              "title": ""
+            },
+            {
+              "id": "city-lumber_yard",
+              "text": "Lumber Yard 5 Lumber Yard description5",
+              "title": ""
+            }
+          ],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 62,
+          "currentConstructionSavingTargetObservation": {
+            "period": 496,
+            "target": {
+              "name": "city-farm",
+              "cost": {
+                "Money": 115,
+                "Lumber": 50,
+                "Stone": 25
+              }
+            }
+          }
+        }
+      },
+      {
+        "period": 750,
+        "workCycles": 6,
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "agriculture": 1,
+          "housing": 1,
+          "currency": 1,
+          "storage": 1,
+          "axe": 1,
+          "mining": 1
+        },
+        "population": 5,
+        "resourceStocks": {
+          "Food": {
+            "amount": 992.5,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 1000,
+            "max": 1000
+          },
+          "Stone": {
+            "amount": 700,
+            "max": 700
+          },
+          "Money": {
+            "amount": 93,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 31.5,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 102,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 1297,
+            "threw": 0
+          },
+          "city-lumber.action": {
+            "returned": 1305,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 904,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 6,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-agriculture.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 1235,
+            "threw": 0
+          },
+          "city-farm.action": {
+            "returned": 4,
+            "threw": 0
+          },
+          "civ-farmer.setDefault": {
+            "returned": 49,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-shed.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-stone_axe.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-lumber_yard.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-farmer.sub": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.add": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.setDefault": {
+            "returned": 22,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-rock_quarry.action": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-lumberjack.sub": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-quarry_worker.add": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-quarry_worker.setDefault": {
+            "returned": 16,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 5,
+          "resources": {
+            "Food": {
+              "amount": 992.5,
+              "max": 1000,
+              "diff": -5
+            },
+            "Lumber": {
+              "amount": 1000,
+              "max": 1000,
+              "diff": 3.3
+            },
+            "Stone": {
+              "amount": 700,
+              "max": 700,
+              "diff": 2.08
+            },
+            "Money": {
+              "amount": 93,
+              "max": 1000,
+              "diff": 2
+            },
+            "Knowledge": {
+              "amount": 31.5,
+              "max": 100,
+              "diff": 1
+            }
+          },
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -5
+          },
+          "lumberProduction": {
+            "Lumberjack": "3v",
+            "ᄂLumber Yard": "10.000000000000009%",
+            "ᄂWoodcutter's Hut": "0%",
+            "ᄂEcosystem": "0%",
+            "ᄂSawmill": "0%",
+            "ᄂPower": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1
+          },
+          "days": 37,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "buildings": {
+            "farm": 4,
+            "basic_housing": 5,
+            "shed": 1,
+            "lumber_yard": 5,
+            "rock_quarry": 2
+          },
+          "researchOffers": [],
+          "constructionOffers": [
+            {
+              "id": "city-basic_housing",
+              "text": "Cabin 5 Cabin description5",
+              "title": ""
+            },
+            {
+              "id": "city-farm",
+              "text": "Farm 4 Farm description4",
+              "title": ""
+            },
+            {
+              "id": "city-shed",
+              "text": "Shed 1 Shed description1",
+              "title": ""
+            },
+            {
+              "id": "city-lumber_yard",
+              "text": "Lumber Yard 5 Lumber Yard description5",
+              "title": ""
+            },
+            {
+              "id": "city-rock_quarry",
+              "text": "Rock Quarry 2 Rock Quarry description2",
+              "title": ""
+            }
+          ],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 93,
+          "currentConstructionSavingTargetObservation": {
+            "period": 744,
+            "target": {
+              "name": "city-farm",
+              "cost": {
+                "Money": 152,
+                "Lumber": 68,
+                "Stone": 34
+              }
+            }
+          }
+        }
+      },
+      {
+        "period": 1000,
+        "workCycles": 6,
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "agriculture": 2,
+          "housing": 1,
+          "currency": 1,
+          "storage": 1,
+          "axe": 1,
+          "mining": 1
+        },
+        "population": 5,
+        "resourceStocks": {
+          "Food": {
+            "amount": 1000,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 1000,
+            "max": 1000
+          },
+          "Stone": {
+            "amount": 700,
+            "max": 700
+          },
+          "Money": {
+            "amount": 65.4000000000001,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 38.77500000000009,
+            "max": 100
+          }
+        },
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": {
+            "returned": 135,
+            "threw": 0
+          },
+          "undefined-food.action": {
+            "returned": 1617,
+            "threw": 0
+          },
+          "city-lumber.action": {
+            "returned": 1360,
+            "threw": 0
+          },
+          "undefined-stone.action": {
+            "returned": 934,
+            "threw": 0
+          },
+          "civ-unemployed.setDefault": {
+            "returned": 6,
+            "threw": 0
+          },
+          "tech-sundial.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-agriculture.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "buildQueue.setData": {
+            "returned": 1864,
+            "threw": 0
+          },
+          "city-farm.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-farmer.setDefault": {
+            "returned": 49,
+            "threw": 0
+          },
+          "tech-housing.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-basic_housing.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "tech-currency.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-storage.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-shed.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "tech-stone_axe.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-lumber_yard.action": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-farmer.sub": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.add": {
+            "returned": 5,
+            "threw": 0
+          },
+          "civ-lumberjack.setDefault": {
+            "returned": 22,
+            "threw": 0
+          },
+          "tech-mining.action": {
+            "returned": 1,
+            "threw": 0
+          },
+          "city-rock_quarry.action": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-lumberjack.sub": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-quarry_worker.add": {
+            "returned": 2,
+            "threw": 0
+          },
+          "civ-quarry_worker.setDefault": {
+            "returned": 48,
+            "threw": 0
+          },
+          "tech-irrigation.action": {
+            "returned": 1,
+            "threw": 0
+          }
+        },
+        "nativeErrors": [],
+        "staleOrThrewControls": {},
+        "native": {
+          "race": {
+            "universe": "standard",
+            "species": "human",
+            "strandGenus": ["humanoid"]
+          },
+          "biome": "grassland",
+          "population": 5,
+          "resources": {
+            "Food": {
+              "amount": 990,
+              "max": 1000,
+              "diff": -5
+            },
+            "Lumber": {
+              "amount": 1000,
+              "max": 1000,
+              "diff": 3.25
+            },
+            "Stone": {
+              "amount": 700,
+              "max": 700,
+              "diff": 2.05
+            },
+            "Money": {
+              "amount": 65.4000000000001,
+              "max": 1000,
+              "diff": 1.96
+            },
+            "Knowledge": {
+              "amount": 38.77500000000009,
+              "max": 100,
+              "diff": 0.98
+            }
+          },
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -5
+          },
+          "lumberProduction": {
+            "Lumberjack": "3v",
+            "ᄂLumber Yard": "10.000000000000009%",
+            "ᄂWoodcutter's Hut": "0%",
+            "ᄂEcosystem": "0%",
+            "ᄂSawmill": "0%",
+            "ᄂPower": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Hunger": "0%"
+          },
+          "lumberConsumption": {},
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "axe": 1,
+            "mining": 1
+          },
+          "days": 49,
+          "starved": 0,
+          "deaths": 0,
+          "jobs": {
+            "lumberjack": 3,
+            "quarry_worker": 2
+          },
+          "buildings": {
+            "farm": 5,
+            "basic_housing": 5,
+            "shed": 1,
+            "lumber_yard": 5,
+            "rock_quarry": 2
+          },
+          "researchOffers": [],
+          "constructionOffers": [
+            {
+              "id": "city-basic_housing",
+              "text": "Cabin 5 Cabin description5",
+              "title": ""
+            },
+            {
+              "id": "city-farm",
+              "text": "Farm 5 Farm description5",
+              "title": ""
+            },
+            {
+              "id": "city-shed",
+              "text": "Shed 1 Shed description1",
+              "title": ""
+            },
+            {
+              "id": "city-lumber_yard",
+              "text": "Lumber Yard 5 Lumber Yard description5",
+              "title": ""
+            },
+            {
+              "id": "city-rock_quarry",
+              "text": "Rock Quarry 2 Rock Quarry description2",
+              "title": ""
+            }
+          ],
+          "gatherControls": [
+            {
+              "id": "undefined-food",
+              "text": "Gather Food Gather Food description",
+              "title": ""
+            },
+            {
+              "id": "city-lumber",
+              "text": "Gather Lumber Gather Lumber description",
+              "title": ""
+            },
+            {
+              "id": "undefined-stone",
+              "text": "Gather Stone Gather Stone description",
+              "title": ""
+            }
+          ],
+          "marketControls": [],
+          "smelterControls": [],
+          "storageControls": [],
+          "constructionSavingTargetObservationCount": 125,
+          "currentConstructionSavingTargetObservation": {
+            "period": 1000,
+            "target": {
+              "name": "city-farm",
+              "cost": {
+                "Money": 200,
+                "Lumber": 93,
+                "Stone": 47
+              }
+            }
+          }
+        }
+      }
+    ],
+    "finalExportSha256": "8eedb35055197b246d76fbbe2027e3a64b3fa08c9fc0c38dc9faff02518855e8",
+    "nativeControlInvocations": {
+      "undefined-food.action": {
+        "returned": 1617,
+        "threw": 0
+      },
+      "city-lumber.action": {
+        "returned": 1360,
+        "threw": 0
+      },
+      "undefined-stone.action": {
+        "returned": 934,
+        "threw": 0
+      },
+      "tech-sundial.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-agriculture.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-farm.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "tech-housing.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-basic_housing.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "tech-currency.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-storage.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-shed.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-stone_axe.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-lumber_yard.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "tech-mining.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-rock_quarry.action": {
+        "returned": 2,
+        "threw": 0
+      },
+      "tech-irrigation.action": {
+        "returned": 1,
+        "threw": 0
+      }
+    },
+    "constructionSavingTargetObservationCount": 125,
+    "constructionSavingTargetObservations": [
+      {
+        "period": 8,
+        "target": null
+      },
+      {
+        "period": 184,
+        "target": {
+          "name": "city-farm",
+          "cost": {
+            "Money": 115,
+            "Lumber": 50,
+            "Stone": 25
+          }
+        }
+      },
+      {
+        "period": 264,
+        "target": {
+          "name": "city-shed",
+          "cost": {
+            "Money": 75,
+            "Lumber": 55,
+            "Stone": 45
+          }
+        }
+      },
+      {
+        "period": 336,
+        "target": {
+          "name": "city-farm",
+          "cost": {
+            "Money": 115,
+            "Lumber": 50,
+            "Stone": 25
+          }
+        }
+      },
+      {
+        "period": 416,
+        "target": {
+          "name": "city-shed",
+          "cost": {
+            "Money": 92,
+            "Lumber": 73,
+            "Stone": 59
+          }
+        }
+      },
+      {
+        "period": 424,
+        "target": {
+          "name": "city-farm",
+          "cost": {
+            "Money": 115,
+            "Lumber": 50,
+            "Stone": 25
+          }
+        }
+      },
+      {
+        "period": 568,
+        "target": {
+          "name": "city-farm",
+          "cost": {
+            "Money": 152,
+            "Lumber": 68,
+            "Stone": 34
+          }
+        }
+      },
+      {
+        "period": 872,
+        "target": {
+          "name": "city-farm",
+          "cost": {
+            "Money": 200,
+            "Lumber": 93,
+            "Stone": 47
+          }
+        }
+      }
+    ],
+    "gatherCalls": {
+      "undefined-food.action": {
+        "returned": 1617,
+        "threw": 0
+      },
+      "city-lumber.action": {
+        "returned": 1360,
+        "threw": 0
+      },
+      "undefined-stone.action": {
+        "returned": 934,
+        "threw": 0
+      }
+    },
+    "nativeFailures": [],
+    "staleOrThrewControls": {},
+    "controlUsage": {
+      "#mainColumn div.content.swapTab": {
+        "returned": 135,
+        "threw": 0
+      },
+      "undefined-food.action": {
+        "returned": 1617,
+        "threw": 0
+      },
+      "city-lumber.action": {
+        "returned": 1360,
+        "threw": 0
+      },
+      "undefined-stone.action": {
+        "returned": 934,
+        "threw": 0
+      },
+      "civ-unemployed.setDefault": {
+        "returned": 6,
+        "threw": 0
+      },
+      "tech-sundial.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-agriculture.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "buildQueue.setData": {
+        "returned": 1864,
+        "threw": 0
+      },
+      "city-farm.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-farmer.setDefault": {
+        "returned": 49,
+        "threw": 0
+      },
+      "tech-housing.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-basic_housing.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "tech-currency.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-storage.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-shed.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-stone_axe.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-lumber_yard.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-farmer.sub": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-lumberjack.add": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-lumberjack.setDefault": {
+        "returned": 22,
+        "threw": 0
+      },
+      "tech-mining.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-rock_quarry.action": {
+        "returned": 2,
+        "threw": 0
+      },
+      "civ-lumberjack.sub": {
+        "returned": 2,
+        "threw": 0
+      },
+      "civ-quarry_worker.add": {
+        "returned": 2,
+        "threw": 0
+      },
+      "civ-quarry_worker.setDefault": {
+        "returned": 48,
+        "threw": 0
+      },
+      "tech-irrigation.action": {
+        "returned": 1,
+        "threw": 0
+      }
+    }
+  },
+  "alwaysClickDuplicate": {
+    "finalExportSha256": "8eedb35055197b246d76fbbe2027e3a64b3fa08c9fc0c38dc9faff02518855e8",
+    "controlUsage": {
+      "#mainColumn div.content.swapTab": {
+        "returned": 135,
+        "threw": 0
+      },
+      "undefined-food.action": {
+        "returned": 1617,
+        "threw": 0
+      },
+      "city-lumber.action": {
+        "returned": 1360,
+        "threw": 0
+      },
+      "undefined-stone.action": {
+        "returned": 934,
+        "threw": 0
+      },
+      "civ-unemployed.setDefault": {
+        "returned": 6,
+        "threw": 0
+      },
+      "tech-sundial.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-agriculture.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "buildQueue.setData": {
+        "returned": 1864,
+        "threw": 0
+      },
+      "city-farm.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-farmer.setDefault": {
+        "returned": 49,
+        "threw": 0
+      },
+      "tech-housing.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-basic_housing.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "tech-currency.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-storage.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-shed.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "tech-stone_axe.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-lumber_yard.action": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-farmer.sub": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-lumberjack.add": {
+        "returned": 5,
+        "threw": 0
+      },
+      "civ-lumberjack.setDefault": {
+        "returned": 22,
+        "threw": 0
+      },
+      "tech-mining.action": {
+        "returned": 1,
+        "threw": 0
+      },
+      "city-rock_quarry.action": {
+        "returned": 2,
+        "threw": 0
+      },
+      "civ-lumberjack.sub": {
+        "returned": 2,
+        "threw": 0
+      },
+      "civ-quarry_worker.add": {
+        "returned": 2,
+        "threw": 0
+      },
+      "civ-quarry_worker.setDefault": {
+        "returned": 48,
+        "threw": 0
+      },
+      "tech-irrigation.action": {
+        "returned": 1,
+        "threw": 0
+      }
+    },
+    "matched": true
+  },
+  "stalledBoundary": {
+    "period": 1000,
+    "population": 0,
+    "resources": {
+      "Food": {
+        "amount": 40,
+        "max": 1000
+      },
+      "Lumber": {
+        "amount": 95,
+        "max": 200
+      },
+      "Stone": {
+        "amount": 0,
+        "max": 200
+      },
+      "Money": {
+        "amount": 0,
+        "max": 1000
+      },
+      "Knowledge": {
+        "amount": 0,
+        "max": 100
+      }
+    },
+    "tech": {
+      "primitive": 2,
+      "wsc": 0
+    },
+    "researchOffers": [],
+    "constructionOffers": [],
+    "gatherControls": [
+      {
+        "id": "undefined-food",
+        "text": "Gather Food Gather Food description",
+        "title": ""
+      },
+      {
+        "id": "city-lumber",
+        "text": "Gather Lumber Gather Lumber description",
+        "title": ""
+      },
+      {
+        "id": "undefined-stone",
+        "text": "Gather Stone Gather Stone description",
+        "title": ""
+      }
+    ],
+    "marketControls": [],
+    "smelterControls": [],
+    "storageControls": [],
+    "jobs": {},
+    "buildings": {},
+    "workCycles": 125,
+    "nativeErrors": [],
+    "staleOrThrewControls": {}
+  },
+  "ownerAuthority": {
+    "construction": {
+      "baselineSavingTargetObservations": [
+        {
+          "period": 8,
+          "target": null
+        }
+      ],
+      "baselineObservationCount": 125,
+      "diagnosticSavingTargetObservations": [
+        {
+          "period": 8,
+          "target": null
+        },
+        {
+          "period": 184,
+          "target": {
+            "name": "city-farm",
+            "cost": {
+              "Money": 115,
+              "Lumber": 50,
+              "Stone": 25
+            }
+          }
+        },
+        {
+          "period": 264,
+          "target": {
+            "name": "city-shed",
+            "cost": {
+              "Money": 75,
+              "Lumber": 55,
+              "Stone": 45
+            }
+          }
+        },
+        {
+          "period": 336,
+          "target": {
+            "name": "city-farm",
+            "cost": {
+              "Money": 115,
+              "Lumber": 50,
+              "Stone": 25
+            }
+          }
+        },
+        {
+          "period": 416,
+          "target": {
+            "name": "city-shed",
+            "cost": {
+              "Money": 92,
+              "Lumber": 73,
+              "Stone": 59
+            }
+          }
+        },
+        {
+          "period": 424,
+          "target": {
+            "name": "city-farm",
+            "cost": {
+              "Money": 115,
+              "Lumber": 50,
+              "Stone": 25
+            }
+          }
+        },
+        {
+          "period": 568,
+          "target": {
+            "name": "city-farm",
+            "cost": {
+              "Money": 152,
+              "Lumber": 68,
+              "Stone": 34
+            }
+          }
+        },
+        {
+          "period": 872,
+          "target": {
+            "name": "city-farm",
+            "cost": {
+              "Money": 200,
+              "Lumber": 93,
+              "Stone": 47
+            }
+          }
+        }
+      ],
+      "diagnosticObservationCount": 125,
+      "evidence": "the compile-time-only observer reads Construction's published saving target and exact price after each successful native Construction cycle; no native building action or Build control is offered at the first stall",
+      "laterAuthority": "the existing Construction observation publishes a current saving target and exact native cost once one exists; it is replaceable and must be revalidated"
+    },
+    "research": {
+      "baselineCurrentOffers": [],
+      "evidence": "no native Research rows or current offer prices exist at the first stall; no Research action is invoked",
+      "policy": "affordable-first; an unaffordable offer would not authorize Gather"
+    },
+    "other": "no current production-owner request was published at the initial stall",
+    "missingAuthority": "there is no current owner declaration for the initial material gathering needed to create population and unlock Construction or Research; Gather exposes controls but does not publish a resource demand"
+  },
+  "candidate": {
+    "run": false,
+    "reason": "no owner has a current actionable resource demand at the baseline stall; selecting Food, Lumber, or Stone would invent the strategy the experiment forbids"
+  },
+  "productionBundleParity": {
+    "requiredSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+    "currentSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+    "testSurfaceBundleSha256": "97f946d398ebd4a7d2e42bbbf1c551b642023e05075b03a5a07b69e7408a3b34",
+    "byteIdentical": true
+  }
+}
