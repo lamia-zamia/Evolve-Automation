@@ -1353,48 +1353,46 @@ export function createCapturedGatherResourcesAdapter({
                   }),
                 );
             }
-            const isCivilizationHandoffClick =
-              active.testStandardConstructionTarget !== undefined &&
-              active.testBootstrap !== undefined &&
-              active.testBootstrap.handoffClicks <
-                active.testBootstrap.handoffLimit;
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
-              isCivilizationHandoffClick
+              active.testStandardConstructionTarget !== undefined
             ) {
-              active.testBootstrap.handoffClicks += 1;
-              const observer = readProperty(
-                active.testIntervention,
-                "civilizationHandoffObserver",
-              );
-              if (typeof observer === "function")
-                observer(
+              const isCivilizationHandoffClick =
+                active.testBootstrap !== undefined &&
+                active.testBootstrap.handoffClicks <
+                  active.testBootstrap.handoffLimit;
+              if (isCivilizationHandoffClick) {
+                active.testBootstrap!.handoffClicks += 1;
+                const observer = readProperty(
+                  active.testIntervention,
+                  "civilizationHandoffObserver",
+                );
+                if (typeof observer === "function")
+                  observer(
+                    Object.freeze({
+                      authorizationId: active.testBootstrap!.authorizationId,
+                      usedClicks: active.testBootstrap!.handoffClicks,
+                      limit: active.testBootstrap!.handoffLimit,
+                      target: active.testStandardConstructionTarget.actionId,
+                      actionId: operation.actionId,
+                    }),
+                  );
+              }
+              if (
+                !isCivilizationHandoffClick &&
+                typeof active.testStandardConstructionTarget.onClick ===
+                  "function"
+              )
+                active.testStandardConstructionTarget.onClick(
                   Object.freeze({
-                    authorizationId: active.testBootstrap.authorizationId,
-                    usedClicks: active.testBootstrap.handoffClicks,
-                    limit: active.testBootstrap.handoffLimit,
-                    target: active.testStandardConstructionTarget.actionId,
-                    actionId: operation.actionId,
+                    actionId: active.testStandardConstructionTarget.actionId,
+                    resourceId:
+                      operation.actionId === "lumber" ? "Lumber" : "Stone",
+                    clickCount: 1,
                   }),
                 );
             }
-            if (
-              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-              __EA_TEST_SURFACE_ENABLED__ === true &&
-              active.testStandardConstructionTarget !== undefined &&
-              !isCivilizationHandoffClick &&
-              typeof active.testStandardConstructionTarget.onClick ===
-                "function"
-            )
-              active.testStandardConstructionTarget.onClick(
-                Object.freeze({
-                  actionId: active.testStandardConstructionTarget.actionId,
-                  resourceId:
-                    operation.actionId === "lumber" ? "Lumber" : "Stone",
-                  clickCount: 1,
-                }),
-              );
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&

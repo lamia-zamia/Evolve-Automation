@@ -15,6 +15,7 @@ import type { PreparedJobsExecution } from "../ports/jobs.ts";
 import type { JobsCycleInput } from "../domain/civic/jobs.ts";
 import { createCapturedPrestigeControl } from "./captured-prestige-control.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
+import { readConstructionAllocationAuthority } from "./construction-allocation-authority.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
 import {
   createCapturedGovernmentAutomation,
@@ -2616,6 +2617,8 @@ export function startCapturedRuntime({
                 });
             }
             if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
               readProperty(
                 readProperty(gatherTestHooks, "constructionAllocation"),
                 "enabled",
@@ -2631,29 +2634,75 @@ export function startCapturedRuntime({
               const request = readDemand("pre-Gather").savingTarget;
               const publishedRequest =
                 progression.observations.readSavingTarget();
-              const targetId = request?.name;
-              const price =
-                typeof targetId === "string"
-                  ? buildCosts.readCost(targetId)?.cost
+              const allocationHooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const costIdentity = (value: unknown) =>
+                isRecord(value)
+                  ? JSON.stringify(
+                      Object.entries(value).sort(([left], [right]) =>
+                        left.localeCompare(right),
+                      ),
+                    )
                   : undefined;
+              const publicationTarget = readProperty(
+                allocationHooks,
+                "constructionPublicationTarget",
+              );
+              const publicationAuthority = readProperty(
+                allocationHooks,
+                "constructionPublicationAuthority",
+              );
+              const publicationWorkCycleId = readProperty(
+                publicationAuthority,
+                "workCycleId",
+              );
+              const publicationCurrent =
+                isRecord(publicationAuthority) &&
+                publicationWorkCycleId === automationCycle - 1 &&
+                readProperty(publicationAuthority, "rootGeneration") ===
+                  rootGeneration &&
+                readProperty(publicationAuthority, "progressionGeneration") ===
+                  progressionGeneration;
+              const currentSavingTargetMatchesPublication =
+                isRecord(publicationTarget) &&
+                publicationTarget.name === publishedRequest?.name &&
+                costIdentity(publicationTarget.cost) ===
+                  costIdentity(publishedRequest?.cost) &&
+                (publicationTarget.pool ?? "anywhere") ===
+                  (publishedRequest?.pool ?? "anywhere");
+              const publicationIsCurrent =
+                publicationCurrent && currentSavingTargetMatchesPublication;
+              const targetId = request?.name;
+              const nativePrice =
+                typeof targetId === "string"
+                  ? buildCosts.readCost(targetId)
+                  : undefined;
+              const authority = readConstructionAllocationAuthority({
+                publicationCurrent: publicationIsCurrent,
+                targetId,
+                request,
+                publication: isRecord(publicationTarget)
+                  ? publicationTarget
+                  : undefined,
+                native: nativePrice,
+                resources: readProperty(root, "resource"),
+              });
+              const price =
+                authority?.cost ??
+                (isRecord(request?.cost) ? request.cost : undefined);
               const targetControl =
                 typeof targetId === "string"
                   ? pageCapture.controls.resolve(targetId)
                   : undefined;
-              const costIdentity = (value: unknown) =>
-                isRecord(value)
-                  ? JSON.stringify(
-                      Object.entries(value).sort(([a], [b]) =>
-                        a.localeCompare(b),
-                      ),
-                    )
-                  : undefined;
-              const priceIdentity = costIdentity(price);
               const requestMatchesPublication =
                 typeof targetId === "string" &&
-                publishedRequest?.name === targetId &&
-                costIdentity(publishedRequest.cost) ===
-                  costIdentity(request?.cost);
+                readProperty(publicationTarget, "name") === targetId &&
+                costIdentity(readProperty(publicationTarget, "cost")) ===
+                  costIdentity(request?.cost) &&
+                (readProperty(publicationTarget, "pool") ?? "anywhere") ===
+                  (request?.pool ?? "anywhere");
               const rawResearchState = readProperty(root, "tech");
               const researchState = isRecord(rawResearchState)
                 ? Object.freeze({ ...rawResearchState })
@@ -2719,8 +2768,32 @@ export function startCapturedRuntime({
                 observe({
                   ownerId: "construction",
                   targetId,
-                  publishedTargetId: publishedRequest?.name,
+                  publishedTargetId: readProperty(publicationTarget, "name"),
                   requestMatchesPublication,
+                  currentSavingTargetId: publishedRequest?.name,
+                  currentSavingTargetMatchesPublication,
+                  priceAuthorityValid: authority !== undefined,
+                  requestPrice: request?.cost,
+                  publicationPrice: readProperty(publicationTarget, "cost"),
+                  currentSavingTargetPrice: publishedRequest?.cost,
+                  capturedPublicationTargetId: readProperty(
+                    publicationTarget,
+                    "name",
+                  ),
+                  capturedPublicationPrice: readProperty(
+                    publicationTarget,
+                    "cost",
+                  ),
+                  nativePrice: nativePrice?.cost,
+                  requestPool: request?.pool ?? "anywhere",
+                  publicationPool:
+                    readProperty(publicationTarget, "pool") ?? "anywhere",
+                  nativePool: nativePrice?.pool ?? "anywhere",
+                  workCycleId: automationCycle,
+                  phase: "pre-Gather",
+                  publicationWorkCycleId,
+                  publicationAuthority,
+                  publicationCurrent: publicationIsCurrent,
                   selectionReason: "native-current-saving-target",
                   researchState,
                   ownerState: Object.freeze({
@@ -2753,10 +2826,48 @@ export function startCapturedRuntime({
                   const now = readDemand("pre-Gather").savingTarget;
                   const nowPublished =
                     progression.observations.readSavingTarget();
-                  const nowPrice =
+                  const nowPublicationAuthority = readProperty(
+                    readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+                    "constructionPublicationAuthority",
+                  );
+                  const nowPublicationTarget = readProperty(
+                    readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+                    "constructionPublicationTarget",
+                  );
+                  const nowCurrentSavingTargetMatchesPublication =
+                    isRecord(nowPublicationTarget) &&
+                    nowPublicationTarget.name === nowPublished?.name &&
+                    costIdentity(nowPublicationTarget.cost) ===
+                      costIdentity(nowPublished?.cost) &&
+                    (nowPublicationTarget.pool ?? "anywhere") ===
+                      (nowPublished?.pool ?? "anywhere");
+                  const nowPublicationCurrent =
+                    isRecord(nowPublicationAuthority) &&
+                    readProperty(nowPublicationAuthority, "workCycleId") ===
+                      automationCycle - 1 &&
+                    readProperty(nowPublicationAuthority, "rootGeneration") ===
+                      rootGeneration &&
+                    readProperty(
+                      nowPublicationAuthority,
+                      "progressionGeneration",
+                    ) === progressionGeneration &&
+                    readProperty(nowPublicationAuthority, "workCycleId") ===
+                      publicationWorkCycleId &&
+                    nowCurrentSavingTargetMatchesPublication;
+                  const nowNativePrice =
                     typeof targetId === "string"
-                      ? buildCosts.readCost(targetId)?.cost
+                      ? buildCosts.readCost(targetId)
                       : undefined;
+                  const nowAuthority = readConstructionAllocationAuthority({
+                    publicationCurrent: nowPublicationCurrent,
+                    targetId,
+                    request: now,
+                    publication: isRecord(nowPublicationTarget)
+                      ? nowPublicationTarget
+                      : undefined,
+                    native: nowNativePrice,
+                    resources: readProperty(root, "resource"),
+                  });
                   const nowControl =
                     typeof targetId === "string"
                       ? pageCapture.controls.resolve(targetId)
@@ -2766,12 +2877,10 @@ export function startCapturedRuntime({
                     progression.readRootGeneration() === rootGeneration &&
                     progression.readProgressionEpoch() ===
                       progressionGeneration &&
-                    now?.name === targetId &&
-                    nowPublished?.name === targetId &&
-                    costIdentity(now?.cost) === costIdentity(request?.cost) &&
-                    costIdentity(nowPublished?.cost) ===
-                      costIdentity(request?.cost) &&
-                    costIdentity(nowPrice) === priceIdentity &&
+                    nowAuthority !== undefined &&
+                    JSON.stringify(nowAuthority.cost) ===
+                      JSON.stringify(authority?.cost) &&
+                    nowAuthority.pool === authority?.pool &&
                     nowControl?.methods.includes("action") === true &&
                     nowControl.generation === targetControl?.generation &&
                     ["queue", "r_queue"].every((queueId) => {
@@ -2788,17 +2897,12 @@ export function startCapturedRuntime({
                   return false;
                 }
               };
-              const otherCostsAffordable = Object.entries(price ?? {}).every(
-                ([id, amount]) =>
-                  id === "Lumber" || id === "Stone"
-                    ? true
-                    : Number(stock[id]) >= Number(amount),
-              );
+              const otherCostsAffordable = authority !== undefined;
               const authorize = readProperty(allocation, "authorize");
               if (
                 typeof targetId === "string" &&
                 targetId.startsWith("city-") &&
-                priceIdentity !== undefined &&
+                authority !== undefined &&
                 targetControl?.methods.includes("action") === true &&
                 otherCostsAffordable &&
                 queuesEmpty &&
@@ -2812,8 +2916,24 @@ export function startCapturedRuntime({
                 const contract = Object.freeze({
                   ownerId: "construction",
                   targetId,
-                  publishedTargetId: publishedRequest?.name,
+                  publishedTargetId: readProperty(publicationTarget, "name"),
                   requestMatchesPublication,
+                  currentSavingTargetId: publishedRequest?.name,
+                  currentSavingTargetMatchesPublication,
+                  priceAuthorityValid: authority !== undefined,
+                  requestPrice: request?.cost,
+                  publicationPrice: readProperty(publicationTarget, "cost"),
+                  currentSavingTargetPrice: publishedRequest?.cost,
+                  nativePrice: nativePrice?.cost,
+                  requestPool: request?.pool ?? "anywhere",
+                  publicationPool:
+                    readProperty(publicationTarget, "pool") ?? "anywhere",
+                  nativePool: nativePrice?.pool ?? "anywhere",
+                  workCycleId: automationCycle,
+                  phase: "pre-Gather",
+                  publicationWorkCycleId,
+                  publicationAuthority,
+                  publicationCurrent: publicationIsCurrent,
                   researchState,
                   selectionReason: "native-current-saving-target",
                   ownerState: Object.freeze({
@@ -7817,19 +7937,59 @@ export function startCapturedRuntime({
             typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
             __EA_TEST_SURFACE_ENABLED__ === true
           ) {
-            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const testHooks = readProperty(
+              settingsHostWindow,
+              "__EA_TEST_HOOKS__",
+            );
+            const publicationAuthority = Object.freeze({
+              workCycleId: automationCycle,
+              rootGeneration: progression.readRootGeneration(),
+              progressionGeneration: progression.readProgressionEpoch(),
+            });
+            if (isRecord(testHooks)) {
+              Reflect.set(
+                testHooks,
+                "constructionPublicationAuthority",
+                publicationAuthority,
+              );
+            }
             const observeSavingTarget = readProperty(
-              hooks,
+              testHooks,
               "captureConstructionSavingTargetForTest",
             );
             if (typeof observeSavingTarget === "function") {
               try {
-                Reflect.apply(observeSavingTarget, hooks, [
-                  progression.observations.readSavingTarget(),
+                const savingTarget =
+                  progression.observations.readSavingTarget();
+                if (isRecord(testHooks))
+                  Reflect.set(
+                    testHooks,
+                    "constructionPublicationTarget",
+                    savingTarget,
+                  );
+                Reflect.apply(observeSavingTarget, testHooks, [
+                  savingTarget,
+                  Object.freeze({
+                    phase: "post-Construction",
+                    ...publicationAuthority,
+                  }),
                 ]);
               } catch (error) {
-                Reflect.apply(observeSavingTarget, hooks, [
-                  Object.freeze({ unavailable: String(error) }),
+                const unavailableTarget = Object.freeze({
+                  unavailable: String(error),
+                });
+                if (isRecord(testHooks))
+                  Reflect.set(
+                    testHooks,
+                    "constructionPublicationTarget",
+                    unavailableTarget,
+                  );
+                Reflect.apply(observeSavingTarget, testHooks, [
+                  unavailableTarget,
+                  Object.freeze({
+                    phase: "post-Construction",
+                    ...publicationAuthority,
+                  }),
                 ]);
               }
             }
