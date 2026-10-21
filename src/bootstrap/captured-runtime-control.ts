@@ -7430,6 +7430,27 @@ export function startCapturedRuntime({
           );
         }
         if (outcome?.status === "succeeded") {
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true
+          ) {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const observeSavingTarget = readProperty(
+              hooks,
+              "captureConstructionSavingTargetForTest",
+            );
+            if (typeof observeSavingTarget === "function") {
+              try {
+                Reflect.apply(observeSavingTarget, hooks, [
+                  progression.observations.readSavingTarget(),
+                ]);
+              } catch (error) {
+                Reflect.apply(observeSavingTarget, hooks, [
+                  Object.freeze({ unavailable: String(error) }),
+                ]);
+              }
+            }
+          }
           try {
             if (stateLogPlannerDetailsDue) {
               currentStateLogConstructionSnapshot =
