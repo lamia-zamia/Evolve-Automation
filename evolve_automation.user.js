@@ -15457,7 +15457,6 @@
                   "gather-click-failed",
                   result.detail ?? result.reason
                 );
-              let stopTargetAfterClick = !1;
               if (active.resourceClaimLedger !== void 0) {
                 let afterClickRoot = rootState.readRoot();
                 if (afterClickRoot !== active.root)
@@ -15511,7 +15510,6 @@
                   })
                 );
               }
-              if (stopTargetAfterClick) break;
             }
           }
           if (!assignmentsMatch(rootState.readRoot(), operation2.afterAction, !0))

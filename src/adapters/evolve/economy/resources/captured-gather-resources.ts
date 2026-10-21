@@ -710,7 +710,6 @@ export function createCapturedGatherResourcesAdapter({
                     result.detail ?? result.reason,
                   );
             }
-            let stopTargetAfterClick = false;
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
@@ -728,7 +727,7 @@ export function createCapturedGatherResourcesAdapter({
                 );
               const stoneAfter = currentQuantity(afterTargetClickRoot, "Stone");
               if (stoneAfter >= active.testStandardResearchTarget.stonePrice)
-                stopTargetAfterClick = true;
+                break;
             }
             if (active.resourceClaimLedger !== undefined) {
               const afterClickRoot = rootState.readRoot();
@@ -802,7 +801,6 @@ export function createCapturedGatherResourcesAdapter({
                 }),
               );
             }
-            if (stopTargetAfterClick) break;
           }
         }
         if (
