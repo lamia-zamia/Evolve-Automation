@@ -935,6 +935,33 @@ handles.set("city-farm", {
   generation: 30,
   methods: ["action"],
 });
+root.resource.Mana.amount = 0;
+root.tech.conjuring = 2;
+const manaProtectedInput = bootstrapAdapter.reader.read();
+const manaProtectedDecision = planGatherResources(manaProtectedInput);
+assert.notEqual(manaProtectedDecision, null);
+assert.equal(
+  manaProtectedDecision.operations.some((operation) => operation.preserveMana),
+  true,
+  "Construction Gather operations retain their Mana protection requirement",
+);
+const clicksBeforeManaProtection = bootstrapClicks;
+root.resource.Mana.amount = 2;
+assert.deepEqual(bootstrapAdapter.executor.execute(manaProtectedDecision), {
+  status: "stale",
+  failure: {
+    code: "gather-construction-mana-protected",
+    message: "Construction-targeted lumber would spend protected Mana",
+  },
+});
+assert.equal(
+  bootstrapClicks,
+  clicksBeforeManaProtection,
+  "Construction handoff does not invoke a Conjuring click that spends Mana",
+);
+assert.equal(root.resource.Mana.amount, 2);
+root.resource.Mana.amount = 0;
+delete root.tech.conjuring;
 const firstHandoffInput = bootstrapAdapter.reader.read();
 assert.deepEqual(firstHandoffInput.testOnlyMaterialTarget, {
   Lumber: { quantity: 100, clickBudget: 5, preserveMana: true },

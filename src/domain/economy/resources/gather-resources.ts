@@ -63,6 +63,8 @@ export interface GatherOperation {
   /** Preserves the legacy `for (let i = 0; i < amount; i++)` bound. */
   readonly amount: number;
   readonly bootstrap?: boolean;
+  /** Test-only Construction responses must use ordinary clicks and preserve Mana. */
+  readonly preserveMana?: boolean;
   readonly beforeAction: readonly GatherResourceAssignment[];
   readonly afterAction: readonly GatherResourceAssignment[];
 }
@@ -431,6 +433,7 @@ export function planGatherResources(
         Object.freeze({
           actionId,
           amount,
+          ...(target.preserveMana === true ? { preserveMana: true } : {}),
           beforeAction: Object.freeze([
             Object.freeze({
               resourceId,

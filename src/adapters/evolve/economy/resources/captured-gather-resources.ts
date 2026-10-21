@@ -1236,6 +1236,16 @@ export function createCapturedGatherResourcesAdapter({
             const expectedManaSpend = conjuring && manaBefore >= 1;
             const proposedManaSpend = expectedManaSpend ? 1 : 0;
             if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              operation.preserveMana === true &&
+              expectedManaSpend
+            )
+              return stale(
+                "gather-construction-mana-protected",
+                `Construction-targeted ${operation.actionId} would spend protected Mana`,
+              );
+            if (
               active.resourceClaimLedger !== undefined &&
               expectedManaSpend &&
               remainingClaimSpend < 1
@@ -1382,6 +1392,20 @@ export function createCapturedGatherResourcesAdapter({
                 afterTargetClickRoot,
                 resourceId,
               );
+              if (operation.preserveMana === true) {
+                const manaAfter = readResource(
+                  afterTargetClickRoot,
+                  "Mana",
+                ).currentQuantity;
+                if (
+                  !Number.isFinite(manaAfter) ||
+                  Math.abs(manaAfter - manaBefore) > 1e-9
+                )
+                  return stale(
+                    "gather-construction-mana-postcondition",
+                    `Mana changed during Construction-targeted ${operation.actionId}`,
+                  );
+              }
               const resourcePrice =
                 active.testStandardConstructionTarget.cost[resourceId];
               if (
