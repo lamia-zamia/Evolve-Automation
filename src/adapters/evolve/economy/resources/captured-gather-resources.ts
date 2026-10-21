@@ -70,11 +70,14 @@ interface CapturedGatherSession {
 }
 
 interface TestStandardResearchTarget {
-  readonly actionId: "tech-sundial";
-  readonly stonePrice: number;
+  readonly actionId: "tech-sundial" | "tech-stone_axe";
+  readonly cost: Readonly<Record<string, number>>;
+  readonly resourceClickBudget: number;
   readonly clickBudget: number;
   readonly offerGeneration: number;
-  readonly stoneControlGeneration: number;
+  readonly resourceControlGenerations: Readonly<
+    Partial<Record<GatherActionId, number>>
+  >;
   readonly isCurrent: () => boolean;
 }
 
@@ -147,16 +150,31 @@ function readControl(
 
 function readTestStandardResearchTarget(
   value: unknown,
-): Omit<TestStandardResearchTarget, "stoneControlGeneration"> | undefined {
+): Omit<TestStandardResearchTarget, "resourceControlGenerations"> | undefined {
   const actionId = readProperty(value, "actionId");
-  const stonePrice = readProperty(value, "stonePrice");
+  const cost = readProperty(value, "cost");
+  const resourceClickBudget = readProperty(value, "resourceClickBudget");
   const clickBudget = readProperty(value, "clickBudget");
   const offerGeneration = readProperty(value, "offerGeneration");
   const isCurrent = readProperty(value, "isCurrent");
-  return actionId === "tech-sundial" &&
-    typeof stonePrice === "number" &&
-    Number.isFinite(stonePrice) &&
-    stonePrice > 0 &&
+  const validTarget =
+    actionId === "tech-sundial" || actionId === "tech-stone_axe";
+  const validCost =
+    cost !== null &&
+    typeof cost === "object" &&
+    Object.entries(cost).every(
+      ([resourceId, quantity]) =>
+        typeof resourceId === "string" &&
+        typeof quantity === "number" &&
+        Number.isFinite(quantity) &&
+        quantity > 0,
+    );
+  return validTarget &&
+    validCost &&
+    typeof resourceClickBudget === "number" &&
+    Number.isSafeInteger(resourceClickBudget) &&
+    resourceClickBudget > 0 &&
+    resourceClickBudget <= 10 &&
     typeof clickBudget === "number" &&
     Number.isSafeInteger(clickBudget) &&
     clickBudget > 0 &&
@@ -167,7 +185,8 @@ function readTestStandardResearchTarget(
     typeof isCurrent === "function"
     ? Object.freeze({
         actionId,
-        stonePrice,
+        cost: Object.freeze({ ...(cost as Record<string, number>) }),
+        resourceClickBudget,
         clickBudget,
         offerGeneration,
         isCurrent: isCurrent as () => boolean,
@@ -355,23 +374,35 @@ export function createCapturedGatherResourcesAdapter({
         const target = readTestStandardResearchTarget(
           readProperty(intervention, "standardResearchTarget"),
         );
-        const stoneControlId = controlsByAction.stone;
-        const stoneControl =
-          stoneControlId === undefined
-            ? undefined
-            : controls.resolve(stoneControlId);
-        const researchControl = controls.resolve("tech-sundial");
+        const targetControl = controls.resolve(target?.actionId ?? "");
+        const resourceControlGenerations: Partial<
+          Record<GatherActionId, number>
+        > = {};
+        for (const [resourceId, actionId] of [
+          ["Lumber", "lumber"],
+          ["Stone", "stone"],
+        ] as const) {
+          if (target?.actionId === "tech-sundial" && resourceId !== "Stone")
+            continue;
+          if (target?.cost[resourceId] === undefined) continue;
+          const elementId = controlsByAction[actionId];
+          const handle =
+            elementId === undefined ? undefined : controls.resolve(elementId);
+          if (handle?.methods.includes("action") === true)
+            resourceControlGenerations[actionId] = handle.generation;
+        }
         if (
           target !== undefined &&
-          stoneControlId !== undefined &&
-          stoneControl?.methods.includes("action") === true &&
-          researchControl?.methods.includes("action") === true &&
-          researchControl.generation === target.offerGeneration &&
+          targetControl?.methods.includes("action") === true &&
+          targetControl.generation === target.offerGeneration &&
+          Object.keys(resourceControlGenerations).length > 0 &&
           target.isCurrent()
         )
           testStandardResearchTarget = Object.freeze({
             ...target,
-            stoneControlGeneration: stoneControl.generation,
+            resourceControlGenerations: Object.freeze(
+              resourceControlGenerations,
+            ),
           });
         const claim = readAdmittedResourceClaim(
           readProperty(intervention, "resourceClaim"),
@@ -509,10 +540,35 @@ export function createCapturedGatherResourcesAdapter({
         __EA_TEST_SURFACE_ENABLED__ === true &&
         testStandardResearchTarget !== undefined
           ? {
-              testOnlyStoneTarget: Object.freeze({
-                quantity: testStandardResearchTarget.stonePrice,
-                clickBudget: testStandardResearchTarget.clickBudget,
-              }),
+              ...(testStandardResearchTarget.actionId === "tech-sundial"
+                ? {
+                    testOnlyStoneTarget: Object.freeze({
+                      quantity: testStandardResearchTarget.cost.Stone ?? 0,
+                      clickBudget: testStandardResearchTarget.clickBudget,
+                    }),
+                  }
+                : {
+                    testOnlyMaterialTarget: Object.freeze({
+                      ...(testStandardResearchTarget.cost.Lumber === undefined
+                        ? {}
+                        : {
+                            Lumber: Object.freeze({
+                              quantity: testStandardResearchTarget.cost.Lumber,
+                              clickBudget:
+                                testStandardResearchTarget.resourceClickBudget,
+                            }),
+                          }),
+                      ...(testStandardResearchTarget.cost.Stone === undefined
+                        ? {}
+                        : {
+                            Stone: Object.freeze({
+                              quantity: testStandardResearchTarget.cost.Stone,
+                              clickBudget:
+                                testStandardResearchTarget.resourceClickBudget,
+                            }),
+                          }),
+                    }),
+                  }),
             }
           : {}),
         fursUnlocked: Boolean(readProperty(furs, "display")),
@@ -632,14 +688,18 @@ export function createCapturedGatherResourcesAdapter({
             typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
             __EA_TEST_SURFACE_ENABLED__ === true &&
             active.testStandardResearchTarget !== undefined &&
-            operation.actionId === "stone" &&
+            active.testStandardResearchTarget.resourceControlGenerations[
+              operation.actionId
+            ] !== undefined &&
             (handle.generation !==
-              active.testStandardResearchTarget.stoneControlGeneration ||
+              active.testStandardResearchTarget.resourceControlGenerations[
+                operation.actionId
+              ] ||
               !active.testStandardResearchTarget.isCurrent())
           )
             return stale(
               "gather-research-target-stale",
-              "current Sundial offer or Gather control changed",
+              "current Research offer or Gather control changed",
             );
           for (let index = 0; index < operation.amount; index += 1) {
             const beforeClickRoot = rootState.readRoot();
@@ -714,7 +774,9 @@ export function createCapturedGatherResourcesAdapter({
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
               active.testStandardResearchTarget !== undefined &&
-              operation.actionId === "stone"
+              active.testStandardResearchTarget.resourceControlGenerations[
+                operation.actionId
+              ] !== undefined
             ) {
               const afterTargetClickRoot = rootState.readRoot();
               if (
@@ -723,10 +785,20 @@ export function createCapturedGatherResourcesAdapter({
               )
                 return stale(
                   "gather-research-target-invalidated",
-                  "current Sundial offer changed during Gather",
+                  "current Research offer changed during Gather",
                 );
-              const stoneAfter = currentQuantity(afterTargetClickRoot, "Stone");
-              if (stoneAfter >= active.testStandardResearchTarget.stonePrice)
+              const resourceId =
+                operation.actionId === "lumber" ? "Lumber" : "Stone";
+              const resourceAfter = currentQuantity(
+                afterTargetClickRoot,
+                resourceId,
+              );
+              const resourcePrice =
+                active.testStandardResearchTarget.cost[resourceId];
+              if (
+                typeof resourcePrice === "number" &&
+                resourceAfter >= resourcePrice
+              )
                 break;
             }
             if (active.resourceClaimLedger !== undefined) {

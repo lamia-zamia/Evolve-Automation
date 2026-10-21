@@ -2246,8 +2246,18 @@ export function startCapturedRuntime({
               gatherTestHooks,
               "standardResearchTargetClickBudget",
             );
+            const targetResourceClickBudget =
+              readProperty(
+                gatherTestHooks,
+                "standardResearchTargetResourceClickBudget",
+              ) ?? targetClickBudget;
             if (
-              targetActionId === "tech-sundial" &&
+              (targetActionId === "tech-sundial" ||
+                targetActionId === "tech-stone_axe") &&
+              typeof targetResourceClickBudget === "number" &&
+              Number.isSafeInteger(targetResourceClickBudget) &&
+              targetResourceClickBudget > 0 &&
+              targetResourceClickBudget <= 10 &&
               typeof targetClickBudget === "number" &&
               Number.isSafeInteger(targetClickBudget) &&
               targetClickBudget > 0 &&
@@ -2261,14 +2271,46 @@ export function startCapturedRuntime({
                 progression.readOfferedTechs() ??
                 progression.sampleOfferedTechs("standard-bootstrap-gather");
               const targetOffer = targetOffers?.find(
-                (offer) => offer.elementId === "tech-sundial",
+                (offer) => offer.elementId === targetActionId,
               );
               const targetControl =
-                pageCapture.controls.resolve("tech-sundial");
-              const stoneControl =
-                pageCapture.controls.resolve("undefined-stone") ??
-                pageCapture.controls.resolve("city-stone");
-              const stonePrice = targetOffer?.cost.Stone;
+                pageCapture.controls.resolve(targetActionId);
+              const targetResources = Object.keys(
+                targetOffer?.cost ?? {},
+              ).filter(
+                (resourceId) =>
+                  resourceId === "Lumber" || resourceId === "Stone",
+              );
+              const resourceControls = new Map(
+                targetResources.map((resourceId) => [
+                  resourceId,
+                  pageCapture.controls.resolve(
+                    `undefined-${resourceId.toLowerCase()}`,
+                  ) ??
+                    pageCapture.controls.resolve(
+                      `city-${resourceId.toLowerCase()}`,
+                    ),
+                ]),
+              );
+              const nonMaterialCostsAffordable = Object.entries(
+                targetOffer?.cost ?? {},
+              ).every(([resourceId, price]) =>
+                resourceId === "Lumber" || resourceId === "Stone"
+                  ? true
+                  : typeof price === "number" &&
+                    Number(
+                      readProperty(
+                        readProperty(
+                          readProperty(
+                            pageCapture.rootState.readRoot(),
+                            "resource",
+                          ),
+                          resourceId,
+                        ),
+                        "amount",
+                      ),
+                    ) >= price,
+              );
               const nativePriceIdentity = targetOffer
                 ? JSON.stringify(
                     Object.entries(targetOffer.cost).sort(([left], [right]) =>
@@ -2279,13 +2321,10 @@ export function startCapturedRuntime({
               const isTargetCurrent = () => {
                 const currentOffers = progression.readOfferedTechs();
                 const currentOffer = currentOffers?.find(
-                  (offer) => offer.elementId === "tech-sundial",
+                  (offer) => offer.elementId === targetActionId,
                 );
                 const currentTargetControl =
-                  pageCapture.controls.resolve("tech-sundial");
-                const currentStoneControl =
-                  pageCapture.controls.resolve("undefined-stone") ??
-                  pageCapture.controls.resolve("city-stone");
+                  pageCapture.controls.resolve(targetActionId);
                 const currentPriceIdentity = currentOffer
                   ? JSON.stringify(
                       Object.entries(currentOffer.cost).sort(
@@ -2302,17 +2341,45 @@ export function startCapturedRuntime({
                   currentOffer !== undefined &&
                   currentOffer.generation === targetOffer?.generation &&
                   currentPriceIdentity === nativePriceIdentity &&
+                  Object.entries(currentOffer.cost).every(
+                    ([resourceId, price]) =>
+                      resourceId === "Lumber" || resourceId === "Stone"
+                        ? true
+                        : typeof price === "number" &&
+                          Number(
+                            readProperty(
+                              readProperty(
+                                readProperty(
+                                  pageCapture.rootState.readRoot(),
+                                  "resource",
+                                ),
+                                resourceId,
+                              ),
+                              "amount",
+                            ),
+                          ) >= price,
+                  ) &&
                   currentTargetControl?.methods.includes("action") === true &&
                   currentTargetControl.generation === targetOffer?.generation &&
-                  currentStoneControl?.methods.includes("action") === true &&
-                  currentStoneControl.generation === stoneControl?.generation
+                  [...resourceControls].every(([resourceId, original]) => {
+                    const current =
+                      pageCapture.controls.resolve(
+                        `undefined-${resourceId.toLowerCase()}`,
+                      ) ??
+                      pageCapture.controls.resolve(
+                        `city-${resourceId.toLowerCase()}`,
+                      );
+                    return (
+                      current?.methods.includes("action") === true &&
+                      current.generation === original?.generation
+                    );
+                  })
                 );
               };
               if (
                 targetOffer !== undefined &&
-                typeof stonePrice === "number" &&
-                Number.isFinite(stonePrice) &&
-                stonePrice > 0 &&
+                targetResources.length > 0 &&
+                nonMaterialCostsAffordable &&
                 targetOffer.generation > 0 &&
                 targetRoot !== undefined &&
                 progression.readRootGeneration() === targetRootGeneration &&
@@ -2320,16 +2387,98 @@ export function startCapturedRuntime({
                   targetProgressionGeneration &&
                 targetControl?.methods.includes("action") === true &&
                 targetControl.generation === targetOffer.generation &&
-                stoneControl?.methods.includes("action") === true &&
+                [...resourceControls.values()].every(
+                  (control) => control?.methods.includes("action") === true,
+                ) &&
                 isTargetCurrent()
               )
                 standardResearchTarget = Object.freeze({
-                  actionId: "tech-sundial",
-                  stonePrice,
+                  actionId: targetActionId,
+                  cost: Object.freeze({ ...targetOffer.cost }),
+                  resourceClickBudget: targetResourceClickBudget,
                   clickBudget: targetClickBudget,
                   offerGeneration: targetOffer.generation,
                   isCurrent: isTargetCurrent,
                 });
+              if (
+                standardResearchTarget !== undefined &&
+                isRecord(hooks) &&
+                readProperty(
+                  readProperty(hooks, "standardResearchTargetObservation"),
+                  "actionId",
+                ) !== targetActionId
+              ) {
+                const targetResourcesState = readProperty(
+                  targetRoot,
+                  "resource",
+                );
+                const savingTarget = readDemand("pre-Gather").savingTarget;
+                const managedBuildings = progression.readManagedBuildTargets();
+                Reflect.set(
+                  hooks,
+                  "standardResearchTargetObservation",
+                  Object.freeze({
+                    actionId: targetActionId,
+                    cost: Object.freeze({ ...(targetOffer?.cost ?? {}) }),
+                    offerGeneration: targetOffer?.generation,
+                    targetControlGeneration: targetControl?.generation,
+                    resourceControlGenerations: Object.freeze(
+                      Object.fromEntries(
+                        [...resourceControls].map(([resourceId, control]) => [
+                          resourceId,
+                          control?.generation,
+                        ]),
+                      ),
+                    ),
+                    rootGeneration: targetRootGeneration,
+                    progressionGeneration: targetProgressionGeneration,
+                    holdings: Object.freeze(
+                      Object.fromEntries(
+                        ["Food", "Knowledge", "Lumber", "Stone"].map(
+                          (resourceId) => {
+                            const resource = readProperty(
+                              targetResourcesState,
+                              resourceId,
+                            );
+                            return [
+                              resourceId,
+                              Object.freeze({
+                                amount: readProperty(resource, "amount"),
+                                max: readProperty(resource, "max"),
+                              }),
+                            ];
+                          },
+                        ),
+                      ),
+                    ),
+                    savingTarget,
+                    managedBuildingOptions: Object.freeze(
+                      managedBuildings.map((building) =>
+                        Object.freeze({
+                          actionId: building.key,
+                          controlId: building.elementId,
+                          cost: buildCosts.readCost(building.key)?.cost,
+                          controlGeneration: pageCapture.controls.resolve(
+                            building.elementId,
+                          )?.generation,
+                        }),
+                      ),
+                    ),
+                    buildingActionIds: Object.freeze(
+                      pageCapture.controls
+                        .capturedElementIds()
+                        .filter((elementId) => {
+                          const handle =
+                            pageCapture.controls.resolve(elementId);
+                          return (
+                            elementId.startsWith("city-") &&
+                            handle?.methods.includes("action") === true
+                          );
+                        }),
+                    ),
+                  }),
+                );
+              }
             }
             const resourceClaim = readProperty(
               gatherTestHooks,

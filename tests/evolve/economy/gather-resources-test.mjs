@@ -345,4 +345,58 @@ assert.equal(
   "a target beyond Stone capacity cannot trigger futile clicks",
 );
 
+const targetedMaterials = planGatherResources(
+  makeInput({
+    stopped: true,
+    clickLimit: 50,
+    testOnlyMaterialTarget: {
+      Lumber: { quantity: 20, clickBudget: 5 },
+      Stone: { quantity: 20, clickBudget: 5 },
+    },
+    clickable: {
+      ...makeInput().clickable,
+      food: true,
+      lumber: true,
+      stone: true,
+    },
+    resources: {
+      ...makeInput().resources,
+      Food: { currentQuantity: 40, maxQuantity: 100 },
+      Lumber: { currentQuantity: 12, maxQuantity: 200 },
+      Stone: { currentQuantity: 0, maxQuantity: 200 },
+    },
+  }),
+);
+assert.deepEqual(
+  targetedMaterials?.operations.map(({ actionId, amount }) => ({
+    actionId,
+    amount,
+  })),
+  [
+    { actionId: "lumber", amount: 5 },
+    { actionId: "stone", amount: 5 },
+  ],
+  "material targets gather only each named shortage within per-cycle budgets",
+);
+assert.equal(
+  planGatherResources(
+    makeInput({
+      stopped: true,
+      materialConjuring: true,
+      resourceClaimLedger: { spendableStock: 0 },
+      testOnlyMaterialTarget: {
+        Stone: { quantity: 20, clickBudget: 5 },
+      },
+      clickable: { ...makeInput().clickable, stone: true },
+      resources: {
+        ...makeInput().resources,
+        Mana: { currentQuantity: 5, maxQuantity: 10 },
+        Stone: { currentQuantity: 0, maxQuantity: 200 },
+      },
+    }),
+  ),
+  null,
+  "material target gathering preserves claimed Mana while native Conjuring is active",
+);
+
 console.log("Gather resource planning matches native Conjuring budgets");

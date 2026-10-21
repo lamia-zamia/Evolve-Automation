@@ -30,6 +30,11 @@ export interface GatherResourcesInput {
     quantity: number;
     clickBudget: number;
   }>;
+  /** Explicit test-surface material shortages for one current native Research offer. */
+  readonly testOnlyMaterialTarget?: Readonly<{
+    readonly Lumber?: Readonly<{ quantity: number; clickBudget: number }>;
+    readonly Stone?: Readonly<{ quantity: number; clickBudget: number }>;
+  }>;
   readonly clickable: Readonly<Record<GatherActionId, boolean>>;
   readonly resources: Readonly<Record<GatherResourceId, GatherResourceInput>>;
 }
@@ -257,6 +262,96 @@ export function planGatherResources(
           }),
         );
       }
+    }
+  }
+
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    input.stopped &&
+    input.testOnlyMaterialTarget !== undefined
+  ) {
+    for (const resourceId of ["Lumber", "Stone"] as const) {
+      const target = input.testOnlyMaterialTarget[resourceId];
+      const actionId = resourceId === "Lumber" ? "lumber" : "stone";
+      if (
+        target === undefined ||
+        !input.clickable[actionId] ||
+        !Number.isFinite(target.quantity) ||
+        target.quantity <= 0 ||
+        target.quantity > input.resources[resourceId].maxQuantity ||
+        !Number.isSafeInteger(target.clickBudget) ||
+        target.clickBudget <= 0
+      )
+        continue;
+      const current = quantities[resourceId];
+      const clickLimit = Math.min(
+        Math.ceil(
+          Math.max(0, target.quantity - current) / input.resourcesPerClick,
+        ),
+        target.clickBudget,
+        input.clickLimit,
+      );
+      if (clickLimit <= 0) continue;
+      const conjuring = input.materialConjuring && quantities.Mana >= 1;
+      if (
+        conjuring &&
+        input.resourceClaimLedger !== undefined &&
+        remainingClaimSpend < 1
+      )
+        continue;
+      const conjuredClicks = conjuring
+        ? Math.min(
+            clickLimit,
+            Math.floor(quantities.Mana),
+            Math.floor(remainingClaimSpend),
+          )
+        : 0;
+      const manaAfterConjuring = quantities.Mana - conjuredClicks;
+      const quantityAfterConjuring = Math.min(
+        current + conjuredClicks * input.resourcesPerClick * 10,
+        input.resources[resourceId].maxQuantity,
+      );
+      const ordinaryClicks =
+        quantityAfterConjuring >= target.quantity || manaAfterConjuring >= 1
+          ? 0
+          : Math.min(
+              clickLimit - conjuredClicks,
+              Math.ceil(
+                Math.max(0, target.quantity - quantityAfterConjuring) /
+                  input.resourcesPerClick,
+              ),
+            );
+      const amount = conjuredClicks + ordinaryClicks;
+      if (amount <= 0) continue;
+      quantities.Mana = manaAfterConjuring;
+      if (input.resourceClaimLedger !== undefined)
+        remainingClaimSpend = Math.max(0, remainingClaimSpend - conjuredClicks);
+      const quantity = Math.min(
+        quantityAfterConjuring + ordinaryClicks * input.resourcesPerClick,
+        input.resources[resourceId].maxQuantity,
+      );
+      operations.push(
+        Object.freeze({
+          actionId,
+          amount,
+          beforeAction: Object.freeze([
+            Object.freeze({
+              resourceId,
+              expectedQuantity: current,
+              quantity: current,
+            }),
+          ]),
+          afterAction: Object.freeze([
+            Object.freeze({
+              resourceId,
+              expectedQuantity: current,
+              quantity,
+            }),
+          ]),
+        }),
+      );
+      quantities[resourceId] = quantity;
     }
   }
 

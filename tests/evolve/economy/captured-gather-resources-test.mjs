@@ -615,7 +615,8 @@ const targetedGatherAdapter = createCapturedGatherResourcesAdapter({
   readTestIntervention: () => ({
     standardResearchTarget: {
       actionId: "tech-sundial",
-      stonePrice: 10,
+      cost: { Lumber: 8, Stone: 10 },
+      resourceClickBudget: 10,
       clickBudget: 10,
       offerGeneration: 4,
       isCurrent: () => targetCurrent,
@@ -634,7 +635,7 @@ assert.deepEqual(
     status: "stale",
     failure: {
       code: "gather-research-target-stale",
-      message: "current Sundial offer or Gather control changed",
+      message: "current Research offer or Gather control changed",
     },
   },
 );
@@ -652,5 +653,71 @@ assert.deepEqual(targetedGatherAdapter.executor.execute(targetedPlan), {
 });
 assert.equal(root.resource.Stone.amount, 10);
 assert.equal(targetStoneClicks, 10);
+
+root.resource.Lumber.amount = 17;
+root.resource.Lumber.max = 200;
+root.resource.Stone.amount = 0;
+root.resource.Stone.max = 200;
+root.resource.Food.amount = 40;
+delete root.tech.conjuring;
+root.resource.Mana.amount = 0;
+let materialGatherCalls = 0;
+const axeControls = {
+  resolve(elementId) {
+    return ["city-lumber", "undefined-stone", "tech-stone_axe"].includes(
+      elementId,
+    )
+      ? { elementId, generation: 6, methods: ["action"] }
+      : undefined;
+  },
+  invoke(handle, method) {
+    assert.equal(method, "action");
+    materialGatherCalls += 1;
+    const resourceId = handle.elementId === "city-lumber" ? "Lumber" : "Stone";
+    root.resource[resourceId].amount += 1;
+    return { ok: true, value: true };
+  },
+  capturedElementIds: () => [
+    "city-lumber",
+    "undefined-stone",
+    "tech-stone_axe",
+  ],
+};
+const axeGatherAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls: axeControls,
+  readSettings: () => settings,
+  readTestIntervention: () => ({
+    standardResearchTarget: {
+      actionId: "tech-stone_axe",
+      cost: { Knowledge: 45, Lumber: 20, Stone: 20 },
+      resourceClickBudget: 5,
+      clickBudget: 5,
+      offerGeneration: 6,
+      isCurrent: () => true,
+    },
+  }),
+});
+const axeTargetInput = axeGatherAdapter.reader.read();
+assert.deepEqual(axeTargetInput.testOnlyMaterialTarget, {
+  Lumber: { quantity: 20, clickBudget: 5 },
+  Stone: { quantity: 20, clickBudget: 5 },
+});
+const axeTargetPlan = planGatherResources(axeTargetInput);
+assert.deepEqual(
+  axeTargetPlan.operations.map(({ actionId, amount }) => ({
+    actionId,
+    amount,
+  })),
+  [
+    { actionId: "lumber", amount: 3 },
+    { actionId: "stone", amount: 5 },
+  ],
+);
+const axeResult = axeGatherAdapter.executor.execute(axeTargetPlan);
+assert.deepEqual(axeResult, { status: "succeeded" });
+assert.equal(root.resource.Lumber.amount, 20);
+assert.equal(root.resource.Stone.amount, 5);
+assert.equal(materialGatherCalls, 8);
 
 console.log("captured-gather-resources ok");
