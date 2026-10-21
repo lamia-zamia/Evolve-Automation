@@ -15341,7 +15341,7 @@
           stone: readControl(controls2, "stone"),
           chrysotile: readControl(controls2, "chrysotile"),
           slaughter: readControl(controls2, "slaughter")
-        }), foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, resourceClaimLedger, testIntervention, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
+        }), foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, resourceClaimLedger, testIntervention, testStandardResearchTarget, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
           stopped,
           resourcesPerClick: Number(
             (readStrongMultiplier(root) * (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1)).toFixed(1)
@@ -15457,6 +15457,7 @@
                   "gather-click-failed",
                   result.detail ?? result.reason
                 );
+              let stopTargetAfterClick = !1;
               if (active.resourceClaimLedger !== void 0) {
                 let afterClickRoot = rootState.readRoot();
                 if (afterClickRoot !== active.root)
@@ -15510,6 +15511,7 @@
                   })
                 );
               }
+              if (stopTargetAfterClick) break;
             }
           }
           if (!assignmentsMatch(rootState.readRoot(), operation2.afterAction, !0))

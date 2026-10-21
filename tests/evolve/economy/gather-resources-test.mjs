@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
-import { planGatherResources } from "../../../src/domain/economy/resources/gather-resources.ts";
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+const { planGatherResources } =
+  await import("../../../src/domain/economy/resources/gather-resources.ts");
 
 const makeInput = (overrides = {}) => ({
   stopped: false,
@@ -290,6 +292,57 @@ assert.equal(
     makeInput({ clickable: { ...makeInput().clickable, food: false } }),
   ),
   null,
+);
+
+const targetedStone = planGatherResources(
+  makeInput({
+    stopped: true,
+    resourcesPerClick: 4,
+    clickLimit: 50,
+    testOnlyStoneTarget: { quantity: 10, clickBudget: 3 },
+    clickable: {
+      ...makeInput().clickable,
+      food: true,
+      lumber: true,
+      stone: true,
+    },
+    resources: {
+      ...makeInput().resources,
+      Food: { currentQuantity: 40, maxQuantity: 100 },
+      Lumber: { currentQuantity: 72, maxQuantity: 200 },
+      Stone: { currentQuantity: 0, maxQuantity: 200 },
+    },
+  }),
+);
+assert.deepEqual(
+  targetedStone?.operations.map(({ actionId, amount, afterAction }) => ({
+    actionId,
+    amount,
+    afterAction,
+  })),
+  [
+    {
+      actionId: "stone",
+      amount: 3,
+      afterAction: [{ resourceId: "Stone", expectedQuantity: 0, quantity: 12 }],
+    },
+  ],
+  "the explicit test target gathers only its shortage within its click budget",
+);
+assert.equal(
+  planGatherResources(
+    makeInput({
+      stopped: true,
+      testOnlyStoneTarget: { quantity: 10, clickBudget: 10 },
+      clickable: { ...makeInput().clickable, stone: true },
+      resources: {
+        ...makeInput().resources,
+        Stone: { currentQuantity: 0, maxQuantity: 5 },
+      },
+    }),
+  ),
+  null,
+  "a target beyond Stone capacity cannot trigger futile clicks",
 );
 
 console.log("Gather resource planning matches native Conjuring budgets");

@@ -66,6 +66,16 @@ interface CapturedGatherSession {
   readonly materialConjuring: boolean;
   readonly manaQuantity: number;
   readonly testIntervention?: unknown;
+  readonly testStandardResearchTarget?: TestStandardResearchTarget;
+}
+
+interface TestStandardResearchTarget {
+  readonly actionId: "tech-sundial";
+  readonly stonePrice: number;
+  readonly clickBudget: number;
+  readonly offerGeneration: number;
+  readonly stoneControlGeneration: number;
+  readonly isCurrent: () => boolean;
 }
 
 export interface CapturedGatherResourcesDependencies {
@@ -133,6 +143,36 @@ function readControl(
     const handle = controls.resolve(elementId);
     return handle !== undefined && handle.methods.includes("action");
   });
+}
+
+function readTestStandardResearchTarget(
+  value: unknown,
+): Omit<TestStandardResearchTarget, "stoneControlGeneration"> | undefined {
+  const actionId = readProperty(value, "actionId");
+  const stonePrice = readProperty(value, "stonePrice");
+  const clickBudget = readProperty(value, "clickBudget");
+  const offerGeneration = readProperty(value, "offerGeneration");
+  const isCurrent = readProperty(value, "isCurrent");
+  return actionId === "tech-sundial" &&
+    typeof stonePrice === "number" &&
+    Number.isFinite(stonePrice) &&
+    stonePrice > 0 &&
+    typeof clickBudget === "number" &&
+    Number.isSafeInteger(clickBudget) &&
+    clickBudget > 0 &&
+    clickBudget <= 10 &&
+    typeof offerGeneration === "number" &&
+    Number.isSafeInteger(offerGeneration) &&
+    offerGeneration > 0 &&
+    typeof isCurrent === "function"
+    ? Object.freeze({
+        actionId,
+        stonePrice,
+        clickBudget,
+        offerGeneration,
+        isCurrent: isCurrent as () => boolean,
+      })
+    : undefined;
 }
 
 function emptyInput(): GatherResourcesInput {
@@ -305,12 +345,34 @@ export function createCapturedGatherResourcesAdapter({
       let resourceClaimLedger:
         ReturnType<typeof planResourceClaimLedger> | undefined;
       let testIntervention: unknown;
+      let testStandardResearchTarget: TestStandardResearchTarget | undefined;
       if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true
       ) {
         const intervention = readTestIntervention?.();
         testIntervention = intervention;
+        const target = readTestStandardResearchTarget(
+          readProperty(intervention, "standardResearchTarget"),
+        );
+        const stoneControlId = controlsByAction.stone;
+        const stoneControl =
+          stoneControlId === undefined
+            ? undefined
+            : controls.resolve(stoneControlId);
+        const researchControl = controls.resolve("tech-sundial");
+        if (
+          target !== undefined &&
+          stoneControlId !== undefined &&
+          stoneControl?.methods.includes("action") === true &&
+          researchControl?.methods.includes("action") === true &&
+          researchControl.generation === target.offerGeneration &&
+          target.isCurrent()
+        )
+          testStandardResearchTarget = Object.freeze({
+            ...target,
+            stoneControlGeneration: stoneControl.generation,
+          });
         const claim = readAdmittedResourceClaim(
           readProperty(intervention, "resourceClaim"),
         );
@@ -443,6 +505,16 @@ export function createCapturedGatherResourcesAdapter({
         foodConjuring,
         materialConjuring,
         ...(resourceClaimLedger === undefined ? {} : { resourceClaimLedger }),
+        ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        testStandardResearchTarget !== undefined
+          ? {
+              testOnlyStoneTarget: Object.freeze({
+                quantity: testStandardResearchTarget.stonePrice,
+                clickBudget: testStandardResearchTarget.clickBudget,
+              }),
+            }
+          : {}),
         fursUnlocked: Boolean(readProperty(furs, "display")),
         clickable: Object.freeze({
           food: controlsByAction.food !== undefined,
@@ -460,6 +532,11 @@ export function createCapturedGatherResourcesAdapter({
         materialConjuring,
         manaQuantity: resources.Mana.currentQuantity,
         ...(testIntervention === undefined ? {} : { testIntervention }),
+        ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        testStandardResearchTarget !== undefined
+          ? { testStandardResearchTarget }
+          : {}),
       });
       return input;
     },
@@ -551,6 +628,19 @@ export function createCapturedGatherResourcesAdapter({
               `captured control disappeared for ${operation.actionId}`,
             );
           }
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true &&
+            active.testStandardResearchTarget !== undefined &&
+            operation.actionId === "stone" &&
+            (handle.generation !==
+              active.testStandardResearchTarget.stoneControlGeneration ||
+              !active.testStandardResearchTarget.isCurrent())
+          )
+            return stale(
+              "gather-research-target-stale",
+              "current Sundial offer or Gather control changed",
+            );
           for (let index = 0; index < operation.amount; index += 1) {
             const beforeClickRoot = rootState.readRoot();
             if (beforeClickRoot !== active.root) {
@@ -619,6 +709,26 @@ export function createCapturedGatherResourcesAdapter({
                     "gather-click-failed",
                     result.detail ?? result.reason,
                   );
+            }
+            let stopTargetAfterClick = false;
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              active.testStandardResearchTarget !== undefined &&
+              operation.actionId === "stone"
+            ) {
+              const afterTargetClickRoot = rootState.readRoot();
+              if (
+                afterTargetClickRoot !== active.root ||
+                !active.testStandardResearchTarget.isCurrent()
+              )
+                return stale(
+                  "gather-research-target-invalidated",
+                  "current Sundial offer changed during Gather",
+                );
+              const stoneAfter = currentQuantity(afterTargetClickRoot, "Stone");
+              if (stoneAfter >= active.testStandardResearchTarget.stonePrice)
+                stopTargetAfterClick = true;
             }
             if (active.resourceClaimLedger !== undefined) {
               const afterClickRoot = rootState.readRoot();
@@ -692,6 +802,7 @@ export function createCapturedGatherResourcesAdapter({
                 }),
               );
             }
+            if (stopTargetAfterClick) break;
           }
         }
         if (

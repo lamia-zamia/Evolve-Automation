@@ -1,5 +1,7 @@
 import type { ResourceClaimLedger } from "./resource-claims.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 export type GatherActionId =
   "food" | "lumber" | "stone" | "chrysotile" | "slaughter";
 
@@ -23,6 +25,11 @@ export interface GatherResourcesInput {
   readonly fursUnlocked: boolean;
   /** Test-only callers may provide an admitted-claim budget; ordinary sessions omit it. */
   readonly resourceClaimLedger?: Readonly<ResourceClaimLedger>;
+  /** Explicit, test-surface-only Research target supplied to the existing Gather owner. */
+  readonly testOnlyStoneTarget?: Readonly<{
+    quantity: number;
+    clickBudget: number;
+  }>;
   readonly clickable: Readonly<Record<GatherActionId, boolean>>;
   readonly resources: Readonly<Record<GatherResourceId, GatherResourceInput>>;
 }
@@ -201,6 +208,56 @@ export function planGatherResources(
         afterAction: Object.freeze(afterAction),
       }),
     );
+  }
+
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    input.stopped &&
+    input.clickable.stone
+  ) {
+    const testStoneTarget = input.testOnlyStoneTarget;
+    if (
+      testStoneTarget !== undefined &&
+      Number.isFinite(testStoneTarget.quantity) &&
+      testStoneTarget.quantity <= input.resources.Stone.maxQuantity &&
+      Number.isSafeInteger(testStoneTarget.clickBudget) &&
+      testStoneTarget.clickBudget > 0
+    ) {
+      const resource = input.resources.Stone;
+      const current = quantities.Stone;
+      const shortage = Math.max(0, testStoneTarget.quantity - current);
+      const amount = Math.min(
+        Math.ceil(shortage / input.resourcesPerClick),
+        testStoneTarget.clickBudget,
+        input.clickLimit,
+      );
+      if (amount > 0) {
+        operations.push(
+          Object.freeze({
+            actionId: "stone",
+            amount,
+            beforeAction: Object.freeze([
+              Object.freeze({
+                resourceId: "Stone",
+                expectedQuantity: current,
+                quantity: current,
+              }),
+            ]),
+            afterAction: Object.freeze([
+              Object.freeze({
+                resourceId: "Stone",
+                expectedQuantity: current,
+                quantity: Math.min(
+                  current + amount * input.resourcesPerClick,
+                  resource.maxQuantity,
+                ),
+              }),
+            ]),
+          }),
+        );
+      }
+    }
   }
 
   if (!input.stopped && input.clickable.slaughter) {

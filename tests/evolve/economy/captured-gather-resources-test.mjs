@@ -467,6 +467,7 @@ root.r_queue.queue = [];
 root.r_queue.pause = false;
 
 settings.buildingAlwaysClick = false;
+settings.buildingClickPerTick = 10;
 root.race.universe = "magic";
 root.race.sappy = false;
 root.race.fasting = false;
@@ -581,5 +582,75 @@ assert.deepEqual(adapter.executor.execute(decision), {
     message: "captured game root changed",
   },
 });
+
+root = structuredClone(root);
+root.tech.primitive = 1;
+root.resource.Food.amount = 40;
+root.resource.Lumber.amount = 72;
+root.resource.Stone.amount = 0;
+root.resource.Stone.max = 200;
+delete root.race.strong;
+settings.buildingAlwaysClick = false;
+let targetCurrent = true;
+let targetStoneClicks = 0;
+const targetControls = {
+  resolve(elementId) {
+    return ["undefined-stone", "tech-sundial"].includes(elementId)
+      ? { elementId, generation: 4, methods: ["action"] }
+      : undefined;
+  },
+  invoke(handle, method) {
+    assert.equal(method, "action");
+    assert.equal(handle.elementId, "undefined-stone");
+    targetStoneClicks += 1;
+    root.resource.Stone.amount += 1;
+    return { ok: true, value: true };
+  },
+  capturedElementIds: () => ["undefined-stone", "tech-sundial"],
+};
+const targetedGatherAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls: targetControls,
+  readSettings: () => settings,
+  readTestIntervention: () => ({
+    standardResearchTarget: {
+      actionId: "tech-sundial",
+      stonePrice: 10,
+      clickBudget: 10,
+      offerGeneration: 4,
+      isCurrent: () => targetCurrent,
+    },
+  }),
+});
+const staleTargetInput = targetedGatherAdapter.reader.read();
+assert.equal(staleTargetInput.stopped, true);
+assert.equal(staleTargetInput.testOnlyStoneTarget.quantity, 10);
+targetCurrent = false;
+const staleTargetPlan = planGatherResources(staleTargetInput);
+assert.deepEqual(
+  targetedGatherAdapter.executor.execute(staleTargetPlan),
+  // The executor rechecks the current offer before it invokes the captured Stone control.
+  {
+    status: "stale",
+    failure: {
+      code: "gather-research-target-stale",
+      message: "current Sundial offer or Gather control changed",
+    },
+  },
+);
+assert.equal(targetStoneClicks, 0);
+
+targetCurrent = true;
+const targetedInput = targetedGatherAdapter.reader.read();
+const targetedPlan = planGatherResources(targetedInput);
+assert.deepEqual(
+  targetedPlan.operations.map(({ actionId, amount }) => ({ actionId, amount })),
+  [{ actionId: "stone", amount: 10 }],
+);
+assert.deepEqual(targetedGatherAdapter.executor.execute(targetedPlan), {
+  status: "succeeded",
+});
+assert.equal(root.resource.Stone.amount, 10);
+assert.equal(targetStoneClicks, 10);
 
 console.log("captured-gather-resources ok");

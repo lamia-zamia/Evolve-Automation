@@ -2237,6 +2237,100 @@ export function startCapturedRuntime({
             const gatherTestHooks = isRecord(gatherTestHooksValue)
               ? gatherTestHooksValue
               : Object.freeze({});
+            let standardResearchTarget: unknown;
+            const targetActionId = readProperty(
+              gatherTestHooks,
+              "standardResearchTargetActionId",
+            );
+            const targetClickBudget = readProperty(
+              gatherTestHooks,
+              "standardResearchTargetClickBudget",
+            );
+            if (
+              targetActionId === "tech-sundial" &&
+              typeof targetClickBudget === "number" &&
+              Number.isSafeInteger(targetClickBudget) &&
+              targetClickBudget > 0 &&
+              targetClickBudget <= 10
+            ) {
+              const targetRoot = pageCapture.rootState.readRoot();
+              const targetRootGeneration = progression.readRootGeneration();
+              const targetProgressionGeneration =
+                progression.readProgressionEpoch();
+              const targetOffers =
+                progression.readOfferedTechs() ??
+                progression.sampleOfferedTechs("standard-bootstrap-gather");
+              const targetOffer = targetOffers?.find(
+                (offer) => offer.elementId === "tech-sundial",
+              );
+              const targetControl =
+                pageCapture.controls.resolve("tech-sundial");
+              const stoneControl =
+                pageCapture.controls.resolve("undefined-stone") ??
+                pageCapture.controls.resolve("city-stone");
+              const stonePrice = targetOffer?.cost.Stone;
+              const nativePriceIdentity = targetOffer
+                ? JSON.stringify(
+                    Object.entries(targetOffer.cost).sort(([left], [right]) =>
+                      left.localeCompare(right),
+                    ),
+                  )
+                : undefined;
+              const isTargetCurrent = () => {
+                const currentOffers = progression.readOfferedTechs();
+                const currentOffer = currentOffers?.find(
+                  (offer) => offer.elementId === "tech-sundial",
+                );
+                const currentTargetControl =
+                  pageCapture.controls.resolve("tech-sundial");
+                const currentStoneControl =
+                  pageCapture.controls.resolve("undefined-stone") ??
+                  pageCapture.controls.resolve("city-stone");
+                const currentPriceIdentity = currentOffer
+                  ? JSON.stringify(
+                      Object.entries(currentOffer.cost).sort(
+                        ([left], [right]) => left.localeCompare(right),
+                      ),
+                    )
+                  : undefined;
+                return (
+                  targetRoot !== undefined &&
+                  pageCapture.rootState.readRoot() === targetRoot &&
+                  progression.readRootGeneration() === targetRootGeneration &&
+                  progression.readProgressionEpoch() ===
+                    targetProgressionGeneration &&
+                  currentOffer !== undefined &&
+                  currentOffer.generation === targetOffer?.generation &&
+                  currentPriceIdentity === nativePriceIdentity &&
+                  currentTargetControl?.methods.includes("action") === true &&
+                  currentTargetControl.generation === targetOffer?.generation &&
+                  currentStoneControl?.methods.includes("action") === true &&
+                  currentStoneControl.generation === stoneControl?.generation
+                );
+              };
+              if (
+                targetOffer !== undefined &&
+                typeof stonePrice === "number" &&
+                Number.isFinite(stonePrice) &&
+                stonePrice > 0 &&
+                targetOffer.generation > 0 &&
+                targetRoot !== undefined &&
+                progression.readRootGeneration() === targetRootGeneration &&
+                progression.readProgressionEpoch() ===
+                  targetProgressionGeneration &&
+                targetControl?.methods.includes("action") === true &&
+                targetControl.generation === targetOffer.generation &&
+                stoneControl?.methods.includes("action") === true &&
+                isTargetCurrent()
+              )
+                standardResearchTarget = Object.freeze({
+                  actionId: "tech-sundial",
+                  stonePrice,
+                  clickBudget: targetClickBudget,
+                  offerGeneration: targetOffer.generation,
+                  isCurrent: isTargetCurrent,
+                });
+            }
             const resourceClaim = readProperty(
               gatherTestHooks,
               "resourceClaim",
@@ -2326,6 +2420,9 @@ export function startCapturedRuntime({
                 : Object.freeze([]);
             return Object.freeze({
               ...gatherTestHooks,
+              ...(standardResearchTarget === undefined
+                ? {}
+                : { standardResearchTarget }),
               resourceClaimLedgerObserver: (ledger: unknown) => {
                 ledgerStatusForGatherCycle = String(
                   readProperty(ledger, "status") ?? "unavailable",
