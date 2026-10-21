@@ -758,8 +758,8 @@ const compostGatherAdapter = createCapturedGatherResourcesAdapter({
 });
 const compostTargetInput = compostGatherAdapter.reader.read();
 assert.deepEqual(compostTargetInput.testOnlyMaterialTarget, {
-  Lumber: { quantity: 12, clickBudget: 5 },
-  Stone: { quantity: 12, clickBudget: 5 },
+  Lumber: { quantity: 12, clickBudget: 5, preserveMana: true },
+  Stone: { quantity: 12, clickBudget: 5, preserveMana: true },
 });
 const compostTargetPlan = planGatherResources(compostTargetInput);
 assert.deepEqual(
@@ -800,5 +800,222 @@ assert.deepEqual(compostGatherAdapter.executor.execute(compostFinalBatch), {
 });
 assert.equal(root.resource.Stone.amount, 12);
 assert.equal(compostStoneClicks, 7);
+
+root = {
+  resource: {
+    Food: { amount: 40, max: 1000 },
+    Lumber: { amount: 95, max: 200 },
+    Stone: { amount: 0, max: 200 },
+    Chrysotile: { amount: 0, max: 200 },
+    Furs: { amount: 0, max: 100, display: false },
+    Mana: { amount: 0, max: 100 },
+    human: { amount: 0, max: 20 },
+  },
+  race: { universe: "standard", species: "human" },
+  stats: { days: 0 },
+  tech: { primitive: 2 },
+  genes: {},
+  city: {},
+  civic: {},
+  queue: { queue: [] },
+  r_queue: { queue: [] },
+};
+settings.buildingAlwaysClick = false;
+settings.buildingClickPerTick = 3;
+handles.clear();
+for (const elementId of ["undefined-food", "city-lumber", "undefined-stone"])
+  handles.set(elementId, {
+    elementId,
+    generation: 20,
+    methods: ["action"],
+  });
+let bootstrapAuthorization = {
+  authorized: true,
+  authorizationId: "human-start-1",
+};
+let bootstrapRootGeneration = 7;
+let revokeBootstrapAfterNextClick = false;
+let standardConstructionTarget;
+let bootstrapClicks = 0;
+const bootstrapAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls: {
+    resolve: (elementId) => handles.get(elementId),
+    invoke(handle, method) {
+      assert.equal(method, "action");
+      const resourceId =
+        handle.elementId === "undefined-food"
+          ? "Food"
+          : handle.elementId === "city-lumber"
+            ? "Lumber"
+            : "Stone";
+      root.resource[resourceId].amount += 1;
+      bootstrapClicks += 1;
+      if (revokeBootstrapAfterNextClick) {
+        revokeBootstrapAfterNextClick = false;
+        bootstrapAuthorization = {
+          ...bootstrapAuthorization,
+          authorized: false,
+        };
+      }
+      return { ok: true, value: false };
+    },
+    capturedElementIds: () => [...handles.keys()],
+  },
+  readSettings: () => settings,
+  readTestIntervention: () => ({
+    civilizationBootstrap: bootstrapAuthorization,
+    rootGeneration: bootstrapRootGeneration,
+    standardConstructionTarget,
+  }),
+});
+for (let cycle = 0; cycle < 1; cycle += 1) {
+  const bootstrapInput = bootstrapAdapter.reader.read();
+  assert.deepEqual(bootstrapInput.testOnlyBootstrapTarget, {
+    resourceId: "Stone",
+    quantity: 10,
+    clickBudget: Math.min(10 - bootstrapClicks, 10),
+  });
+  const bootstrapDecision = planGatherResources(bootstrapInput);
+  assert.deepEqual(bootstrapAdapter.executor.execute(bootstrapDecision), {
+    status: "succeeded",
+  });
+}
+assert.equal(bootstrapClicks, 3);
+
+root = { ...root, resource: { ...root.resource } };
+root.resource.Food.amount = 100;
+assert.equal(
+  bootstrapAdapter.reader.read().testOnlyBootstrapTarget,
+  undefined,
+  "root replacement suspends an active bootstrap authorization",
+);
+bootstrapAuthorization = {
+  authorized: true,
+  authorizationId: "human-start-2",
+};
+assert.equal(
+  bootstrapAdapter.reader.read().testOnlyBootstrapTarget?.resourceId,
+  "Stone",
+  "a new explicit authorization starts a new root generation",
+);
+for (let cycle = 0; cycle < 3; cycle += 1) {
+  const bootstrapInput = bootstrapAdapter.reader.read();
+  assert.deepEqual(bootstrapInput.testOnlyBootstrapTarget, {
+    resourceId: "Stone",
+    quantity: 10,
+    clickBudget: Math.min(10 - (bootstrapClicks - 3), 10),
+  });
+  const bootstrapDecision = planGatherResources(bootstrapInput);
+  assert.deepEqual(bootstrapAdapter.executor.execute(bootstrapDecision), {
+    status: "succeeded",
+  });
+}
+assert.equal(
+  bootstrapClicks,
+  10,
+  "the new authorization respects its ten-click bound",
+);
+assert.equal(root.resource.Stone.amount, 10);
+assert.equal(
+  bootstrapAdapter.reader.read().testOnlyBootstrapTarget,
+  undefined,
+  "spent bootstrap budget does not re-enter under the same authorization",
+);
+
+standardConstructionTarget = {
+  actionId: "city-farm",
+  cost: { Lumber: 100, Stone: 15 },
+  resourceClickBudget: 5,
+  controlGeneration: 30,
+  isCurrent: () => true,
+};
+handles.set("city-farm", {
+  elementId: "city-farm",
+  generation: 30,
+  methods: ["action"],
+});
+const firstHandoffInput = bootstrapAdapter.reader.read();
+assert.deepEqual(firstHandoffInput.testOnlyMaterialTarget, {
+  Lumber: { quantity: 100, clickBudget: 5, preserveMana: true },
+  Stone: { quantity: 15, clickBudget: 5, preserveMana: true },
+});
+const firstHandoffDecision = planGatherResources(firstHandoffInput);
+assert.deepEqual(
+  firstHandoffDecision.operations.map(({ actionId, amount }) => ({
+    actionId,
+    amount,
+  })),
+  [
+    { actionId: "lumber", amount: 3 },
+    { actionId: "stone", amount: 2 },
+  ],
+  "current Construction demand is gathered under a shared five-click cycle cap",
+);
+assert.deepEqual(bootstrapAdapter.executor.execute(firstHandoffDecision), {
+  status: "succeeded",
+});
+assert.equal(bootstrapAuthorization.state.handoffClicks, 5);
+const secondHandoffInput = bootstrapAdapter.reader.read();
+assert.deepEqual(secondHandoffInput.testOnlyMaterialTarget, {
+  Lumber: { quantity: 100, clickBudget: 5, preserveMana: true },
+  Stone: { quantity: 15, clickBudget: 5, preserveMana: true },
+});
+assert.deepEqual(
+  bootstrapAdapter.executor.execute(planGatherResources(secondHandoffInput)),
+  { status: "succeeded" },
+);
+assert.equal(bootstrapAuthorization.state.handoffClicks, 10);
+assert.equal(
+  bootstrapAdapter.reader.read().testOnlyMaterialTarget,
+  undefined,
+  "Construction handoff respects its ten-click total limit",
+);
+
+root = { ...root, resource: { ...root.resource } };
+root.resource.Food.amount = 100;
+root.resource.Lumber.amount = 100;
+root.resource.Stone.amount = 0;
+bootstrapAuthorization = {
+  authorized: true,
+  authorizationId: "human-start-revoked-mid-batch",
+};
+standardConstructionTarget = undefined;
+revokeBootstrapAfterNextClick = true;
+const revokedBootstrapInput = bootstrapAdapter.reader.read();
+const revokedBootstrapDecision = planGatherResources(revokedBootstrapInput);
+const clicksBeforeRevocation = bootstrapClicks;
+assert.deepEqual(
+  bootstrapAdapter.executor.execute(revokedBootstrapDecision),
+  {
+    status: "stale",
+    failure: {
+      code: "gather-bootstrap-stale",
+      message: "explicit bootstrap authorization or native root changed",
+    },
+  },
+  "bootstrap authorization is revalidated after each native click",
+);
+assert.equal(
+  bootstrapClicks - clicksBeforeRevocation,
+  1,
+  "authorization revocation prevents the remaining batch clicks",
+);
+
+bootstrapAuthorization = {
+  authorized: true,
+  authorizationId: "human-start-root-generation",
+};
+bootstrapRootGeneration = 9;
+const changedGenerationInput = bootstrapAdapter.reader.read();
+const changedGenerationDecision = planGatherResources(changedGenerationInput);
+const clicksBeforeGenerationChange = bootstrapClicks;
+bootstrapRootGeneration = 10;
+assert.equal(
+  bootstrapAdapter.executor.execute(changedGenerationDecision).status,
+  "stale",
+  "bootstrap is suspended when the native root generation changes",
+);
+assert.equal(bootstrapClicks, clicksBeforeGenerationChange);
 
 console.log("captured-gather-resources ok");

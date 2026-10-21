@@ -378,6 +378,30 @@ assert.deepEqual(
   ],
   "material targets gather only each named shortage within per-cycle budgets",
 );
+const bootstrapTarget = planGatherResources(
+  makeInput({
+    stopped: true,
+    testOnlyBootstrapTarget: {
+      resourceId: "Stone",
+      quantity: 10,
+      clickBudget: 10,
+    },
+    clickable: { ...makeInput().clickable, stone: true },
+    resources: {
+      ...makeInput().resources,
+      Stone: { currentQuantity: 0, maxQuantity: 200 },
+    },
+  }),
+);
+assert.deepEqual(
+  bootstrapTarget?.operations.map(({ actionId, amount, bootstrap }) => ({
+    actionId,
+    amount,
+    bootstrap,
+  })),
+  [{ actionId: "stone", amount: 3, bootstrap: true }],
+  "the explicit bootstrap target gathers a modest stock within its finite budget",
+);
 assert.equal(
   planGatherResources(
     makeInput({
@@ -397,6 +421,27 @@ assert.equal(
   ),
   null,
   "material target gathering preserves claimed Mana while native Conjuring is active",
+);
+assert.equal(
+  planGatherResources(
+    makeInput({
+      stopped: true,
+      materialConjuring: true,
+      testOnlyBootstrapTarget: {
+        resourceId: "Stone",
+        quantity: 10,
+        clickBudget: 10,
+      },
+      clickable: { ...makeInput().clickable, stone: true },
+      resources: {
+        ...makeInput().resources,
+        Mana: { currentQuantity: 2, maxQuantity: 10 },
+        Stone: { currentQuantity: 0, maxQuantity: 200 },
+      },
+    }),
+  ),
+  null,
+  "bootstrap does not implicitly spend Mana through Conjuring",
 );
 
 console.log("Gather resource planning matches native Conjuring budgets");

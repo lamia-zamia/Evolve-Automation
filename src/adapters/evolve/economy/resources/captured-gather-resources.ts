@@ -68,6 +68,19 @@ interface CapturedGatherSession {
   readonly testIntervention?: unknown;
   readonly testStandardResearchTarget?: TestStandardResearchTarget;
   readonly testStandardConstructionTarget?: TestStandardConstructionTarget;
+  readonly testBootstrap?: TestCivilizationBootstrap;
+}
+
+interface TestCivilizationBootstrap {
+  readonly root: unknown;
+  readonly rootGeneration: number | undefined;
+  readonly authorizationId: string;
+  readonly baselineProgress: string;
+  readonly isCurrent: () => boolean;
+  usedClicks: number;
+  handoffClicks: number;
+  readonly handoffLimit: number;
+  phase: "active" | "handoff" | "suspended";
 }
 
 interface TestStandardResearchTarget {
@@ -83,7 +96,7 @@ interface TestStandardResearchTarget {
 }
 
 interface TestStandardConstructionTarget {
-  readonly actionId: "city-compost";
+  readonly actionId: string;
   readonly cost: Readonly<Record<string, number>>;
   readonly resourceClickBudget: number;
   readonly controlGeneration: number;
@@ -325,6 +338,57 @@ function readClickLimit(
   return undefined;
 }
 
+function civilizationProgress(root: unknown): string {
+  const race = readProperty(root, "race");
+  const species = readProperty(race, "species");
+  const population = readProperty(
+    readProperty(root, "resource"),
+    typeof species === "string" ? species : "",
+  );
+  const city = readProperty(root, "city");
+  const buildings = isRecord(city)
+    ? Object.entries(city)
+        .filter(
+          ([, value]) =>
+            isRecord(value) && numberValue(readProperty(value, "count")) > 0,
+        )
+        .map(([key, value]) => [key, numberValue(readProperty(value, "count"))])
+    : [];
+  const tech = readProperty(root, "tech");
+  return JSON.stringify([
+    readProperty(readProperty(root, "stats"), "days"),
+    numberValue(readProperty(population, "amount")),
+    isRecord(tech)
+      ? Object.entries(tech).sort(([a], [b]) => a.localeCompare(b))
+      : [],
+    buildings,
+  ]);
+}
+
+function hasIncompatibleChallenge(root: unknown): boolean {
+  const race = readProperty(root, "race");
+  const stats = readProperty(root, "stats");
+  return (
+    (isRecord(race) &&
+      Object.entries(race).some(
+        ([key, value]) =>
+          value === true &&
+          /(challenge|cataclysm|junker|sludge|banana|truepath|survivor|fasting|inflation|decay|steelen|trade|craft)/i.test(
+            key,
+          ),
+      )) ||
+    (isRecord(stats) &&
+      Object.entries(stats).some(
+        ([key, value]) =>
+          /(cataclysm|blackhole|ascend|descend|apotheosis|terraform|matrix|retire|eden|zappoc|subjug)/i.test(
+            key,
+          ) &&
+          typeof value === "number" &&
+          value > 0,
+      ))
+  );
+}
+
 export function createCapturedGatherResourcesAdapter({
   rootState,
   controls,
@@ -383,6 +447,14 @@ export function createCapturedGatherResourcesAdapter({
       ) {
         const intervention = readTestIntervention?.();
         testIntervention = intervention;
+        let testBootstrap: TestCivilizationBootstrap | undefined;
+        let testOnlyBootstrapTarget: GatherResourcesInput["testOnlyBootstrapTarget"];
+        const authorization = readProperty(
+          testIntervention,
+          "civilizationBootstrap",
+        );
+        const storedBootstrapState = readProperty(authorization, "state") as
+          TestCivilizationBootstrap | undefined;
         const target = readTestStandardResearchTarget(
           readProperty(intervention, "standardResearchTarget"),
         );
@@ -437,7 +509,18 @@ export function createCapturedGatherResourcesAdapter({
           constructionTarget,
           "isCurrent",
         );
-        const constructionControl = controls.resolve("city-compost");
+        const remainingHandoffClicks =
+          storedBootstrapState !== undefined &&
+          (storedBootstrapState.phase === "active" ||
+            storedBootstrapState.phase === "handoff")
+            ? storedBootstrapState.handoffLimit -
+              storedBootstrapState.handoffClicks
+            : constructionActionId === "city-compost"
+              ? 5
+              : 0;
+        const constructionControl = controls.resolve(
+          typeof constructionActionId === "string" ? constructionActionId : "",
+        );
         const constructionResourceControlGenerations: Partial<
           Record<GatherActionId, number>
         > = {};
@@ -456,7 +539,11 @@ export function createCapturedGatherResourcesAdapter({
           }
         }
         if (
-          constructionActionId === "city-compost" &&
+          typeof constructionActionId === "string" &&
+          constructionActionId.startsWith("city-") &&
+          (storedBootstrapState !== undefined ||
+            constructionActionId === "city-compost") &&
+          remainingHandoffClicks > 0 &&
           isRecord(constructionCost) &&
           Object.entries(constructionCost).every(
             ([resourceId, price]) =>
@@ -479,11 +566,14 @@ export function createCapturedGatherResourcesAdapter({
           constructionIsCurrent()
         ) {
           const validatedStandardConstructionTarget = Object.freeze({
-            actionId: "city-compost" as const,
+            actionId: constructionActionId,
             cost: Object.freeze({
               ...(constructionCost as Record<string, number>),
             }),
-            resourceClickBudget: constructionClickBudget,
+            resourceClickBudget: Math.min(
+              constructionClickBudget,
+              remainingHandoffClicks,
+            ),
             controlGeneration: constructionGeneration,
             resourceControlGenerations: Object.freeze(
               constructionResourceControlGenerations,
@@ -494,6 +584,204 @@ export function createCapturedGatherResourcesAdapter({
             ...(isRecord(intervention) ? intervention : {}),
             validatedStandardConstructionTarget,
           });
+        }
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        ) {
+          const authorizationId = readProperty(
+            authorization,
+            "authorizationId",
+          );
+          const authorizationRootGeneration = readProperty(
+            testIntervention,
+            "rootGeneration",
+          );
+          const explicitlyAuthorized =
+            readProperty(authorization, "authorized") === true &&
+            typeof authorizationId === "string" &&
+            authorizationId.length > 0;
+          if (explicitlyAuthorized) {
+            if (
+              storedBootstrapState !== undefined &&
+              storedBootstrapState.authorizationId === authorizationId &&
+              storedBootstrapState.root !== root
+            )
+              storedBootstrapState.phase = "suspended";
+            if (
+              storedBootstrapState === undefined ||
+              storedBootstrapState.authorizationId !== authorizationId
+            ) {
+              const species = readProperty(race, "species");
+              const population =
+                typeof species === "string"
+                  ? readResource(
+                      root,
+                      species as GatherResourceId | "Population",
+                    ).currentQuantity
+                  : Number.NaN;
+              const buildings = readProperty(root, "city");
+              const hasBuildings =
+                isRecord(buildings) &&
+                Object.values(buildings).some(
+                  (building) =>
+                    isRecord(building) && numberValue(building["count"]) > 0,
+                );
+              if (
+                root !== undefined &&
+                typeof species === "string" &&
+                isRecord(readProperty(root, "resource")) &&
+                stopped &&
+                !hasIncompatibleChallenge(root) &&
+                population <= 0 &&
+                !hasBuildings &&
+                ["queue", "r_queue"].every((queueId) => {
+                  const entries = readProperty(
+                    readProperty(root, queueId),
+                    "queue",
+                  );
+                  return Array.isArray(entries) && entries.length === 0;
+                }) &&
+                readProperty(testIntervention, "resourceClaim") === undefined &&
+                (!Array.isArray(
+                  readProperty(testIntervention, "resourceClaims"),
+                ) ||
+                  (
+                    readProperty(
+                      testIntervention,
+                      "resourceClaims",
+                    ) as unknown[]
+                  ).length === 0)
+              ) {
+                const state: TestCivilizationBootstrap = {
+                  root,
+                  rootGeneration:
+                    typeof authorizationRootGeneration === "number" &&
+                    Number.isSafeInteger(authorizationRootGeneration)
+                      ? authorizationRootGeneration
+                      : undefined,
+                  authorizationId,
+                  baselineProgress: civilizationProgress(root),
+                  isCurrent: () => {
+                    const current = readTestIntervention?.();
+                    const currentAuthorization = readProperty(
+                      current,
+                      "civilizationBootstrap",
+                    );
+                    return (
+                      (state.phase === "active" || state.phase === "handoff") &&
+                      rootState.readRoot() === root &&
+                      (state.rootGeneration === undefined ||
+                        readProperty(current, "rootGeneration") ===
+                          state.rootGeneration) &&
+                      readProperty(currentAuthorization, "authorized") ===
+                        true &&
+                      readProperty(currentAuthorization, "authorizationId") ===
+                        authorizationId
+                    );
+                  },
+                  usedClicks: 0,
+                  handoffClicks: 0,
+                  handoffLimit: 10,
+                  phase: "active",
+                };
+                Reflect.set(authorization as object, "state", state);
+              } else {
+                Reflect.set(authorization as object, "state", {
+                  root,
+                  rootGeneration: undefined,
+                  authorizationId,
+                  baselineProgress: "",
+                  isCurrent: () => false,
+                  usedClicks: 0,
+                  handoffClicks: 0,
+                  handoffLimit: 0,
+                  phase: "suspended",
+                });
+              }
+            }
+            const state = readProperty(authorization, "state") as
+              TestCivilizationBootstrap | undefined;
+            if (
+              state !== undefined &&
+              state.authorizationId === authorizationId &&
+              state.phase === "active"
+            ) {
+              if (
+                root !== state.root ||
+                (state.rootGeneration !== undefined &&
+                  authorizationRootGeneration !== state.rootGeneration)
+              ) {
+                state.phase = "suspended";
+              } else if (
+                civilizationProgress(root) !== state.baselineProgress
+              ) {
+                state.phase = "handoff";
+              } else if (
+                (foodConjuring && resources.Mana.currentQuantity >= 1) ||
+                (materialConjuring && resources.Mana.currentQuantity >= 1)
+              ) {
+                state.phase = "suspended";
+              } else {
+                const candidates = (["Food", "Lumber", "Stone"] as const)
+                  .map((resourceId) => ({
+                    resourceId,
+                    resource: resources[resourceId],
+                    actionId:
+                      resourceId === "Food"
+                        ? ("food" as const)
+                        : resourceId === "Lumber"
+                          ? ("lumber" as const)
+                          : ("stone" as const),
+                  }))
+                  .filter(
+                    (candidate) =>
+                      controlsByAction[candidate.actionId] !== undefined &&
+                      candidate.resource.maxQuantity > 0 &&
+                      candidate.resource.currentQuantity <
+                        candidate.resource.maxQuantity * 0.05 &&
+                      !(
+                        candidate.resourceId === "Food" &&
+                        readProperty(race, "fasting")
+                      ),
+                  )
+                  .sort(
+                    (left, right) =>
+                      left.resource.currentQuantity /
+                        left.resource.maxQuantity -
+                      right.resource.currentQuantity /
+                        right.resource.maxQuantity,
+                  );
+                const selected = candidates[0];
+                const remaining = 10 - state.usedClicks;
+                if (selected === undefined || remaining <= 0) {
+                  state.phase = "handoff";
+                } else {
+                  testOnlyBootstrapTarget = Object.freeze({
+                    resourceId: selected.resourceId,
+                    quantity: selected.resource.maxQuantity * 0.05,
+                    clickBudget: Math.min(remaining, 10),
+                  });
+                  testBootstrap = state;
+                }
+              }
+            }
+            if (state !== undefined && state.phase === "handoff")
+              testBootstrap = state;
+          }
+          if (isRecord(testIntervention))
+            testIntervention = Object.freeze({
+              ...testIntervention,
+              ...(testOnlyBootstrapTarget === undefined
+                ? {}
+                : {
+                    validatedCivilizationBootstrapTarget:
+                      testOnlyBootstrapTarget,
+                  }),
+              ...(testBootstrap === undefined
+                ? {}
+                : { validatedCivilizationBootstrapState: testBootstrap }),
+            });
         }
         const claim = readAdmittedResourceClaim(
           readProperty(intervention, "resourceClaim"),
@@ -629,6 +917,19 @@ export function createCapturedGatherResourcesAdapter({
         ...(resourceClaimLedger === undefined ? {} : { resourceClaimLedger }),
         ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
+        readProperty(
+          testIntervention,
+          "validatedCivilizationBootstrapTarget",
+        ) !== undefined
+          ? {
+              testOnlyBootstrapTarget: readProperty(
+                testIntervention,
+                "validatedCivilizationBootstrapTarget",
+              ) as NonNullable<GatherResourcesInput["testOnlyBootstrapTarget"]>,
+            }
+          : {}),
+        ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
         (testStandardResearchTarget !== undefined ||
           (readProperty(
             testIntervention,
@@ -659,6 +960,7 @@ export function createCapturedGatherResourcesAdapter({
                                 "validatedStandardConstructionTarget",
                               ) as TestStandardConstructionTarget | undefined)!
                                 .resourceClickBudget,
+                              preserveMana: true,
                             }),
                           }),
                       ...((readProperty(
@@ -679,6 +981,7 @@ export function createCapturedGatherResourcesAdapter({
                                 "validatedStandardConstructionTarget",
                               ) as TestStandardConstructionTarget | undefined)!
                                 .resourceClickBudget,
+                              preserveMana: true,
                             }),
                           }),
                     }),
@@ -752,6 +1055,19 @@ export function createCapturedGatherResourcesAdapter({
                 testIntervention,
                 "validatedStandardConstructionTarget",
               ) as TestStandardConstructionTarget | undefined)!,
+            }
+          : {}),
+        ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        readProperty(
+          testIntervention,
+          "validatedCivilizationBootstrapState",
+        ) !== undefined
+          ? {
+              testBootstrap: readProperty(
+                testIntervention,
+                "validatedCivilizationBootstrapState",
+              ) as TestCivilizationBootstrap,
             }
           : {}),
       });
@@ -879,6 +1195,17 @@ export function createCapturedGatherResourcesAdapter({
               "gather-construction-target-stale",
               "current Compost saving target or Gather control changed",
             );
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true &&
+            operation.bootstrap === true &&
+            (active.testBootstrap === undefined ||
+              !active.testBootstrap.isCurrent())
+          )
+            return stale(
+              "gather-bootstrap-stale",
+              "explicit bootstrap authorization or native root changed",
+            );
           for (let index = 0; index < operation.amount; index += 1) {
             const beforeClickRoot = rootState.readRoot();
             if (beforeClickRoot !== active.root) {
@@ -887,6 +1214,17 @@ export function createCapturedGatherResourcesAdapter({
                 `captured game root changed before ${operation.actionId}`,
               );
             }
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              operation.bootstrap === true &&
+              (active.testBootstrap === undefined ||
+                !active.testBootstrap.isCurrent())
+            )
+              return stale(
+                "gather-bootstrap-stale",
+                "explicit bootstrap authorization or native root changed",
+              );
             const manaBefore = readResource(
               beforeClickRoot,
               "Mana",
@@ -947,6 +1285,51 @@ export function createCapturedGatherResourcesAdapter({
                     "gather-click-failed",
                     result.detail ?? result.reason,
                   );
+            }
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              operation.bootstrap === true &&
+              active.testBootstrap !== undefined
+            ) {
+              active.testBootstrap.usedClicks += 1;
+              if (active.testBootstrap.usedClicks >= 10)
+                active.testBootstrap.phase = "handoff";
+              const observer = readProperty(
+                active.testIntervention,
+                "civilizationBootstrapObserver",
+              );
+              if (typeof observer === "function")
+                observer(
+                  Object.freeze({
+                    authorizationId: active.testBootstrap.authorizationId,
+                    usedClicks: active.testBootstrap.usedClicks,
+                    phase: active.testBootstrap.phase,
+                    actionId: operation.actionId,
+                  }),
+                );
+            }
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              active.testStandardConstructionTarget !== undefined &&
+              active.testBootstrap !== undefined
+            ) {
+              active.testBootstrap.handoffClicks += 1;
+              const observer = readProperty(
+                active.testIntervention,
+                "civilizationHandoffObserver",
+              );
+              if (typeof observer === "function")
+                observer(
+                  Object.freeze({
+                    authorizationId: active.testBootstrap.authorizationId,
+                    usedClicks: active.testBootstrap.handoffClicks,
+                    limit: active.testBootstrap.handoffLimit,
+                    target: active.testStandardConstructionTarget.actionId,
+                    actionId: operation.actionId,
+                  }),
+                );
             }
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&

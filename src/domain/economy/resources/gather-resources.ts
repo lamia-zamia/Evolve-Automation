@@ -32,8 +32,21 @@ export interface GatherResourcesInput {
   }>;
   /** Explicit test-surface material shortages for one current native Research offer. */
   readonly testOnlyMaterialTarget?: Readonly<{
-    readonly Lumber?: Readonly<{ quantity: number; clickBudget: number }>;
-    readonly Stone?: Readonly<{ quantity: number; clickBudget: number }>;
+    readonly Lumber?: Readonly<{
+      quantity: number;
+      clickBudget: number;
+      preserveMana?: boolean;
+    }>;
+    readonly Stone?: Readonly<{
+      quantity: number;
+      clickBudget: number;
+      preserveMana?: boolean;
+    }>;
+  }>;
+  readonly testOnlyBootstrapTarget?: Readonly<{
+    readonly resourceId: "Food" | "Lumber" | "Stone";
+    readonly quantity: number;
+    readonly clickBudget: number;
   }>;
   readonly clickable: Readonly<Record<GatherActionId, boolean>>;
   readonly resources: Readonly<Record<GatherResourceId, GatherResourceInput>>;
@@ -49,6 +62,7 @@ export interface GatherOperation {
   readonly actionId: GatherActionId;
   /** Preserves the legacy `for (let i = 0; i < amount; i++)` bound. */
   readonly amount: number;
+  readonly bootstrap?: boolean;
   readonly beforeAction: readonly GatherResourceAssignment[];
   readonly afterAction: readonly GatherResourceAssignment[];
 }
@@ -219,6 +233,70 @@ export function planGatherResources(
     typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true &&
     input.stopped &&
+    input.testOnlyBootstrapTarget !== undefined
+  ) {
+    const bootstrapTarget = input.testOnlyBootstrapTarget;
+    const actionId =
+      bootstrapTarget.resourceId === "Food"
+        ? "food"
+        : bootstrapTarget.resourceId === "Lumber"
+          ? "lumber"
+          : "stone";
+    const resource = input.resources[bootstrapTarget.resourceId];
+    const conjuring =
+      actionId === "food" ? input.foodConjuring : input.materialConjuring;
+    if (
+      input.clickable[actionId] &&
+      !(actionId === "food" && input.fasting) &&
+      !(conjuring && quantities.Mana >= 1) &&
+      Number.isFinite(bootstrapTarget.quantity) &&
+      bootstrapTarget.quantity > 0 &&
+      bootstrapTarget.quantity <= resource.maxQuantity &&
+      Number.isSafeInteger(bootstrapTarget.clickBudget) &&
+      bootstrapTarget.clickBudget > 0
+    ) {
+      const current = quantities[bootstrapTarget.resourceId];
+      const amount = Math.min(
+        Math.ceil(
+          Math.max(0, bootstrapTarget.quantity - current) /
+            input.resourcesPerClick,
+        ),
+        bootstrapTarget.clickBudget,
+        input.clickLimit,
+      );
+      if (amount > 0) {
+        operations.push(
+          Object.freeze({
+            actionId,
+            amount,
+            bootstrap: true,
+            beforeAction: Object.freeze([
+              Object.freeze({
+                resourceId: bootstrapTarget.resourceId,
+                expectedQuantity: current,
+                quantity: current,
+              }),
+            ]),
+            afterAction: Object.freeze([
+              Object.freeze({
+                resourceId: bootstrapTarget.resourceId,
+                expectedQuantity: current,
+                quantity: Math.min(
+                  current + amount * input.resourcesPerClick,
+                  resource.maxQuantity,
+                ),
+              }),
+            ]),
+          }),
+        );
+      }
+    }
+  }
+
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    input.stopped &&
     input.clickable.stone
   ) {
     const testStoneTarget = input.testOnlyStoneTarget;
@@ -271,6 +349,13 @@ export function planGatherResources(
     input.stopped &&
     input.testOnlyMaterialTarget !== undefined
   ) {
+    const constructionBudgets = Object.values(input.testOnlyMaterialTarget)
+      .filter((target) => target?.preserveMana === true)
+      .map((target) => target?.clickBudget ?? 0);
+    let remainingConstructionClickBudget =
+      constructionBudgets.length === 0
+        ? Infinity
+        : Math.min(...constructionBudgets);
     for (const resourceId of ["Lumber", "Stone"] as const) {
       const target = input.testOnlyMaterialTarget[resourceId];
       const actionId = resourceId === "Lumber" ? "lumber" : "stone";
@@ -291,9 +376,15 @@ export function planGatherResources(
         ),
         target.clickBudget,
         input.clickLimit,
+        target.preserveMana === true
+          ? remainingConstructionClickBudget
+          : Infinity,
       );
       if (clickLimit <= 0) continue;
-      const conjuring = input.materialConjuring && quantities.Mana >= 1;
+      const conjuring =
+        input.materialConjuring &&
+        quantities.Mana >= 1 &&
+        target.preserveMana !== true;
       if (
         conjuring &&
         input.resourceClaimLedger !== undefined &&
@@ -324,6 +415,11 @@ export function planGatherResources(
             );
       const amount = conjuredClicks + ordinaryClicks;
       if (amount <= 0) continue;
+      if (target.preserveMana === true)
+        remainingConstructionClickBudget = Math.max(
+          0,
+          remainingConstructionClickBudget - amount,
+        );
       quantities.Mana = manaAfterConjuring;
       if (input.resourceClaimLedger !== undefined)
         remainingClaimSpend = Math.max(0, remainingClaimSpend - conjuredClicks);

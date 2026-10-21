@@ -2482,6 +2482,140 @@ export function startCapturedRuntime({
               }
             }
             if (
+              readProperty(gatherTestHooks, "constructionHandoffEnabled") ===
+                true &&
+              readProperty(
+                readProperty(gatherTestHooks, "civilizationBootstrap"),
+                "authorized",
+              ) === true
+            ) {
+              const handoffRoot = pageCapture.rootState.readRoot();
+              const handoffRootGeneration = progression.readRootGeneration();
+              const handoffProgressionGeneration =
+                progression.readProgressionEpoch();
+              const savingTarget = readDemand("pre-Gather").savingTarget;
+              const actionId = savingTarget?.name;
+              const nativeCost =
+                typeof actionId === "string" && actionId.startsWith("city-")
+                  ? buildCosts.readCost(actionId)?.cost
+                  : undefined;
+              const targetControl =
+                typeof actionId === "string"
+                  ? pageCapture.controls.resolve(actionId)
+                  : undefined;
+              const costIdentity = (cost: unknown) =>
+                isRecord(cost)
+                  ? JSON.stringify(
+                      Object.entries(cost).sort(([left], [right]) =>
+                        left.localeCompare(right),
+                      ),
+                    )
+                  : undefined;
+              const nativeCostIdentity = costIdentity(nativeCost);
+              const savingCostIdentity = costIdentity(savingTarget?.cost);
+              const queueEmpty = (queueId: "queue" | "r_queue") => {
+                const entries = readProperty(
+                  readProperty(handoffRoot, queueId),
+                  "queue",
+                );
+                return Array.isArray(entries) && entries.length === 0;
+              };
+              const noClaims = () => {
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                const intervention = readProperty(hooks, "gatherIntervention");
+                const claims = readProperty(intervention, "resourceClaims");
+                return (
+                  (!Array.isArray(claims) || claims.length === 0) &&
+                  readProperty(intervention, "resourceClaim") === undefined
+                );
+              };
+              const otherCostsAffordable =
+                isRecord(nativeCost) &&
+                Object.entries(nativeCost).every(([resourceId, price]) =>
+                  resourceId === "Lumber" || resourceId === "Stone"
+                    ? true
+                    : typeof price === "number" &&
+                      Number(
+                        readProperty(
+                          readProperty(
+                            readProperty(handoffRoot, "resource"),
+                            resourceId,
+                          ),
+                          "amount",
+                        ),
+                      ) >= price,
+                );
+              const targetIsCurrent = () => {
+                try {
+                  const currentTarget = readDemand("pre-Gather").savingTarget;
+                  const currentPrice =
+                    typeof actionId === "string"
+                      ? buildCosts.readCost(actionId)?.cost
+                      : undefined;
+                  const currentControl =
+                    typeof actionId === "string"
+                      ? pageCapture.controls.resolve(actionId)
+                      : undefined;
+                  return (
+                    pageCapture.rootState.readRoot() === handoffRoot &&
+                    progression.readRootGeneration() ===
+                      handoffRootGeneration &&
+                    progression.readProgressionEpoch() ===
+                      handoffProgressionGeneration &&
+                    currentTarget !== null &&
+                    currentTarget.name === actionId &&
+                    costIdentity(currentTarget.cost) === savingCostIdentity &&
+                    costIdentity(currentPrice) === nativeCostIdentity &&
+                    currentControl?.methods.includes("action") === true &&
+                    currentControl.generation === targetControl?.generation &&
+                    queueEmpty("queue") &&
+                    queueEmpty("r_queue") &&
+                    readProperty(settingsStore.readRaw(), "autoBuild") ===
+                      true &&
+                    noClaims()
+                  );
+                } catch {
+                  return false;
+                }
+              };
+              const resourceControls = ["city-lumber", "undefined-stone"]
+                .map((id) => pageCapture.controls.resolve(id))
+                .filter(
+                  (control) => control?.methods.includes("action") === true,
+                );
+              if (
+                handoffRoot !== undefined &&
+                typeof actionId === "string" &&
+                nativeCostIdentity !== undefined &&
+                nativeCostIdentity === savingCostIdentity &&
+                Object.entries(nativeCost ?? {}).some(
+                  ([resourceId, price]) =>
+                    (resourceId === "Lumber" || resourceId === "Stone") &&
+                    typeof price === "number" &&
+                    price > 0,
+                ) &&
+                otherCostsAffordable &&
+                targetControl?.methods.includes("action") === true &&
+                resourceControls.length > 0 &&
+                progression.observations.hasCompletedOrdering() &&
+                queueEmpty("queue") &&
+                queueEmpty("r_queue") &&
+                readProperty(settingsStore.readRaw(), "autoBuild") === true &&
+                noClaims() &&
+                targetIsCurrent()
+              )
+                standardConstructionTarget = Object.freeze({
+                  actionId,
+                  cost: Object.freeze({ ...nativeCost }),
+                  resourceClickBudget: 5,
+                  controlGeneration: targetControl.generation,
+                  isCurrent: targetIsCurrent,
+                });
+            }
+            if (
               readProperty(gatherTestHooks, "standardCompostTargetEnabled") ===
                 true &&
               Number(
@@ -2891,6 +3025,7 @@ export function startCapturedRuntime({
                 : Object.freeze([]);
             return Object.freeze({
               ...gatherTestHooks,
+              rootGeneration: progression.readRootGeneration(),
               ...(standardResearchTarget === undefined
                 ? {}
                 : { standardResearchTarget }),
