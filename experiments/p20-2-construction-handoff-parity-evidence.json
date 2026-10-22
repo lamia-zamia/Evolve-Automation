@@ -1,0 +1,5047 @@
+{
+  "experiment": "P20.2 same-bundle P19 parity and Construction attribution",
+  "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "seed": 44,
+  "epoch": "2026-09-21T00:00:00.000Z",
+  "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+  "settingsSha256": "4badd36cc3e3cad887d09f9710a23599e8f890f53eae286736141b91c8f92e32",
+  "testSurfaceBundleSha256": "f8f9e4ecf55e4a0e00f4d1930531e9019451c709727988e9e4ea3b09865098ec",
+  "productionBundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+  "sourceAggregateSha256": "3ef1e60ad405507b5ef2818e3dfd56fde707b12b250d6e8a8c34fb13d12e77bd",
+  "checkpoints": [8, 64, 72, 80, 112, 272, 1000, 5000],
+  "arms": {
+    "A": {
+      "name": "A-p19-bootstrap-handoff",
+      "checkpoints": [
+        {
+          "period": 8,
+          "workCycles": 1,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 10,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {},
+          "foodConsumption": {},
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 20
+            }
+          ],
+          "rngCalls": 0,
+          "rngState": 44
+        },
+        {
+          "period": 64,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 87,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 5,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 2,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 30
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 72,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 80,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 6,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {
+            "farm": 1
+          },
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 16,
+          "rngState": 98529148
+        },
+        {
+          "period": 112,
+          "workCycles": 8,
+          "population": 2,
+          "resourceStocks": {
+            "Food": {
+              "amount": 43.65010000000001,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 30,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1
+          },
+          "jobs": {
+            "farmer": 2
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 2
+          },
+          "foodProduction": {
+            "Farmer": "2.7479999999999998v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -2
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            }
+          ],
+          "rngCalls": 22,
+          "rngState": 1315008290
+        },
+        {
+          "period": 272,
+          "workCycles": 8,
+          "population": 3,
+          "resourceStocks": {
+            "Food": {
+              "amount": 73.87967200000016,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 24.000000000000036,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 1.5709999999999447,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1
+          },
+          "jobs": {
+            "farmer": 3
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 3
+          },
+          "foodProduction": {
+            "Farmer": "3.7319999999999998v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -3
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 57,
+          "rngState": 3806287827
+        },
+        {
+          "period": 1000,
+          "workCycles": 8,
+          "population": 3,
+          "resourceStocks": {
+            "Food": {
+              "amount": 257.81404000000134,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 242.40000000000347,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 17.89499999999979,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1
+          },
+          "jobs": {
+            "farmer": 3
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 3
+          },
+          "foodProduction": {
+            "Farmer": "4.331999999999999v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -3
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 188,
+          "rngState": 1359058232
+        },
+        {
+          "period": 5000,
+          "workCycles": 8,
+          "population": 3,
+          "resourceStocks": {
+            "Food": {
+              "amount": 1000,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 1000,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 100,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 3,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "jobs": {
+            "farmer": 3
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 3
+          },
+          "foodProduction": {
+            "Farmer": "4.331999999999999v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -3
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-garrison",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-silo",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-banking",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 949,
+          "rngState": 4275315887
+        }
+      ],
+      "bootstrapEvents": [
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "phase": "handoff",
+          "actionId": "stone"
+        }
+      ],
+      "handoffEvents": [
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        }
+      ],
+      "allocationEvents": [],
+      "allocationClicks": [],
+      "allocationGateRejections": [],
+      "researchActions": [
+        {
+          "period": 16,
+          "elementId": "tech-sundial",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 56,
+          "elementId": "tech-agriculture",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "tech-housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 192,
+          "elementId": "tech-currency",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 272,
+          "elementId": "tech-storage",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 456,
+          "elementId": "tech-mining",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 672,
+          "elementId": "tech-irrigation",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 936,
+          "elementId": "tech-science",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1216,
+          "elementId": "tech-garrison",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1536,
+          "elementId": "tech-silo",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1896,
+          "elementId": "tech-banking",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "constructionActions": [
+        {
+          "period": 72,
+          "elementId": "city-farm",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 104,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 112,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "gatherCalls": {
+        "undefined-stone.action": {
+          "returned": 20,
+          "threw": 0
+        }
+      },
+      "controlCallCounts": {
+        "#mainColumn div.content.swapTab": 638,
+        "undefined-stone.action": 20,
+        "civ-unemployed.setDefault": 8,
+        "tech-sundial.action": 1,
+        "tech-agriculture.action": 1,
+        "buildQueue.setData": 16141,
+        "city-farm.action": 1,
+        "civ-farmer.setDefault": 617,
+        "tech-housing.action": 1,
+        "city-basic_housing.action": 3,
+        "tech-currency.action": 1,
+        "tech-storage.action": 1,
+        "tech-mining.action": 1,
+        "tech-irrigation.action": 1,
+        "tech-science.action": 1,
+        "tech-garrison.action": 1,
+        "city-garrison.on_cap": 3799,
+        "tech-silo.action": 1,
+        "tech-banking.action": 1
+      },
+      "totalNativeCalls": 21238,
+      "nativeFailures": [],
+      "staleOrThrewControls": {},
+      "rngCalls": 949,
+      "rngState": 4275315887,
+      "exportedSaveSha256": "f10aaf6e4e621fe0d1de976a8c2c347ac0daa2893040c57a6f9c631c9c3a5de9"
+    },
+    "B": {
+      "name": "B-p19-plus-construction-observer",
+      "checkpoints": [
+        {
+          "period": 8,
+          "workCycles": 1,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 10,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {},
+          "foodConsumption": {},
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 20
+            }
+          ],
+          "rngCalls": 0,
+          "rngState": 44
+        },
+        {
+          "period": 64,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 87,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 5,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 2,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 30
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 72,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 80,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 6,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {
+            "farm": 1
+          },
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 16,
+          "rngState": 98529148
+        },
+        {
+          "period": 112,
+          "workCycles": 8,
+          "population": 2,
+          "resourceStocks": {
+            "Food": {
+              "amount": 43.65010000000001,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 30,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1
+          },
+          "jobs": {
+            "farmer": 2
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 2
+          },
+          "foodProduction": {
+            "Farmer": "2.7479999999999998v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -2
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            }
+          ],
+          "rngCalls": 22,
+          "rngState": 1315008290
+        },
+        {
+          "period": 272,
+          "workCycles": 8,
+          "population": 3,
+          "resourceStocks": {
+            "Food": {
+              "amount": 73.87967200000016,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 24.000000000000036,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 1.5709999999999447,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1
+          },
+          "jobs": {
+            "farmer": 3
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 3
+          },
+          "foodProduction": {
+            "Farmer": "3.7319999999999998v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -3
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 57,
+          "rngState": 3806287827
+        },
+        {
+          "period": 1000,
+          "workCycles": 8,
+          "population": 3,
+          "resourceStocks": {
+            "Food": {
+              "amount": 257.81404000000134,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 242.40000000000347,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 17.89499999999979,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1
+          },
+          "jobs": {
+            "farmer": 3
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 3
+          },
+          "foodProduction": {
+            "Farmer": "4.331999999999999v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -3
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 188,
+          "rngState": 1359058232
+        },
+        {
+          "period": 5000,
+          "workCycles": 8,
+          "population": 3,
+          "resourceStocks": {
+            "Food": {
+              "amount": 1000,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 1000,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 100,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 3,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "jobs": {
+            "farmer": 3
+          },
+          "buildings": {
+            "farm": 1,
+            "basic_housing": 3
+          },
+          "foodProduction": {
+            "Farmer": "4.331999999999999v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -3
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 6
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-garrison",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-silo",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-banking",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 949,
+          "rngState": 4275315887
+        }
+      ],
+      "bootstrapEvents": [
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "phase": "handoff",
+          "actionId": "stone"
+        }
+      ],
+      "handoffEvents": [
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        }
+      ],
+      "allocationEvents": [
+        {
+          "period": 80,
+          "phase": "authorization-disabled",
+          "targetId": "city-farm",
+          "workCycleId": 10
+        }
+      ],
+      "allocationClicks": [],
+      "allocationGateRejections": [
+        {
+          "period": 8,
+          "workCycleId": 1,
+          "reason": "publication-missing-or-invalid-epoch"
+        },
+        {
+          "period": 8,
+          "workCycleId": 1,
+          "reason": "civilization-handoff-pending"
+        },
+        {
+          "period": 64,
+          "targetId": "city-farm",
+          "workCycleId": 8,
+          "reason": "civilization-handoff-pending"
+        },
+        {
+          "period": 80,
+          "targetId": "city-farm",
+          "workCycleId": 10,
+          "reason": "budget-or-policy-denial"
+        },
+        {
+          "period": 280,
+          "targetId": "city-shed",
+          "workCycleId": 35,
+          "reason": "non-material-affordability"
+        },
+        {
+          "period": 448,
+          "targetId": "city-shed",
+          "workCycleId": 56,
+          "reason": "budget-or-policy-denial"
+        }
+      ],
+      "researchActions": [
+        {
+          "period": 16,
+          "elementId": "tech-sundial",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 56,
+          "elementId": "tech-agriculture",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "tech-housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 192,
+          "elementId": "tech-currency",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 272,
+          "elementId": "tech-storage",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 456,
+          "elementId": "tech-mining",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 672,
+          "elementId": "tech-irrigation",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 936,
+          "elementId": "tech-science",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1216,
+          "elementId": "tech-garrison",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1536,
+          "elementId": "tech-silo",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1896,
+          "elementId": "tech-banking",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "constructionActions": [
+        {
+          "period": 72,
+          "elementId": "city-farm",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 104,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 112,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "gatherCalls": {
+        "undefined-stone.action": {
+          "returned": 20,
+          "threw": 0
+        }
+      },
+      "controlCallCounts": {
+        "#mainColumn div.content.swapTab": 638,
+        "undefined-stone.action": 20,
+        "civ-unemployed.setDefault": 8,
+        "tech-sundial.action": 1,
+        "tech-agriculture.action": 1,
+        "buildQueue.setData": 18571,
+        "city-farm.action": 1,
+        "civ-farmer.setDefault": 617,
+        "tech-housing.action": 1,
+        "city-basic_housing.action": 3,
+        "tech-currency.action": 1,
+        "tech-storage.action": 1,
+        "tech-mining.action": 1,
+        "tech-irrigation.action": 1,
+        "tech-science.action": 1,
+        "tech-garrison.action": 1,
+        "city-garrison.on_cap": 3799,
+        "tech-silo.action": 1,
+        "tech-banking.action": 1
+      },
+      "totalNativeCalls": 23668,
+      "nativeFailures": [],
+      "staleOrThrewControls": {},
+      "rngCalls": 949,
+      "rngState": 4275315887,
+      "exportedSaveSha256": "f10aaf6e4e621fe0d1de976a8c2c347ac0daa2893040c57a6f9c631c9c3a5de9"
+    },
+    "C": {
+      "name": "C-corrected-construction-allocation",
+      "checkpoints": [
+        {
+          "period": 8,
+          "workCycles": 1,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 10,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {},
+          "foodConsumption": {},
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 20
+            }
+          ],
+          "rngCalls": 0,
+          "rngState": 44
+        },
+        {
+          "period": 64,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 87,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 5,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 2,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 30
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 72,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 80,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 5,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 6,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {
+            "farm": 1
+          },
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 50
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 16,
+          "rngState": 98529148
+        },
+        {
+          "period": 112,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 43.52650000000004,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 30,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1
+          },
+          "foodProduction": {
+            "Farmer": "1.764v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 68
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 20,
+          "rngState": 2847693936
+        },
+        {
+          "period": 272,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 81.14250000000048,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 8.799999999999985,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 2,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1
+          },
+          "foodProduction": {
+            "Farmer": "1.764v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 68
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 44,
+          "rngState": 1308812392
+        },
+        {
+          "period": 1000,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 272.5040800000031,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 55,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 10,
+              "max": 200
+            },
+            "Money": {
+              "amount": 81.59999999999964,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 18.395000000000095,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1
+          },
+          "foodProduction": {
+            "Farmer": "2.3639999999999994v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 88
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-lumber",
+              "method": "action",
+              "count": 70
+            }
+          ],
+          "rngCalls": 175,
+          "rngState": 435784689
+        },
+        {
+          "period": 5000,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 1000,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 48,
+              "max": 500
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 500
+            },
+            "Money": {
+              "amount": 406.60000000002333,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 100,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 3,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1,
+            "shed": 1
+          },
+          "foodProduction": {
+            "Farmer": "2.3639999999999994v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 158
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-lumber",
+              "method": "action",
+              "count": 166
+            },
+            {
+              "elementId": "city-shed",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-garrison",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-silo",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-banking",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 936,
+          "rngState": 973489524
+        }
+      ],
+      "bootstrapEvents": [
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "phase": "handoff",
+          "actionId": "stone"
+        }
+      ],
+      "handoffEvents": [
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        }
+      ],
+      "allocationEvents": [
+        {
+          "period": 80,
+          "phase": "authorized",
+          "targetId": "city-farm",
+          "workCycleId": 10,
+          "phaseIdentity": "pre-Gather",
+          "publicationWorkCycleId": 9,
+          "publicationCurrent": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|3:4|4:0|27|human|standard|0|0|anarchy|0|0|0|0",
+          "controlGeneration": 1,
+          "price": {
+            "Lumber": 27,
+            "Stone": 14
+          },
+          "stock": {
+            "Lumber": 67,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "obtainableCapacity": {
+            "Lumber": 133,
+            "Stone": 200
+          },
+          "episodeLimit": 80,
+          "totalLimit": 140,
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 104,
+          "phase": "request-expired",
+          "targetId": "city-farm",
+          "reason": "native-request-changed-or-unactionable"
+        },
+        {
+          "period": 104,
+          "phase": "authorization-denied",
+          "targetId": "city-farm",
+          "reason": "same-target-already-authorized",
+          "requestPrice": {
+            "Lumber": 37,
+            "Stone": 18
+          },
+          "stock": {
+            "Lumber": 30,
+            "Stone": 0
+          },
+          "shortage": 25
+        },
+        {
+          "period": 936,
+          "phase": "authorized",
+          "targetId": "city-shed",
+          "workCycleId": 117,
+          "phaseIdentity": "pre-Gather",
+          "publicationWorkCycleId": 116,
+          "publicationCurrent": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "controlGeneration": 4,
+          "price": {
+            "Money": 75,
+            "Lumber": 55,
+            "Stone": 45
+          },
+          "stock": {
+            "Money": 75.2,
+            "Lumber": 20,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "obtainableCapacity": {
+            "Lumber": 180,
+            "Stone": 200
+          },
+          "episodeLimit": 80,
+          "totalLimit": 140,
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 1064,
+          "ownerId": "construction",
+          "targetId": "city-rock_quarry",
+          "publishedTargetId": "city-shed",
+          "requestMatchesPublication": false,
+          "currentSavingTargetId": "city-rock_quarry",
+          "currentSavingTargetMatchesPublication": false,
+          "priceAuthorityValid": false,
+          "requestPrice": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "publicationPrice": {
+            "Money": 92,
+            "Lumber": 73,
+            "Stone": 59
+          },
+          "currentSavingTargetPrice": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "capturedPublicationTargetId": "city-shed",
+          "capturedPublicationPrice": {
+            "Money": 92,
+            "Lumber": 73,
+            "Stone": 59
+          },
+          "nativePrice": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "requestPool": "anywhere",
+          "publicationPool": "anywhere",
+          "nativePool": "anywhere",
+          "workCycleId": 133,
+          "phase": "authority-disagreement",
+          "publicationWorkCycleId": 132,
+          "publicationAuthority": {
+            "workCycleId": 132,
+            "rootGeneration": 0,
+            "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+          },
+          "publicationCurrent": false,
+          "selectionReason": "native-current-saving-target",
+          "researchState": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1
+          },
+          "ownerState": {
+            "orderingComplete": true,
+            "autoBuild": true
+          },
+          "price": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "stock": {
+            "Lumber": 0,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "resourceAuthority": "native-gather-owner-controls",
+          "rootGeneration": 0,
+          "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "controlGeneration": 3,
+          "queuesEmpty": true,
+          "permissions": {
+            "autoBuild": true,
+            "controlAction": true
+          },
+          "competingClaims": false,
+          "materialShortage": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "obtainableCapacity": {
+            "Lumber": 500,
+            "Stone": 500
+          },
+          "gatherControlBindings": {
+            "Lumber": {
+              "elementId": "city-lumber",
+              "generation": 9
+            },
+            "Stone": {
+              "elementId": "undefined-stone",
+              "generation": 9
+            }
+          },
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 1064,
+          "phase": "request-expired",
+          "targetId": "city-shed",
+          "reason": "native-request-changed-or-unactionable"
+        },
+        {
+          "period": 1072,
+          "phase": "authorized",
+          "targetId": "city-rock_quarry",
+          "workCycleId": 134,
+          "phaseIdentity": "pre-Gather",
+          "publicationWorkCycleId": 133,
+          "publicationCurrent": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "controlGeneration": 3,
+          "price": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "stock": {
+            "Lumber": 0,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "obtainableCapacity": {
+            "Lumber": 500,
+            "Stone": 500
+          },
+          "episodeLimit": 80,
+          "totalLimit": 140,
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 1144,
+          "phase": "budget-exhausted",
+          "targetId": "city-rock_quarry",
+          "clicks": 48,
+          "totalClicks": 140
+        }
+      ],
+      "allocationClicks": [
+        {
+          "period": 80,
+          "targetId": "city-farm",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 88,
+          "targetId": "city-farm",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 96,
+          "targetId": "city-farm",
+          "resourceId": "Stone",
+          "clicks": 3
+        },
+        {
+          "period": 936,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 944,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 952,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 960,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 968,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 976,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 984,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 992,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1000,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1008,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1016,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1024,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1032,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1040,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1048,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1056,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 4
+        },
+        {
+          "period": 1072,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1080,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1088,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1096,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1104,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1112,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1120,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1128,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1136,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1144,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 3
+        }
+      ],
+      "allocationGateRejections": [
+        {
+          "period": 8,
+          "workCycleId": 1,
+          "reason": "publication-missing-or-invalid-epoch"
+        },
+        {
+          "period": 8,
+          "workCycleId": 1,
+          "reason": "civilization-handoff-pending"
+        },
+        {
+          "period": 64,
+          "targetId": "city-farm",
+          "workCycleId": 8,
+          "reason": "civilization-handoff-pending"
+        },
+        {
+          "period": 104,
+          "targetId": "city-farm",
+          "workCycleId": 13,
+          "reason": "budget-or-policy-denial"
+        },
+        {
+          "period": 272,
+          "targetId": "city-shed",
+          "workCycleId": 34,
+          "reason": "non-material-affordability"
+        },
+        {
+          "period": 1064,
+          "targetId": "city-rock_quarry",
+          "workCycleId": 133,
+          "reason": "publication-missing-or-invalid-epoch"
+        },
+        {
+          "period": 1152,
+          "targetId": "city-rock_quarry",
+          "workCycleId": 144,
+          "reason": "budget-or-policy-denial"
+        }
+      ],
+      "researchActions": [
+        {
+          "period": 16,
+          "elementId": "tech-sundial",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 56,
+          "elementId": "tech-agriculture",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "tech-housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 184,
+          "elementId": "tech-currency",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 264,
+          "elementId": "tech-storage",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 448,
+          "elementId": "tech-mining",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 672,
+          "elementId": "tech-irrigation",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 928,
+          "elementId": "tech-science",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1216,
+          "elementId": "tech-garrison",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1536,
+          "elementId": "tech-silo",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1896,
+          "elementId": "tech-banking",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "constructionActions": [
+        {
+          "period": 72,
+          "elementId": "city-farm",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "city-farm",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1056,
+          "elementId": "city-shed",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "gatherCalls": {
+        "undefined-stone.action": {
+          "returned": 79,
+          "threw": 0
+        },
+        "city-lumber.action": {
+          "returned": 83,
+          "threw": 0
+        }
+      },
+      "controlCallCounts": {
+        "#mainColumn div.content.swapTab": 638,
+        "undefined-stone.action": 79,
+        "civ-unemployed.setDefault": 8,
+        "tech-sundial.action": 1,
+        "tech-agriculture.action": 1,
+        "buildQueue.setData": 18383,
+        "city-farm.action": 2,
+        "civ-farmer.setDefault": 617,
+        "tech-housing.action": 1,
+        "city-basic_housing.action": 1,
+        "tech-currency.action": 1,
+        "tech-storage.action": 1,
+        "tech-mining.action": 1,
+        "tech-irrigation.action": 1,
+        "tech-science.action": 1,
+        "city-lumber.action": 83,
+        "city-shed.action": 1,
+        "tech-garrison.action": 1,
+        "city-garrison.on_cap": 3799,
+        "tech-silo.action": 1,
+        "tech-banking.action": 1
+      },
+      "totalNativeCalls": 23622,
+      "nativeFailures": [],
+      "staleOrThrewControls": {},
+      "rngCalls": 936,
+      "rngState": 973489524,
+      "exportedSaveSha256": "cbe45bfbd939ecbd099f72f2fc3ab914eed4a860f82e95708f5ad45427c02fbd"
+    },
+    "CRepeat": {
+      "name": "C-repeat-candidate-verification",
+      "checkpoints": [
+        {
+          "period": 8,
+          "workCycles": 1,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 95,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 10,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 0,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 2,
+            "wsc": 0
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {},
+          "foodConsumption": {},
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 20
+            }
+          ],
+          "rngCalls": 0,
+          "rngState": 44
+        },
+        {
+          "period": 64,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 87,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 5,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 2,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 30
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 72,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {},
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 40
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 9,
+          "rngState": 3827863715
+        },
+        {
+          "period": 80,
+          "workCycles": 8,
+          "population": 0,
+          "resourceStocks": {
+            "Food": {
+              "amount": 40,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 67,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 5,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 6,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1
+          },
+          "jobs": {},
+          "buildings": {
+            "farm": 1
+          },
+          "foodProduction": {
+            "Farmer": "0v",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": 0
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 50
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 16,
+          "rngState": 98529148
+        },
+        {
+          "period": 112,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 43.52650000000004,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 30,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 0,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 4,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1
+          },
+          "foodProduction": {
+            "Farmer": "1.764v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 68
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 20,
+          "rngState": 2847693936
+        },
+        {
+          "period": 272,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 81.14250000000048,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 20,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 200
+            },
+            "Money": {
+              "amount": 8.799999999999985,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 2,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 1,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1
+          },
+          "foodProduction": {
+            "Farmer": "1.764v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 68
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 44,
+          "rngState": 1308812392
+        },
+        {
+          "period": 1000,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 272.5040800000031,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 55,
+              "max": 200
+            },
+            "Stone": {
+              "amount": 10,
+              "max": 200
+            },
+            "Money": {
+              "amount": 81.59999999999964,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 18.395000000000095,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1
+          },
+          "foodProduction": {
+            "Farmer": "2.3639999999999994v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "10.000000000000009%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 88
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-lumber",
+              "method": "action",
+              "count": 70
+            }
+          ],
+          "rngCalls": 175,
+          "rngState": 435784689
+        },
+        {
+          "period": 5000,
+          "workCycles": 8,
+          "population": 1,
+          "resourceStocks": {
+            "Food": {
+              "amount": 1000,
+              "max": 1000
+            },
+            "Lumber": {
+              "amount": 48,
+              "max": 500
+            },
+            "Stone": {
+              "amount": 0,
+              "max": 500
+            },
+            "Money": {
+              "amount": 406.60000000002333,
+              "max": 1000
+            },
+            "Knowledge": {
+              "amount": 100,
+              "max": 100
+            }
+          },
+          "tech": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 3,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1,
+            "military": 1,
+            "banking": 1
+          },
+          "jobs": {
+            "farmer": 1
+          },
+          "buildings": {
+            "farm": 2,
+            "basic_housing": 1,
+            "shed": 1
+          },
+          "foodProduction": {
+            "Farmer": "2.3639999999999994v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          },
+          "foodConsumption": {
+            "Human": -1
+          },
+          "starved": 0,
+          "deaths": 0,
+          "invocations": [
+            {
+              "elementId": "undefined-stone",
+              "method": "action",
+              "count": 158
+            },
+            {
+              "elementId": "tech-sundial",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-agriculture",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-farm",
+              "method": "action",
+              "count": 4
+            },
+            {
+              "elementId": "tech-housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-basic_housing",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-currency",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-storage",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-mining",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-irrigation",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-science",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "city-lumber",
+              "method": "action",
+              "count": 166
+            },
+            {
+              "elementId": "city-shed",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-garrison",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-silo",
+              "method": "action",
+              "count": 2
+            },
+            {
+              "elementId": "tech-banking",
+              "method": "action",
+              "count": 2
+            }
+          ],
+          "rngCalls": 936,
+          "rngState": 973489524
+        }
+      ],
+      "bootstrapEvents": [
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "phase": "active",
+          "actionId": "stone"
+        },
+        {
+          "period": 8,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "phase": "handoff",
+          "actionId": "stone"
+        }
+      ],
+      "handoffEvents": [
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 1,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 2,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 3,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 4,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 64,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 5,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 6,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 7,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 8,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 9,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        },
+        {
+          "period": 72,
+          "authorizationId": "p20-2-identical-p19-state",
+          "usedClicks": 10,
+          "limit": 10,
+          "target": "city-farm",
+          "actionId": "stone",
+          "resourceId": "Stone"
+        }
+      ],
+      "allocationEvents": [
+        {
+          "period": 80,
+          "phase": "authorized",
+          "targetId": "city-farm",
+          "workCycleId": 10,
+          "phaseIdentity": "pre-Gather",
+          "publicationWorkCycleId": 9,
+          "publicationCurrent": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|3:4|4:0|27|human|standard|0|0|anarchy|0|0|0|0",
+          "controlGeneration": 1,
+          "price": {
+            "Lumber": 27,
+            "Stone": 14
+          },
+          "stock": {
+            "Lumber": 67,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "obtainableCapacity": {
+            "Lumber": 133,
+            "Stone": 200
+          },
+          "episodeLimit": 80,
+          "totalLimit": 140,
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 104,
+          "phase": "request-expired",
+          "targetId": "city-farm",
+          "reason": "native-request-changed-or-unactionable"
+        },
+        {
+          "period": 104,
+          "phase": "authorization-denied",
+          "targetId": "city-farm",
+          "reason": "same-target-already-authorized",
+          "requestPrice": {
+            "Lumber": 37,
+            "Stone": 18
+          },
+          "stock": {
+            "Lumber": 30,
+            "Stone": 0
+          },
+          "shortage": 25
+        },
+        {
+          "period": 936,
+          "phase": "authorized",
+          "targetId": "city-shed",
+          "workCycleId": 117,
+          "phaseIdentity": "pre-Gather",
+          "publicationWorkCycleId": 116,
+          "publicationCurrent": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "controlGeneration": 4,
+          "price": {
+            "Money": 75,
+            "Lumber": 55,
+            "Stone": 45
+          },
+          "stock": {
+            "Money": 75.2,
+            "Lumber": 20,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "obtainableCapacity": {
+            "Lumber": 180,
+            "Stone": 200
+          },
+          "episodeLimit": 80,
+          "totalLimit": 140,
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 1064,
+          "ownerId": "construction",
+          "targetId": "city-rock_quarry",
+          "publishedTargetId": "city-shed",
+          "requestMatchesPublication": false,
+          "currentSavingTargetId": "city-rock_quarry",
+          "currentSavingTargetMatchesPublication": false,
+          "priceAuthorityValid": false,
+          "requestPrice": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "publicationPrice": {
+            "Money": 92,
+            "Lumber": 73,
+            "Stone": 59
+          },
+          "currentSavingTargetPrice": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "capturedPublicationTargetId": "city-shed",
+          "capturedPublicationPrice": {
+            "Money": 92,
+            "Lumber": 73,
+            "Stone": 59
+          },
+          "nativePrice": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "requestPool": "anywhere",
+          "publicationPool": "anywhere",
+          "nativePool": "anywhere",
+          "workCycleId": 133,
+          "phase": "authority-disagreement",
+          "publicationWorkCycleId": 132,
+          "publicationAuthority": {
+            "workCycleId": 132,
+            "rootGeneration": 0,
+            "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+          },
+          "publicationCurrent": false,
+          "selectionReason": "native-current-saving-target",
+          "researchState": {
+            "primitive": 3,
+            "wsc": 0,
+            "agriculture": 2,
+            "housing": 1,
+            "currency": 1,
+            "storage": 1,
+            "mining": 1,
+            "science": 1
+          },
+          "ownerState": {
+            "orderingComplete": true,
+            "autoBuild": true
+          },
+          "price": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "stock": {
+            "Lumber": 0,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "resourceAuthority": "native-gather-owner-controls",
+          "rootGeneration": 0,
+          "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "controlGeneration": 3,
+          "queuesEmpty": true,
+          "permissions": {
+            "autoBuild": true,
+            "controlAction": true
+          },
+          "competingClaims": false,
+          "materialShortage": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "obtainableCapacity": {
+            "Lumber": 500,
+            "Stone": 500
+          },
+          "gatherControlBindings": {
+            "Lumber": {
+              "elementId": "city-lumber",
+              "generation": 9
+            },
+            "Stone": {
+              "elementId": "undefined-stone",
+              "generation": 9
+            }
+          },
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 1064,
+          "phase": "request-expired",
+          "targetId": "city-shed",
+          "reason": "native-request-changed-or-unactionable"
+        },
+        {
+          "period": 1072,
+          "phase": "authorized",
+          "targetId": "city-rock_quarry",
+          "workCycleId": 134,
+          "phaseIdentity": "pre-Gather",
+          "publicationWorkCycleId": 133,
+          "publicationCurrent": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|8:10|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "controlGeneration": 3,
+          "price": {
+            "Lumber": 50,
+            "Stone": 10
+          },
+          "stock": {
+            "Lumber": 0,
+            "Stone": 0
+          },
+          "pool": "anywhere",
+          "obtainableCapacity": {
+            "Lumber": 500,
+            "Stone": 500
+          },
+          "episodeLimit": 80,
+          "totalLimit": 140,
+          "expires": "target-price-root-progression-control-queue-or-permission-change"
+        },
+        {
+          "period": 1144,
+          "phase": "budget-exhausted",
+          "targetId": "city-rock_quarry",
+          "clicks": 48,
+          "totalClicks": 140
+        }
+      ],
+      "allocationClicks": [
+        {
+          "period": 80,
+          "targetId": "city-farm",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 88,
+          "targetId": "city-farm",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 96,
+          "targetId": "city-farm",
+          "resourceId": "Stone",
+          "clicks": 3
+        },
+        {
+          "period": 936,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 944,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 952,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 960,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 968,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 976,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 984,
+          "targetId": "city-shed",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 992,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1000,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1008,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1016,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1024,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1032,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1040,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1048,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 5
+        },
+        {
+          "period": 1056,
+          "targetId": "city-shed",
+          "resourceId": "Stone",
+          "clicks": 4
+        },
+        {
+          "period": 1072,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1080,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1088,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1096,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1104,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1112,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1120,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1128,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1136,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 5
+        },
+        {
+          "period": 1144,
+          "targetId": "city-rock_quarry",
+          "resourceId": "Lumber",
+          "clicks": 3
+        }
+      ],
+      "allocationGateRejections": [
+        {
+          "period": 8,
+          "workCycleId": 1,
+          "reason": "publication-missing-or-invalid-epoch"
+        },
+        {
+          "period": 8,
+          "workCycleId": 1,
+          "reason": "civilization-handoff-pending"
+        },
+        {
+          "period": 64,
+          "targetId": "city-farm",
+          "workCycleId": 8,
+          "reason": "civilization-handoff-pending"
+        },
+        {
+          "period": 104,
+          "targetId": "city-farm",
+          "workCycleId": 13,
+          "reason": "budget-or-policy-denial"
+        },
+        {
+          "period": 272,
+          "targetId": "city-shed",
+          "workCycleId": 34,
+          "reason": "non-material-affordability"
+        },
+        {
+          "period": 1064,
+          "targetId": "city-rock_quarry",
+          "workCycleId": 133,
+          "reason": "publication-missing-or-invalid-epoch"
+        },
+        {
+          "period": 1152,
+          "targetId": "city-rock_quarry",
+          "workCycleId": 144,
+          "reason": "budget-or-policy-denial"
+        }
+      ],
+      "researchActions": [
+        {
+          "period": 16,
+          "elementId": "tech-sundial",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 56,
+          "elementId": "tech-agriculture",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "tech-housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 184,
+          "elementId": "tech-currency",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 264,
+          "elementId": "tech-storage",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 448,
+          "elementId": "tech-mining",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 672,
+          "elementId": "tech-irrigation",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 928,
+          "elementId": "tech-science",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1216,
+          "elementId": "tech-garrison",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1536,
+          "elementId": "tech-silo",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1896,
+          "elementId": "tech-banking",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "constructionActions": [
+        {
+          "period": 72,
+          "elementId": "city-farm",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "city-basic_housing",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 96,
+          "elementId": "city-farm",
+          "method": "action",
+          "count": 2
+        },
+        {
+          "period": 1056,
+          "elementId": "city-shed",
+          "method": "action",
+          "count": 2
+        }
+      ],
+      "gatherCalls": {
+        "undefined-stone.action": {
+          "returned": 79,
+          "threw": 0
+        },
+        "city-lumber.action": {
+          "returned": 83,
+          "threw": 0
+        }
+      },
+      "controlCallCounts": {
+        "#mainColumn div.content.swapTab": 638,
+        "undefined-stone.action": 79,
+        "civ-unemployed.setDefault": 8,
+        "tech-sundial.action": 1,
+        "tech-agriculture.action": 1,
+        "buildQueue.setData": 18383,
+        "city-farm.action": 2,
+        "civ-farmer.setDefault": 617,
+        "tech-housing.action": 1,
+        "city-basic_housing.action": 1,
+        "tech-currency.action": 1,
+        "tech-storage.action": 1,
+        "tech-mining.action": 1,
+        "tech-irrigation.action": 1,
+        "tech-science.action": 1,
+        "city-lumber.action": 83,
+        "city-shed.action": 1,
+        "tech-garrison.action": 1,
+        "city-garrison.on_cap": 3799,
+        "tech-silo.action": 1,
+        "tech-banking.action": 1
+      },
+      "totalNativeCalls": 23622,
+      "nativeFailures": [],
+      "staleOrThrewControls": {},
+      "rngCalls": 936,
+      "rngState": 973489524,
+      "exportedSaveSha256": "cbe45bfbd939ecbd099f72f2fc3ab914eed4a860f82e95708f5ad45427c02fbd"
+    }
+  },
+  "parity": {
+    "observerEquivalent": true,
+    "observerBuildQueueProbeCalls": [
+      {
+        "period": 8,
+        "p19": 0,
+        "observer": 0
+      },
+      {
+        "period": 64,
+        "p19": 31,
+        "observer": 35
+      },
+      {
+        "period": 72,
+        "p19": 58,
+        "observer": 66
+      },
+      {
+        "period": 80,
+        "p19": 65,
+        "observer": 77
+      },
+      {
+        "period": 112,
+        "p19": 111,
+        "observer": 139
+      },
+      {
+        "period": 272,
+        "p19": 340,
+        "observer": 448
+      },
+      {
+        "period": 1000,
+        "p19": 1842,
+        "observer": 2272
+      },
+      {
+        "period": 5000,
+        "p19": 16141,
+        "observer": 18571
+      }
+    ],
+    "firstValidCandidateMaterialClickPeriod": 80,
+    "candidateEquivalentBeforeFirstValidClick": true,
+    "firstCandidateDifferenceAfterClick": {
+      "A": {
+        "period": 80,
+        "population": 0,
+        "resourceStocks": {
+          "Food": {
+            "amount": 40,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 67,
+            "max": 200
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200
+          },
+          "Money": {
+            "amount": 0,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 6,
+            "max": 100
+          }
+        },
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "agriculture": 1
+        },
+        "jobs": {},
+        "buildings": {
+          "farm": 1
+        },
+        "workCycleInvocations": [],
+        "rngCalls": 16,
+        "rngState": 98529148
+      },
+      "C": {
+        "period": 80,
+        "population": 0,
+        "resourceStocks": {
+          "Food": {
+            "amount": 40,
+            "max": 1000
+          },
+          "Lumber": {
+            "amount": 67,
+            "max": 200
+          },
+          "Stone": {
+            "amount": 5,
+            "max": 200
+          },
+          "Money": {
+            "amount": 0,
+            "max": 1000
+          },
+          "Knowledge": {
+            "amount": 6,
+            "max": 100
+          }
+        },
+        "tech": {
+          "primitive": 3,
+          "wsc": 0,
+          "agriculture": 1
+        },
+        "jobs": {},
+        "buildings": {
+          "farm": 1
+        },
+        "workCycleInvocations": [
+          {
+            "period": 80,
+            "elementId": "undefined-stone",
+            "method": "action",
+            "count": 10
+          }
+        ],
+        "rngCalls": 16,
+        "rngState": 98529148
+      }
+    },
+    "candidateRepeatable": true,
+    "candidateRepeatDifference": null,
+    "farmPurchasePeriod": 72,
+    "p1000Farmers": 3,
+    "p1000FarmerFoodProduction": "4.331999999999999v"
+  }
+}
