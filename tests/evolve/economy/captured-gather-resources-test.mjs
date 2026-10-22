@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readConstructionAllocationAuthority } from "../../../src/bootstrap/construction-allocation-authority.ts";
 import { admitResourceClaim } from "../../../src/domain/economy/resources/resource-claims.ts";
 import { planGatherResources } from "../../../src/domain/economy/resources/gather-resources.ts";
 
@@ -912,6 +913,254 @@ assert.equal(
   undefined,
   "root replacement suspends an active bootstrap authorization",
 );
+function createFarmAllocationHarness({
+  lumber = 16,
+  stone = 0,
+  handoffClicks = 9,
+  repriceOnFirstAllocationClick = false,
+  noMaterialStockChange = false,
+} = {}) {
+  const farmRoot = {
+    resource: {
+      Food: { amount: 0, max: 10 },
+      Lumber: { amount: lumber, max: 30 },
+      Stone: { amount: stone, max: 20 },
+      Mana: { amount: 0, max: 100 },
+      Furs: { amount: 0, max: 10 },
+      Population: { amount: 10, max: 20 },
+    },
+    race: { species: "Human" },
+    tech: { primitive: 1 },
+    genes: {},
+    queue: { display: false, queue: [] },
+    r_queue: { display: false, queue: [] },
+    city: {},
+  };
+  const farmPrice = { Lumber: 20, Stone: 10 };
+  const liveNativePrice = { ...farmPrice };
+  const priceInput = {
+    publicationCurrent: true,
+    targetId: "city-farm",
+    request: { name: "city-farm", pool: "anywhere", cost: farmPrice },
+    publication: {
+      name: "city-farm",
+      pool: "anywhere",
+      cost: farmPrice,
+    },
+    native: {
+      name: "city-farm",
+      pool: "anywhere",
+      get cost() {
+        return liveNativePrice;
+      },
+    },
+    resources: farmRoot.resource,
+  };
+  const isFarmAuthorityCurrent = () =>
+    readConstructionAllocationAuthority(priceInput) !== undefined;
+  const handles = new Map(
+    [
+      ["city-farm", 30],
+      ["undefined-food", 21],
+      ["city-lumber", 20],
+      ["undefined-stone", 20],
+    ].map(([elementId, generation]) => [
+      elementId,
+      { elementId, generation, methods: ["action"] },
+    ]),
+  );
+  const handoffEvents = [];
+  const allocationEvents = [];
+  const bootstrapState = {
+    root: farmRoot,
+    authorizationId: "farm-boundary-handoff",
+    phase: "handoff",
+    handoffClicks,
+    handoffLimit: 10,
+    usedClicks: 10,
+    isCurrent: () => true,
+  };
+  const adapter = createCapturedGatherResourcesAdapter({
+    rootState: {
+      readRoot: () => farmRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: (elementId) => handles.get(elementId),
+      invoke(handle, method) {
+        assert.equal(method, "action");
+        const resourceId =
+          handle.elementId === "undefined-food"
+            ? "Food"
+            : handle.elementId === "city-lumber"
+              ? "Lumber"
+              : "Stone";
+        if (!(noMaterialStockChange && resourceId !== "Food"))
+          farmRoot.resource[resourceId].amount += 1;
+        return { ok: true, value: true };
+      },
+      capturedElementIds: () => [...handles.keys()],
+    },
+    readSettings: () => settings,
+    readTestIntervention: () => ({
+      civilizationBootstrap: {
+        authorized: true,
+        authorizationId: "farm-boundary-handoff",
+        state: bootstrapState,
+      },
+      civilizationHandoffObserver: (event) => handoffEvents.push(event),
+      constructionAllocation: { enabled: true },
+      standardConstructionTarget: {
+        actionId: "city-farm",
+        allocationAuthorized: true,
+        cost: farmPrice,
+        resourceClickBudget: 5,
+        controlGeneration: 30,
+        isCurrent: isFarmAuthorityCurrent,
+        onClick: (event) => {
+          allocationEvents.push(event);
+          if (repriceOnFirstAllocationClick && allocationEvents.length === 1)
+            liveNativePrice.Lumber = 21;
+        },
+      },
+    }),
+  });
+  return {
+    adapter,
+    farmRoot,
+    liveNativePrice,
+    handoffEvents,
+    allocationEvents,
+    bootstrapState,
+  };
+}
+
+const farmHarness = createFarmAllocationHarness();
+const farmPlan = planGatherResources(farmHarness.adapter.reader.read());
+assert.deepEqual(
+  farmPlan.operations.map(({ actionId }) => actionId),
+  ["food", "lumber", "stone"],
+  "the observed Farm boundary plans emergency Food before Farm materials",
+);
+assert.equal(farmPlan.operations[0]?.constructionProvenance, undefined);
+assert.deepEqual(
+  farmPlan.operations.slice(1).map(({ constructionProvenance }) => ({
+    actionId: constructionProvenance?.actionId,
+    resourceId: constructionProvenance?.resourceId,
+    price: constructionProvenance?.price,
+    targetGeneration: constructionProvenance?.targetGeneration,
+    resourceControlGeneration:
+      constructionProvenance?.resourceControlGeneration,
+  })),
+  [
+    {
+      actionId: "city-farm",
+      resourceId: "Lumber",
+      price: 20,
+      targetGeneration: 30,
+      resourceControlGeneration: 20,
+    },
+    {
+      actionId: "city-farm",
+      resourceId: "Stone",
+      price: 10,
+      targetGeneration: 30,
+      resourceControlGeneration: 20,
+    },
+  ],
+  "Farm provenance carries each native material price and captured binding generation",
+);
+assert.deepEqual(
+  farmPlan.operations.map(({ amount }) => amount),
+  [3, 3, 2],
+);
+assert.deepEqual(farmHarness.adapter.executor.execute(farmPlan), {
+  status: "succeeded",
+});
+assert.equal(farmHarness.farmRoot.resource.Food.amount, 3);
+assert.equal(farmHarness.farmRoot.resource.Lumber.amount, 19);
+assert.equal(farmHarness.farmRoot.resource.Stone.amount, 2);
+assert.equal(farmHarness.bootstrapState.handoffClicks, 10);
+assert.deepEqual(
+  farmHarness.handoffEvents.map(({ actionId, resourceId, target }) => ({
+    actionId,
+    resourceId,
+    target,
+  })),
+  [{ actionId: "lumber", resourceId: "Lumber", target: "city-farm" }],
+  "only a verified Farm material click spends the remaining handoff budget",
+);
+assert.equal(farmHarness.allocationEvents.length, 4);
+assert.deepEqual(
+  farmHarness.allocationEvents.map(({ actionId, resourceId }) => ({
+    actionId,
+    resourceId,
+  })),
+  [
+    { actionId: "city-farm", resourceId: "Lumber" },
+    { actionId: "city-farm", resourceId: "Lumber" },
+    { actionId: "city-farm", resourceId: "Stone" },
+    { actionId: "city-farm", resourceId: "Stone" },
+  ],
+  "Food does not trigger the separate dynamic allocation budget callback",
+);
+
+const farmNoopHarness = createFarmAllocationHarness({
+  noMaterialStockChange: true,
+});
+const farmNoopPlan = planGatherResources(farmNoopHarness.adapter.reader.read());
+assert.equal(
+  farmNoopHarness.adapter.executor.execute(farmNoopPlan).status,
+  "stale",
+);
+assert.equal(farmNoopHarness.farmRoot.resource.Food.amount, 3);
+assert.equal(farmNoopHarness.farmRoot.resource.Lumber.amount, 16);
+assert.equal(farmNoopHarness.bootstrapState.handoffClicks, 9);
+assert.equal(farmNoopHarness.handoffEvents.length, 0);
+assert.equal(farmNoopHarness.allocationEvents.length, 0);
+
+const farmRepricedBeforeClick = createFarmAllocationHarness();
+const farmBeforeClickPlan = planGatherResources(
+  farmRepricedBeforeClick.adapter.reader.read(),
+);
+farmRepricedBeforeClick.liveNativePrice.Lumber = 21;
+const farmBeforeClickResult =
+  farmRepricedBeforeClick.adapter.executor.execute(farmBeforeClickPlan);
+assert.equal(farmBeforeClickResult.status, "stale");
+assert.equal(farmRepricedBeforeClick.farmRoot.resource.Food.amount, 3);
+assert.equal(farmRepricedBeforeClick.farmRoot.resource.Lumber.amount, 16);
+assert.equal(farmRepricedBeforeClick.farmRoot.resource.Stone.amount, 0);
+assert.equal(farmRepricedBeforeClick.bootstrapState.handoffClicks, 9);
+assert.equal(farmRepricedBeforeClick.allocationEvents.length, 0);
+
+const farmRepricedAfterFirstClick = createFarmAllocationHarness({
+  lumber: 0,
+  handoffClicks: 10,
+  repriceOnFirstAllocationClick: true,
+});
+const farmDuringClickPlan = planGatherResources(
+  farmRepricedAfterFirstClick.adapter.reader.read(),
+);
+const farmDuringClickResult =
+  farmRepricedAfterFirstClick.adapter.executor.execute(farmDuringClickPlan);
+assert.equal(farmDuringClickResult.status, "stale");
+assert.equal(
+  farmDuringClickResult.failure?.code,
+  "gather-construction-target-invalidated",
+  "a live native reprice is reported as stale authority",
+);
+assert.equal(farmRepricedAfterFirstClick.farmRoot.resource.Food.amount, 3);
+assert.equal(farmRepricedAfterFirstClick.farmRoot.resource.Lumber.amount, 1);
+assert.equal(farmRepricedAfterFirstClick.farmRoot.resource.Stone.amount, 0);
+assert.equal(farmRepricedAfterFirstClick.bootstrapState.handoffClicks, 10);
+assert.equal(farmRepricedAfterFirstClick.allocationEvents.length, 1);
+assert.equal(
+  farmRepricedAfterFirstClick.allocationEvents[0]?.resourceId,
+  "Lumber",
+  "only the first verified Farm material click is credited before repricing",
+);
+
 bootstrapAuthorization = {
   authorized: true,
   authorizationId: "human-start-2",
