@@ -1,0 +1,122 @@
+{
+  "stage": "P22 controlled production window",
+  "decision": "C: no optimization retained; 2% CPU sensitivity not established",
+  "fixture": "test-artifacts/benchmark/slice0/saves/mad-tech-offered-blocked.json",
+  "settings": "test-artifacts/benchmark/slice0/settings/current-full.json",
+  "saveSha256": "7eb43bc6cd1e7267561ceb21aaaa7b8c5eee9a4aa7c700ef9d579063a26cf090",
+  "settingsSha256": "ecaf13f665c1029cacdb544f21f070ebdd5cc709f07bec852489b26aa7333b7c",
+  "bundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+  "gameSnapshotSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+  "pinnedGameCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "runnerInputHash": "06d1ede0bed3179ff8a6538024208f7f20a28fddf8f2c365b9c841becfd97ea9",
+  "chromium": "HeadlessChrome/151.0.7922.71",
+  "seed": 42,
+  "epoch": "2026-09-21T00:00:00.000Z",
+  "periods": 800,
+  "workTicks": 100,
+  "controls": [
+    {
+      "run": 1,
+      "activeRendererCpuSec": 30.413,
+      "otherRendererCpuSec": 0.0004,
+      "taskDurationSec": 26.7008,
+      "scriptDurationSec": 0.049,
+      "advanceWallMs": 26717.83,
+      "randomCalls": 2194,
+      "nativeControlCalls": 121695,
+      "stateSha256": "26f08bef03ea462ce0a1237249b4aed4a9f8b85ee46d325a85c9fe5ee42361a8",
+      "exportSha256": "a99e0f35aa7cb5b4c9f3f3a7ed93963f5b3382cf4194737218474e927c48168a"
+    },
+    {
+      "run": 2,
+      "activeRendererCpuSec": 29.4969,
+      "otherRendererCpuSec": 0,
+      "taskDurationSec": 25.7122,
+      "scriptDurationSec": 0.0451,
+      "advanceWallMs": 25727.58,
+      "randomCalls": 2194,
+      "nativeControlCalls": 121695,
+      "stateSha256": "26f08bef03ea462ce0a1237249b4aed4a9f8b85ee46d325a85c9fe5ee42361a8",
+      "exportSha256": "a99e0f35aa7cb5b4c9f3f3a7ed93963f5b3382cf4194737218474e927c48168a"
+    },
+    {
+      "run": 3,
+      "activeRendererCpuSec": 29.4519,
+      "otherRendererCpuSec": 0.0006,
+      "taskDurationSec": 25.6821,
+      "scriptDurationSec": 0.0567,
+      "advanceWallMs": 25696.77,
+      "randomCalls": 2194,
+      "nativeControlCalls": 121695,
+      "stateSha256": "26f08bef03ea462ce0a1237249b4aed4a9f8b85ee46d325a85c9fe5ee42361a8",
+      "exportSha256": "a99e0f35aa7cb5b4c9f3f3a7ed93963f5b3382cf4194737218474e927c48168a"
+    }
+  ],
+  "cpuControlRange": {
+    "minimumSec": 29.4525,
+    "maximumSec": 30.413,
+    "meanSec": 29.7876,
+    "rangeAsPercentOfMean": 3.23,
+    "taskMinimumSec": 25.6821,
+    "taskMaximumSec": 26.7008,
+    "taskRangeAsPercentOfMean": 3.91
+  },
+  "profileAttributionOnly": {
+    "rendererCpuSec": 29.3204,
+    "taskDurationSec": 25.5447,
+    "scriptDurationSec": 0.0461,
+    "nativeControlCalls": 121695,
+    "randomCalls": 2194,
+    "sameStateAndExportAsControls": true,
+    "exclusivePhaseMsPerWorkTick": {
+      "research.draw.native-switch-drawTech-and-dom-generation": 32.32,
+      "autoMarket.adjustTradeRoutes": 13.61,
+      "jobs.full.buildWeighting": 7.76,
+      "construction saving discovery": 7.53,
+      "autoBuild.beginCycle": 7.32,
+      "demand.sample.build": 6.86,
+      "discovery.capability-check build-controls civTabs:1/spaceTabs:1": 2.52,
+      "discovery.capability-check build-controls civTabs:1/spaceTabs:0": 1.66,
+      "action-cost.native-batch": 4.34,
+      "autoMarket": 4.01,
+      "autoPower.readCycle": 3.64,
+      "construction demand preparation": 3.01,
+      "autoStorage.read.building-targets": 2.84,
+      "autoPower.execute.adjust": 2.78,
+      "pre-Power build demand preparation": 2.71
+    },
+    "operationCounts": {
+      "autoBuild.beginCycle": 100,
+      "autoBuild.sampleCandidate": 7550,
+      "autoBuild.sampleConflict": 727,
+      "autoBuild.sampleCompetition": 464,
+      "autoBuild.executeClick": 58,
+      "autoMarket.adjustTradeRoutes": 100,
+      "research.draw.native-switch-drawTech-and-dom-generation": 103,
+      "research.catalog.registry-read": 103,
+      "discovery.capability-check build-controls civTabs:1/spaceTabs:1": 802,
+      "discovery.capability-check build-controls civTabs:1/spaceTabs:0": 803,
+      "jobs.full.planCalls": 100,
+      "jobs.full.buildCostReads": 7200,
+      "jobs.full.craftCostReads": 1100,
+      "autoStorage.building-target-price-probes": 7200,
+      "demand.sample.samples": 159,
+      "demand.sample.inputCaptures": 159
+    }
+  },
+  "workTickCallbackLatencyMs": {
+    "sampleCount": 100,
+    "p50": 161.8,
+    "p95": 234.4,
+    "p99": 346.9,
+    "maximum": 637.4,
+    "includesGameAndAutomation": true,
+    "callbackProfilingEnabled": true
+  },
+  "instrumentation": {
+    "phaseAndCounts": "eaPerformance with 25-worktick flushes; timings are exclusive elapsed time, not CPU",
+    "cpuControls": "perf=false, callbackProfile=false, nativeTrace=false; process and TaskDuration boundaries immediately around session.advance(800)",
+    "latency": "callbackProfile=true in separate run",
+    "scriptDurationUse": "reported only; rejected as authoritative for controlled advance work"
+  }
+}
