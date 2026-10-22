@@ -758,8 +758,30 @@ const compostGatherAdapter = createCapturedGatherResourcesAdapter({
 });
 const compostTargetInput = compostGatherAdapter.reader.read();
 assert.deepEqual(compostTargetInput.testOnlyMaterialTarget, {
-  Lumber: { quantity: 12, clickBudget: 5, preserveMana: true },
-  Stone: { quantity: 12, clickBudget: 5, preserveMana: true },
+  Lumber: {
+    quantity: 12,
+    clickBudget: 5,
+    preserveMana: true,
+    constructionProvenance: {
+      actionId: "city-compost",
+      resourceId: "Lumber",
+      price: 12,
+      targetGeneration: 9,
+      resourceControlGeneration: 9,
+    },
+  },
+  Stone: {
+    quantity: 12,
+    clickBudget: 5,
+    preserveMana: true,
+    constructionProvenance: {
+      actionId: "city-compost",
+      resourceId: "Stone",
+      price: 12,
+      targetGeneration: 9,
+      resourceControlGeneration: 9,
+    },
+  },
 });
 const compostTargetPlan = planGatherResources(compostTargetInput);
 assert.deepEqual(
@@ -964,8 +986,30 @@ root.resource.Mana.amount = 0;
 delete root.tech.conjuring;
 const firstHandoffInput = bootstrapAdapter.reader.read();
 assert.deepEqual(firstHandoffInput.testOnlyMaterialTarget, {
-  Lumber: { quantity: 100, clickBudget: 5, preserveMana: true },
-  Stone: { quantity: 15, clickBudget: 5, preserveMana: true },
+  Lumber: {
+    quantity: 100,
+    clickBudget: 5,
+    preserveMana: true,
+    constructionProvenance: {
+      actionId: "city-farm",
+      resourceId: "Lumber",
+      price: 100,
+      targetGeneration: 30,
+      resourceControlGeneration: 20,
+    },
+  },
+  Stone: {
+    quantity: 15,
+    clickBudget: 5,
+    preserveMana: true,
+    constructionProvenance: {
+      actionId: "city-farm",
+      resourceId: "Stone",
+      price: 15,
+      targetGeneration: 30,
+      resourceControlGeneration: 20,
+    },
+  },
 });
 const firstHandoffDecision = planGatherResources(firstHandoffInput);
 assert.deepEqual(
@@ -985,8 +1029,30 @@ assert.deepEqual(bootstrapAdapter.executor.execute(firstHandoffDecision), {
 assert.equal(bootstrapAuthorization.state.handoffClicks, 5);
 const secondHandoffInput = bootstrapAdapter.reader.read();
 assert.deepEqual(secondHandoffInput.testOnlyMaterialTarget, {
-  Lumber: { quantity: 100, clickBudget: 5, preserveMana: true },
-  Stone: { quantity: 15, clickBudget: 5, preserveMana: true },
+  Lumber: {
+    quantity: 100,
+    clickBudget: 5,
+    preserveMana: true,
+    constructionProvenance: {
+      actionId: "city-farm",
+      resourceId: "Lumber",
+      price: 100,
+      targetGeneration: 30,
+      resourceControlGeneration: 20,
+    },
+  },
+  Stone: {
+    quantity: 15,
+    clickBudget: 5,
+    preserveMana: true,
+    constructionProvenance: {
+      actionId: "city-farm",
+      resourceId: "Stone",
+      price: 15,
+      targetGeneration: 30,
+      resourceControlGeneration: 20,
+    },
+  },
 });
 assert.deepEqual(
   bootstrapAdapter.executor.execute(planGatherResources(secondHandoffInput)),
@@ -1014,6 +1080,8 @@ let allocationActionMode = "normal";
 let allocationOwnerEnabled = true;
 let allocationQueuesEmpty = true;
 let allocationHasCompetingCommitment = false;
+const allocationHandoffEvents = [];
+const allocationCallbackEvents = [];
 const allocationBootstrapState = {
   root,
   rootGeneration: undefined,
@@ -1027,7 +1095,12 @@ const allocationBootstrapState = {
 };
 const allocationControls = {
   resolve(elementId) {
-    return ["city-shed", "city-lumber", "undefined-stone"].includes(elementId)
+    return [
+      "city-shed",
+      "city-lumber",
+      "undefined-stone",
+      "undefined-food",
+    ].includes(elementId)
       ? {
           elementId,
           generation: allocationControlGeneration,
@@ -1039,13 +1112,23 @@ const allocationControls = {
     assert.equal(method, "action");
     if (allocationActionMode === "fail")
       return { ok: false, reason: "action-failed", detail: "native rejected" };
-    const resourceId = handle.elementId === "city-lumber" ? "Lumber" : "Stone";
+    const resourceId =
+      handle.elementId === "undefined-food"
+        ? "Food"
+        : handle.elementId === "city-lumber"
+          ? "Lumber"
+          : "Stone";
     if (allocationActionMode !== "no-stock-change")
       root.resource[resourceId].amount += 1;
     if (cancelAllocationAfterClick) allocationCurrent = false;
     return { ok: true, value: true };
   },
-  capturedElementIds: () => ["city-shed", "city-lumber", "undefined-stone"],
+  capturedElementIds: () => [
+    "city-shed",
+    "city-lumber",
+    "undefined-stone",
+    "undefined-food",
+  ],
 };
 const allocationAdapter = createCapturedGatherResourcesAdapter({
   rootState,
@@ -1057,9 +1140,11 @@ const allocationAdapter = createCapturedGatherResourcesAdapter({
       authorizationId: "retained-bootstrap-after-handoff",
       state: allocationBootstrapState,
     },
+    civilizationHandoffObserver: (event) => allocationHandoffEvents.push(event),
     constructionAllocation: { enabled: true },
     standardConstructionTarget: {
       actionId: "city-shed",
+      allocationAuthorized: true,
       cost: { Money: 1, Lumber: 2, Stone: 2 },
       resourceClickBudget: 4,
       controlGeneration: 12,
@@ -1068,8 +1153,9 @@ const allocationAdapter = createCapturedGatherResourcesAdapter({
         allocationOwnerEnabled &&
         allocationQueuesEmpty &&
         !allocationHasCompetingCommitment,
-      onClick: () => {
+      onClick: (event) => {
         allocationClicks += 1;
+        allocationCallbackEvents.push(event);
       },
     },
   }),
@@ -1102,6 +1188,70 @@ assert.equal(
   10,
   "the final P19 handoff click consumes only its own retained budget",
 );
+
+root.resource.Food.amount = 0;
+root.resource.Lumber.amount = 0;
+root.resource.Stone.amount = 0;
+allocationBootstrapState.handoffClicks = 9;
+allocationHandoffEvents.length = 0;
+allocationCallbackEvents.length = 0;
+const mixedEmergencyFoodInput = allocationAdapter.reader.read();
+const mixedEmergencyFoodPlan = planGatherResources(mixedEmergencyFoodInput);
+assert.equal(mixedEmergencyFoodPlan.operations[0]?.actionId, "food");
+assert.deepEqual(
+  mixedEmergencyFoodPlan.operations.map(({ actionId }) => actionId),
+  ["food", "lumber", "stone"],
+  "emergency Food precedes the target-material operations",
+);
+allocationAdapter.executor.execute(mixedEmergencyFoodPlan);
+assert.equal(allocationBootstrapState.handoffClicks, 10);
+assert.equal(
+  allocationHandoffEvents[0]?.actionId,
+  "lumber",
+  "emergency Food must not consume the Construction handoff budget",
+);
+assert.equal(
+  allocationCallbackEvents.some((event) => event.actionId === "food"),
+  false,
+  "emergency Food must not trigger the Construction allocation callback",
+);
+assert.equal(allocationCallbackEvents.length, 3);
+assert.deepEqual(
+  allocationCallbackEvents.map(({ actionId, resourceId }) => ({
+    actionId,
+    resourceId,
+  })),
+  [
+    { actionId: "city-shed", resourceId: "Lumber" },
+    { actionId: "city-shed", resourceId: "Stone" },
+    { actionId: "city-shed", resourceId: "Stone" },
+  ],
+  "dynamic allocation reports only verified target-material stock increases",
+);
+
+root.resource.Food.amount = 0;
+root.resource.Lumber.amount = 0;
+root.resource.Stone.amount = 0;
+allocationBootstrapState.handoffClicks = 10;
+allocationHandoffEvents.length = 0;
+allocationCallbackEvents.length = 0;
+allocationCurrent = true;
+const staleAfterPlan = planGatherResources(allocationAdapter.reader.read());
+allocationCurrent = false;
+assert.equal(
+  allocationAdapter.executor.execute(staleAfterPlan).status,
+  "stale",
+);
+assert.ok(
+  root.resource.Food.amount > 0,
+  "valid emergency Food completes before a later stale Construction operation is rejected",
+);
+assert.equal(root.resource.Lumber.amount, 0);
+assert.equal(root.resource.Stone.amount, 0);
+assert.equal(allocationHandoffEvents.length, 0);
+assert.equal(allocationCallbackEvents.length, 0);
+allocationCurrent = true;
+root.resource.Food.amount = 40;
 
 root.resource.Lumber.amount = 2;
 root.resource.Stone.amount = 0;
@@ -1236,8 +1386,8 @@ const noStockChangePlan = planGatherResources(allocationAdapter.reader.read());
 assert.deepEqual(allocationAdapter.executor.execute(noStockChangePlan), {
   status: "stale",
   failure: {
-    code: "gather-result-changed",
-    message: "gather result differed for lumber",
+    code: "gather-construction-stock-postcondition",
+    message: "Construction-targeted lumber did not increase Lumber",
   },
 });
 allocationActionMode = "normal";

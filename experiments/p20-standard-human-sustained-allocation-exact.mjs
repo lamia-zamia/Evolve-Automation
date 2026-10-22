@@ -5,11 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import {
-  allocationClickBudget,
-  allocationDenialReason,
-} from "./p20-allocation-budget.mjs";
-
-import {
   createChromiumRunner,
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
@@ -244,6 +239,8 @@ async function captureState(session) {
           window.__EA_TEST_HOOKS__?.constructionAllocationOwnerCycles ?? 0,
         constructionOwnerEvidence:
           window.__EA_TEST_HOOKS__?.constructionOwnerEvidence ?? [],
+        constructionAllocationGateRejections:
+          window.__EA_TEST_HOOKS__?.constructionAllocationGateRejections ?? [],
         researchOwnerEvidence:
           window.__EA_TEST_HOOKS__?.researchOwnerEvidence ?? [],
       };
@@ -270,6 +267,7 @@ async function captureState(session) {
       ]),
     ),
     controlUsage: diagnostics.controlUsage ?? {},
+    nativeInvocations: diagnostics.nativeInvocations ?? [],
     nativeErrors: diagnostics.errors ?? [],
     staleOrThrewControls: Object.fromEntries(
       Object.entries(diagnostics.controlUsage ?? {}).filter(
@@ -287,6 +285,7 @@ async function replay(
   periods = 5_000,
   nativePacket = [],
   policy = undefined,
+  requestedCheckpoints = undefined,
 ) {
   const save = parseSave(await readFile(fixturePath, "utf8"));
   // The pinned game's debug clone is read-only and exists only in this in-memory replay.
@@ -303,14 +302,40 @@ async function replay(
   if (policy !== undefined)
     await session.evaluate((value) => {
       const hooks = window.__EA_TEST_HOOKS__;
+      const allocationDenialReason = ({
+        targetAlreadyAuthorized,
+        episodeCount,
+        maxEpisodes,
+        totalClicks,
+        maxTotalClicks,
+      }) => {
+        if (targetAlreadyAuthorized) return "same-target-already-authorized";
+        if (episodeCount >= maxEpisodes || totalClicks >= maxTotalClicks)
+          return "episode-or-total-budget-exhausted";
+        return undefined;
+      };
+      const allocationClickBudget = ({
+        episodeClicks,
+        maxEpisodeClicks,
+        totalClicks,
+        maxTotalClicks,
+      }) => {
+        const remaining = Math.min(
+          maxEpisodeClicks - episodeClicks,
+          maxTotalClicks - totalClicks,
+        );
+        return remaining > 0 ? Math.min(5, remaining) : 0;
+      };
       const episodes = new Map();
       const seenRequests = new Set();
       const deniedTargets = new Set();
+      const recordedGateRejections = new Set();
       const total = { clicks: 0 };
       let lastRequestKey;
       hooks.constructionAllocationEvents = [];
       hooks.constructionAllocationOwnerCycles = 0;
       hooks.constructionOwnerEvidence = [];
+      hooks.constructionAllocationGateRejections = [];
       hooks.researchOwnerEvidence = [];
       hooks.constructionPublicationAuthority = undefined;
       hooks.readPeriodForTest = () => window.__EA_RUNNER__?.periods?.() ?? null;
@@ -343,6 +368,19 @@ async function replay(
           ? {
               constructionAllocation: {
                 enabled: true,
+                onRejected(event) {
+                  const key = `${event.targetId ?? "none"}:${event.reason}`;
+                  if (
+                    recordedGateRejections.has(key) ||
+                    hooks.constructionAllocationGateRejections.length >= 32
+                  )
+                    return;
+                  recordedGateRejections.add(key);
+                  hooks.constructionAllocationGateRejections.push({
+                    period: window.__EA_RUNNER__?.periods?.() ?? null,
+                    ...event,
+                  });
+                },
                 observe(contract) {
                   const period = window.__EA_RUNNER__?.periods?.() ?? null;
                   if (
@@ -469,6 +507,21 @@ async function replay(
                 },
                 authorize(contract) {
                   hooks.constructionAllocationOwnerCycles += 1;
+                  if (
+                    value.constructionAllocation.authorizationEnabled === false
+                  ) {
+                    if (
+                      !hooks.constructionAllocationEvents.some(
+                        (entry) => entry.phase === "authorization-disabled",
+                      )
+                    )
+                      record({
+                        phase: "authorization-disabled",
+                        targetId: contract.targetId,
+                        workCycleId: contract.workCycleId,
+                      });
+                    return undefined;
+                  }
                   const authorizationKey = contract.targetId;
                   const key = `${contract.targetId}:${JSON.stringify(contract.price)}:${contract.rootGeneration}`;
                   const shortage = ["Lumber", "Stone"].reduce(
@@ -519,6 +572,9 @@ async function replay(
                           phase: "authorization-denied",
                           targetId: contract.targetId,
                           reason: denialReason,
+                          requestPrice: contract.price,
+                          stock: contract.stock,
+                          shortage,
                         });
                       }
                       return undefined;
@@ -654,17 +710,31 @@ async function replay(
     return results;
   }, nativePacket);
   const checkpoints = [];
-  for (let elapsed = 0; elapsed < periods;) {
-    const next =
-      elapsed < 250
-        ? 250
-        : elapsed < 272
-          ? 272
-          : Math.ceil((elapsed + 1) / 250) * 250;
-    const amount = Math.min(next - elapsed, periods - elapsed);
-    await session.advance(amount);
-    elapsed += amount;
-    checkpoints.push(await captureState(session));
+  if (Array.isArray(requestedCheckpoints)) {
+    let elapsed = 0;
+    for (const checkpointPeriod of requestedCheckpoints) {
+      if (
+        !Number.isSafeInteger(checkpointPeriod) ||
+        checkpointPeriod <= elapsed
+      )
+        throw new Error("requested checkpoints must be increasing periods");
+      await session.advance(checkpointPeriod - elapsed);
+      elapsed = checkpointPeriod;
+      checkpoints.push(await captureState(session));
+    }
+  } else {
+    for (let elapsed = 0; elapsed < periods;) {
+      const next =
+        elapsed < 250
+          ? 250
+          : elapsed < 272
+            ? 272
+            : Math.ceil((elapsed + 1) / 250) * 250;
+      const amount = Math.min(next - elapsed, periods - elapsed);
+      await session.advance(amount);
+      elapsed += amount;
+      checkpoints.push(await captureState(session));
+    }
   }
   const exported = await session.exportSave();
   const final = checkpoints.at(-1);
@@ -687,17 +757,32 @@ async function replay(
     nativePacket,
     packetResults,
     periods,
-    checkpoints: checkpoints.map(({ native, ...checkpoint }) => ({
-      ...checkpoint,
-      native: {
-        ...native,
-        constructionSavingTargetObservationCount:
-          native.constructionSavingTargetObservations.length,
-        currentConstructionSavingTargetObservation:
-          native.constructionSavingTargetObservations.at(-1) ?? null,
-        constructionSavingTargetObservations: undefined,
-      },
-    })),
+    checkpoints: checkpoints.map(
+      ({ native, nativeInvocations, ...checkpoint }) => ({
+        ...checkpoint,
+        nativeInvocations: nativeInvocations
+          .filter(
+            (entry) =>
+              entry.method === "action" &&
+              /^(undefined-food|city-lumber|undefined-stone|city-stone|tech-|city-(?!lumber$))/.test(
+                entry.elementId ?? "",
+              ),
+          )
+          .map(({ period, elementId, method }) => ({
+            period,
+            elementId,
+            method,
+          })),
+        native: {
+          ...native,
+          constructionSavingTargetObservationCount:
+            native.constructionSavingTargetObservations.length,
+          currentConstructionSavingTargetObservation:
+            native.constructionSavingTargetObservations.at(-1) ?? null,
+          constructionSavingTargetObservations: undefined,
+        },
+      }),
+    ),
     finalExportSha256: hash(exported),
     randomCalls: final.randomCalls,
     finalRngState: final.rngState,
@@ -737,6 +822,8 @@ async function replay(
     constructionAllocationOwnerCycles:
       final.native.constructionAllocationOwnerCycles ?? 0,
     constructionOwnerEvidence: final.native.constructionOwnerEvidence ?? [],
+    constructionAllocationGateRejections:
+      final.native.constructionAllocationGateRejections ?? [],
     researchOwnerEvidence: final.native.researchOwnerEvidence ?? [],
     controlUsage: final.controlUsage,
   };
@@ -816,522 +903,907 @@ try {
       ),
     ),
   );
-  const baseline =
-    previousEvidence?.normalBaseline ??
-    (await replay("normal-baseline", false));
-  const stoneTen =
-    previousEvidence?.nativeStoneTen ??
-    (await replay("native-stone-ten", false, 5_000, [["undefined-stone", 10]]));
-  const starterPacket =
-    previousEvidence?.nativeStarterPacket ??
-    (await replay("native-food-lumber-stone-packet", false, 5_000, [
-      ["undefined-food", 10],
-      ["city-lumber", 10],
-      ["undefined-stone", 10],
-    ]));
-  const candidate = await replay(
-    "p20-1-corrected-construction-authority",
-    false,
-    10_000,
-    [],
-    {
-      authorizationId: "p19-human-candidate-1",
+  if (process.argv.includes("--p20-2-parity")) {
+    const checkpoints = [8, 64, 72, 80, 112, 272, 1_000, 5_000];
+    const groupInvocations = (invocations) => {
+      const grouped = new Map();
+      for (const entry of invocations) {
+        const groupKey = `${entry.period}:${entry.elementId}:${entry.method}`;
+        grouped.set(groupKey, (grouped.get(groupKey) ?? 0) + 1);
+      }
+      return [...grouped].map(([groupKey, count]) => {
+        const [period, elementId, method] = groupKey.split(":");
+        return { period: Number(period), elementId, method, count };
+      });
+    };
+    const countInvocationsByControl = (invocations) => {
+      const grouped = new Map();
+      for (const entry of invocations) {
+        const groupKey = `${entry.elementId}:${entry.method}`;
+        grouped.set(groupKey, (grouped.get(groupKey) ?? 0) + 1);
+      }
+      return [...grouped].map(([groupKey, count]) => {
+        const separator = groupKey.lastIndexOf(":");
+        return {
+          elementId: groupKey.slice(0, separator),
+          method: groupKey.slice(separator + 1),
+          count,
+        };
+      });
+    };
+    const p19Policy = {
+      authorizationId: "p20-2-identical-p19-state",
       constructionHandoffEnabled: true,
+    };
+    const observerPolicy = {
+      ...p19Policy,
       constructionAllocation: {
         enabled: true,
+        authorizationEnabled: false,
         maxEpisodes: 3,
         maxEpisodeClicks: 80,
         maxTotalClicks: 140,
       },
-    },
-  );
-  const duplicateCandidate = await replay(
-    "p20-1-corrected-construction-authority-repeat",
-    false,
-    10_000,
-    [],
-    {
-      authorizationId: "p19-human-candidate-2",
-      constructionHandoffEnabled: true,
+    };
+    const allocationPolicy = {
+      ...p19Policy,
       constructionAllocation: {
         enabled: true,
+        authorizationEnabled: true,
         maxEpisodes: 3,
         maxEpisodeClicks: 80,
         maxTotalClicks: 140,
       },
-    },
-  );
-  await mkdir(path.dirname(interimEvidencePath), { recursive: true });
-  await writeFile(
-    interimEvidencePath,
-    `${JSON.stringify({ candidate, duplicateCandidate }, null, 2)}\n`,
-  );
-  const diagnostic =
-    previousEvidence?.alwaysClickDiagnostic ??
-    (await replay("always-click-diagnostic", true));
-  const duplicateDiagnostic =
-    previousEvidence?.alwaysClickDuplicate ??
-    (await replay("always-click-diagnostic-repeat", true));
-  assert.equal(
-    diagnostic.finalExportSha256,
-    duplicateDiagnostic.finalExportSha256,
-    "matched always-click diagnostic exports should be deterministic",
-  );
-  assert.deepEqual(
-    diagnostic.controlUsage,
-    duplicateDiagnostic.controlUsage,
-    "matched always-click native control use should be deterministic",
-  );
-  if (duplicateDiagnostic.constructionSavingTargetObservations !== undefined)
-    assert.deepEqual(
-      diagnostic.constructionSavingTargetObservations,
-      duplicateDiagnostic.constructionSavingTargetObservations,
-      "matched always-click Construction demand observations should be deterministic",
-    );
-  assert.equal(
-    candidate.finalExportSha256,
-    duplicateCandidate.finalExportSha256,
-    "the bounded candidate exports should be deterministic",
-  );
-  assert.deepEqual(
-    candidate.controlUsage,
-    duplicateCandidate.controlUsage,
-    "the bounded candidate native control use should be deterministic",
-  );
-  assert.deepEqual(
-    candidate.researchInvocations,
-    duplicateCandidate.researchInvocations,
-    "the bounded candidate native Research periods should be deterministic",
-  );
-  assert.deepEqual(
-    candidate.constructionInvocations,
-    duplicateCandidate.constructionInvocations,
-    "the bounded candidate native Construction periods should be deterministic",
-  );
-  assert.equal(
-    candidate.finalRngState,
-    duplicateCandidate.finalRngState,
-    "the bounded candidate final RNG state should be deterministic",
-  );
-  assert.equal(
-    candidate.randomCalls,
-    duplicateCandidate.randomCalls,
-    "the bounded candidate random-call count should be deterministic",
-  );
-  assert.deepEqual(
-    candidate.constructionSavingTargetObservations,
-    duplicateCandidate.constructionSavingTargetObservations,
-    "the bounded candidate Construction observations should be deterministic",
-  );
-  const candidateFinalNative = candidate.checkpoints.at(-1)?.native;
-  assert.equal(
-    candidateFinalNative?.civilizationBootstrapEvents.length,
-    10,
-    "bootstrap stops after its ten native Gather clicks",
-  );
-  const authorizationEvents = candidate.constructionAllocationEvents.filter(
-    (event) => event.phase === "authorized",
-  );
-  const allocationClicks = candidate.constructionAllocationEvents.filter(
-    (event) => event.phase === "gather-click",
-  );
-  assert.ok(authorizationEvents.length <= 3);
-  assert.ok(allocationClicks.length <= 140);
-  assert.ok(
-    authorizationEvents.every(
-      (event, index) =>
-        authorizationEvents.findIndex(
-          (other) => other.targetId === event.targetId,
-        ) === index,
-    ),
-    "repeated unchanged targets cannot reset an exhausted episode budget",
-  );
-  assert.ok(
-    allocationClicks.every((event) => event.episodeClicks <= 80),
-    "episode click budgets are enforced",
-  );
-  const clicksByWorkCycle = new Map();
-  for (const event of allocationClicks)
-    clicksByWorkCycle.set(
-      event.workCycleId,
-      (clicksByWorkCycle.get(event.workCycleId) ?? 0) + 1,
-    );
-  assert.ok(
-    [...clicksByWorkCycle.values()].every((count) => count <= 5),
-    "per-cycle click budgets are enforced",
-  );
-  assert.equal(
-    candidate.checkpoints.at(-1)?.native.civilizationHandoffEvents.length,
-    10,
-    "the P19 Construction handoff remains bounded at ten clicks",
-  );
-  const candidateAt1000 = candidate.checkpoints.find(
-    (checkpoint) => checkpoint.period === 1_000,
-  );
-  const candidateAt5000 = candidate.checkpoints.find(
-    (checkpoint) => checkpoint.period === 5_000,
-  );
-  const diagnosticAt5000 = diagnostic.checkpoints.find(
-    (checkpoint) => checkpoint.period === 5_000,
-  );
-  const gatherCallsAt = (checkpoint) =>
-    ["undefined-food.action", "city-lumber.action", "undefined-stone.action"]
-      .map((id) => checkpoint?.controlUsage?.[id]?.returned ?? 0)
-      .reduce((sum, count) => sum + count, 0);
-  const bootstrapActivatedOwners =
-    candidateAt1000?.native.population > 0 &&
-    candidateAt1000?.native.jobs?.farmer > 0 &&
-    candidateAt1000?.native.buildings?.farm > 0 &&
-    candidateAt1000?.controlUsage?.["tech-sundial.action"]?.returned === 1;
-  const downstreamFoodBlocker =
-    candidateAt5000?.native.starved > 0 &&
-    candidateAt5000?.native.resources?.Food?.diff < 0 &&
-    candidateAt5000?.native.foodProduction !== null &&
-    candidateAt5000?.native.foodConsumption !== null;
-  const additionalInvocations = (actual, baseline) => {
-    const baselineCounts = new Map();
-    for (const entry of baseline)
-      baselineCounts.set(
-        entry.elementId,
-        (baselineCounts.get(entry.elementId) ?? 0) + 1,
-      );
-    const actualCounts = new Map();
-    return actual.filter((entry) => {
-      const count = (actualCounts.get(entry.elementId) ?? 0) + 1;
-      actualCounts.set(entry.elementId, count);
-      return count > (baselineCounts.get(entry.elementId) ?? 0);
-    });
-  };
-  const additionalConstructionPurchases = additionalInvocations(
-    candidate.constructionInvocations,
-    previousEvidence.candidate.constructionInvocations,
-  );
-  const additionalResearchPurchases = additionalInvocations(
-    candidate.researchInvocations,
-    previousEvidence.candidate.researchInvocations,
-  );
-  const lastConstructionOwnerObservation =
-    candidate.constructionOwnerEvidence.at(-1);
-  const ownerAt5000 = candidate.constructionOwnerEvidence.find(
-    (entry) => entry.period === 5_000,
-  );
-  const consumedTargetAt5000 = ownerAt5000?.publicationConsumedByGather?.target;
-  const latestPublishedTargetId =
-    candidateFinalNative?.currentConstructionSavingTargetObservation?.target
-      ?.name ?? null;
-  const lateAuthorityMismatch =
-    ownerAt5000 !== undefined &&
-    (ownerAt5000.publicationCurrent !== true ||
-      ownerAt5000.workCycleId !== ownerAt5000.publicationWorkCycleId + 1 ||
-      ownerAt5000.targetId !== ownerAt5000.publishedTargetId ||
-      ownerAt5000.targetId !== consumedTargetAt5000?.name ||
-      JSON.stringify(ownerAt5000.requestPrice) !==
-        JSON.stringify(ownerAt5000.publicationPrice) ||
-      JSON.stringify(ownerAt5000.requestPrice) !==
-        JSON.stringify(ownerAt5000.nativePrice) ||
-      ownerAt5000.requestPool !== ownerAt5000.publicationPool ||
-      ownerAt5000.requestPool !== ownerAt5000.nativePool);
-  const firstAllocationAuthorization =
-    candidate.constructionAllocationEvents.find(
-      (event) => event.phase === "authorized",
-    ) ?? null;
-  const firstAuthorityDisagreement =
-    candidate.constructionAllocationEvents.find(
-      (event) => event.phase === "authority-disagreement",
-    ) ?? null;
-  const additionalCompetingConstructionPurchases =
-    additionalConstructionPurchases.filter(
-      (entry) => entry.period > 576 && entry.elementId !== "city-rock_quarry",
-    );
-  const decision =
-    lateAuthorityMismatch || firstAuthorityDisagreement !== null
-      ? "C"
-      : additionalConstructionPurchases.length > 0 ||
-          additionalResearchPurchases.length > 0
-        ? "A"
-        : allocationClicks.length > 0
-          ? "B"
-          : "C";
-  const firstResearchOfferCheckpoint = candidate.checkpoints.find(
-    (checkpoint) => checkpoint.native.researchOffers.length > 0,
-  );
-  assert.ok(baseline.constructionSavingTargetObservationCount > 0);
-  assert.ok(
-    baseline.constructionSavingTargetObservations.every(
-      (observation) => observation.target === null,
-    ),
-    "the baseline must not invent a Construction target",
-  );
-  assert.ok(
-    diagnostic.constructionSavingTargetObservations.some(
-      (observation) => observation.target !== null,
-    ),
-    "the diagnostic must record the first published Construction saving target",
-  );
-  const baselineFinal = baseline.checkpoints.at(-1);
-  const diagnosticFinal = diagnostic.checkpoints.at(-1);
-  const workEvidence = {
-    sourceFileCount: sourceFiles.length,
-    sourceAggregateSha256,
-    sourceFiles: Object.fromEntries(
-      await Promise.all(
-        sourceFiles.map(async (file) => [
-          path.relative(root, file).replaceAll("\\", "/"),
-          await sha256File(file),
-        ]),
+    };
+    const [armA, armB, armC, armCRepeat] = await Promise.all([
+      replay(
+        "A-p19-bootstrap-handoff",
+        false,
+        5_000,
+        [],
+        p19Policy,
+        checkpoints,
       ),
-    ),
-    productionBundleSha256,
-    testSurfaceBundleSha256,
-    currentBundleSha256: currentBundleHash,
-    gameSha256: hash(gameBytes),
-    fixtureSha256: hash(fixtureBytes),
-    baseSettingsSha256: hash(baseSettingsText),
-    settingsSha256: hash(settingsText),
-    runner: runner.inputs,
-  };
-  const evidence = {
-    experiment: "P20.1 Construction allocation authority correction",
-    decision,
-    runner: "chromium-exact",
-    seed,
-    epoch,
-    pinnedGame: "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
-    fixture: {
-      path: path.relative(root, fixturePath).replaceAll("\\", "/"),
-      sha256: hash(fixtureBytes),
-      bytes: fixture.exportedSaveBytes,
-      firstHumanCheckpoint: fixture.firstHumanCheckpoint,
-      nativeLineage: fixture.native,
-      humanoidGenusAction: fixture.genusAction,
-      saveMutation:
-        "none; debug expose was set only on in-memory replay copies",
-    },
-    settings: {
-      path: path.relative(root, settingsPath).replaceAll("\\", "/"),
-      sha256: hash(settingsText),
-      basePath: path.relative(root, baseSettingsPath).replaceAll("\\", "/"),
-      baseSha256: hash(baseSettingsText),
-      configuredOwners,
-      overrides: {
-        userEvolutionTarget: {
-          from: baseSettings.userEvolutionTarget,
-          to: settings.userEvolutionTarget,
-          reason: "requested Human target",
-        },
-        firstEvolutionQueueTarget: {
-          from: baseSettings.evolutionQueue[0].userEvolutionTarget,
-          to: settings.evolutionQueue[0].userEvolutionTarget,
-          reason: "the enabled queue is applied before target selection",
-        },
-        firstEvolutionQueueGenus: {
-          from: baseSettings.evolutionQueue[0].userEvolutionGenus,
-          to: settings.evolutionQueue[0].userEvolutionGenus,
-          reason: "make the queued Human row select its native Humanoid genus",
-        },
-        buildingAlwaysClick: false,
-      },
-      queueEnabled: settings.evolutionQueueEnabled,
-      queueRepeat: settings.evolutionQueueRepeat,
-    },
-    inputHashes: workEvidence,
-    normalBaseline: baseline,
-    nativeStoneTen: stoneTen,
-    nativeStarterPacket: starterPacket,
-    candidate,
-    comparison: {
-      p19AcceptedCandidate: {
-        evidencePath: "experiments/p19-civilization-bootstrap-evidence.json",
-        decision: previousEvidence.decision,
-        candidate: {
-          periods: previousEvidence.candidate.periods,
-          finalExportSha256: previousEvidence.candidate.finalExportSha256,
-          finalRngState: previousEvidence.candidate.finalRngState,
-          randomCalls: previousEvidence.candidate.randomCalls,
-          gatherCalls: previousEvidence.candidate.gatherCalls,
-          constructionInvocations:
-            previousEvidence.candidate.constructionInvocations,
-          researchInvocations: previousEvidence.candidate.researchInvocations,
-          checkpoints: previousEvidence.candidate.checkpoints.map(
-            ({ period, population, tech, resourceStocks, native }) => ({
-              period,
-              population,
-              tech,
-              resourceStocks,
-              foodProduction: native.foodProduction,
-              starved: native.starved,
-              deaths: native.deaths,
-              jobs: native.jobs,
-              buildings: native.buildings,
+      replay(
+        "B-p19-plus-construction-observer",
+        false,
+        5_000,
+        [],
+        observerPolicy,
+        checkpoints,
+      ),
+      replay(
+        "C-corrected-construction-allocation",
+        false,
+        5_000,
+        [],
+        allocationPolicy,
+        checkpoints,
+      ),
+      replay(
+        "C-repeat-candidate-verification",
+        false,
+        5_000,
+        [],
+        allocationPolicy,
+        checkpoints,
+      ),
+    ]);
+    const paritySignature = (checkpoint) => ({
+      period: checkpoint.period,
+      workCycles: checkpoint.workCycles,
+      population: checkpoint.population,
+      resourceStocks: checkpoint.resourceStocks,
+      tech: checkpoint.tech,
+      jobs: checkpoint.native.jobs,
+      buildings: checkpoint.native.buildings,
+      foodProduction: checkpoint.native.foodProduction,
+      foodConsumption: checkpoint.native.foodConsumption,
+      starved: checkpoint.native.starved,
+      deaths: checkpoint.native.deaths,
+      nativeInvocations: checkpoint.nativeInvocations,
+      randomCalls: checkpoint.randomCalls,
+      rngState: checkpoint.rngState,
+    });
+    const firstDifference = (left, right) => {
+      const count = Math.min(left.checkpoints.length, right.checkpoints.length);
+      for (let index = 0; index < count; index += 1) {
+        if (
+          JSON.stringify(paritySignature(left.checkpoints[index])) !==
+          JSON.stringify(paritySignature(right.checkpoints[index]))
+        )
+          return {
+            period: left.checkpoints[index].period,
+            left: paritySignature(left.checkpoints[index]),
+            right: paritySignature(right.checkpoints[index]),
+          };
+      }
+      return undefined;
+    };
+    const p19FarmInvocation = armA.checkpoints
+      .flatMap((checkpoint) => checkpoint.nativeInvocations)
+      .find((entry) => entry.elementId === "city-farm");
+    const at112 = armA.checkpoints.find(
+      (checkpoint) => checkpoint.period === 112,
+    );
+    const at1000 = armA.checkpoints.find(
+      (checkpoint) => checkpoint.period === 1_000,
+    );
+    assert.equal(
+      p19FarmInvocation?.period,
+      72,
+      "P19 Farm purchase remains at p72",
+    );
+    assert.equal(at112?.native.buildings?.farm, 1);
+    assert.equal(at1000?.population, 3);
+    assert.equal(at1000?.native.jobs?.farmer, 3);
+    assert.ok(
+      Number.parseFloat(at1000?.native.foodProduction?.Farmer ?? "0") > 0,
+    );
+    const observerDifference = firstDifference(armA, armB);
+    assert.equal(
+      observerDifference,
+      undefined,
+      "P20.1 observation must preserve P19 actions, stocks, purchases, and RNG",
+    );
+    const observerProbeCalls = armB.checkpoints.map((checkpoint, index) => ({
+      period: checkpoint.period,
+      p19:
+        armA.checkpoints[index]?.controlUsage["buildQueue.setData"]?.returned ??
+        0,
+      observer: checkpoint.controlUsage["buildQueue.setData"]?.returned ?? 0,
+    }));
+    const candidateRepeatDifference = firstDifference(armC, armCRepeat);
+    assert.equal(
+      candidateRepeatDifference,
+      undefined,
+      "duplicate candidate replay must reproduce native state and RNG",
+    );
+    assert.deepEqual(
+      armC.constructionAllocationEvents,
+      armCRepeat.constructionAllocationEvents,
+      "duplicate candidate replay must reproduce the authorization and material-click trace",
+    );
+    const candidateClicks = armC.constructionAllocationEvents.filter(
+      (event) => event.phase === "gather-click",
+    );
+    const firstCandidateClickPeriod = candidateClicks[0]?.period;
+    const candidateBeforeClick =
+      firstCandidateClickPeriod === undefined
+        ? undefined
+        : firstDifference(
+            {
+              checkpoints: armA.checkpoints.filter(
+                (entry) => entry.period < firstCandidateClickPeriod,
+              ),
+            },
+            {
+              checkpoints: armC.checkpoints.filter(
+                (entry) => entry.period < firstCandidateClickPeriod,
+              ),
+            },
+          );
+    const firstCandidateDifference = firstDifference(armA, armC);
+    const firstCandidateDifferenceTrace =
+      firstCandidateDifference === undefined
+        ? undefined
+        : Object.fromEntries(
+            ["A", "C"].map((key) => {
+              const arm = key === "A" ? armA : armC;
+              const checkpoint = arm.checkpoints.find(
+                (entry) => entry.period === firstCandidateDifference.period,
+              );
+              return [
+                key,
+                checkpoint === undefined
+                  ? null
+                  : {
+                      period: checkpoint.period,
+                      population: checkpoint.population,
+                      resourceStocks: checkpoint.resourceStocks,
+                      tech: checkpoint.tech,
+                      jobs: checkpoint.native.jobs,
+                      buildings: checkpoint.native.buildings,
+                      workCycleInvocations: groupInvocations(
+                        checkpoint.nativeInvocations.filter(
+                          (entry) =>
+                            entry.period === firstCandidateDifference.period,
+                        ),
+                      ),
+                      rngCalls: checkpoint.randomCalls,
+                      rngState: checkpoint.rngState,
+                    },
+              ];
             }),
-          ),
-        },
-      },
-      p20OriginalHistorical: {
-        evidencePath:
-          "experiments/p20-standard-human-sustained-allocation-evidence.json",
-        decision: historicalP20.decision,
-        candidate: {
-          periods: historicalP20.candidate.periods,
-          finalExportSha256: historicalP20.candidate.finalExportSha256,
-          finalRngState: historicalP20.candidate.finalRngState,
-          randomCalls: historicalP20.candidate.randomCalls,
-          constructionAllocationEvents:
-            historicalP20.candidate.constructionAllocationEvents,
-          constructionInvocations:
-            historicalP20.candidate.constructionInvocations,
-          researchInvocations: historicalP20.candidate.researchInvocations,
-        },
-        admissible: false,
-      },
-    },
-    duplicateCandidate: {
-      finalExportSha256: duplicateCandidate.finalExportSha256,
-      controlUsage: duplicateCandidate.controlUsage,
-      matched:
-        candidate.finalExportSha256 === duplicateCandidate.finalExportSha256,
-    },
-    alwaysClickDiagnostic: diagnostic,
-    alwaysClickDuplicate: {
-      finalExportSha256: duplicateDiagnostic.finalExportSha256,
-      controlUsage: duplicateDiagnostic.controlUsage,
-      matched: true,
-    },
-    stalledBoundary: {
-      period: baselineFinal.period,
-      population: baselineFinal.population,
-      resources: baselineFinal.resourceStocks,
-      tech: baselineFinal.tech,
-      researchOffers: baselineFinal.native.researchOffers,
-      constructionOffers: baselineFinal.native.constructionOffers,
-      gatherControls: baselineFinal.native.gatherControls,
-      marketControls: baselineFinal.native.marketControls,
-      smelterControls: baselineFinal.native.smelterControls,
-      storageControls: baselineFinal.native.storageControls,
-      jobs: baselineFinal.native.jobs,
-      buildings: baselineFinal.native.buildings,
-      workCycles: baselineFinal.workCycles,
-      nativeErrors: baselineFinal.nativeErrors,
-      staleOrThrewControls: baselineFinal.staleOrThrewControls,
-    },
-    ownerAuthority: {
-      construction: {
-        baselineSavingTargetObservations:
-          baseline.constructionSavingTargetObservations,
-        baselineObservationCount:
-          baseline.constructionSavingTargetObservationCount,
-        diagnosticSavingTargetObservations:
-          diagnostic.constructionSavingTargetObservations,
-        diagnosticObservationCount:
-          diagnostic.constructionSavingTargetObservationCount,
-        evidence:
-          "the compile-time-only observer reads Construction's published saving target and exact price after each successful native Construction cycle; no native building action or Build control is offered at the first stall",
-        laterAuthority:
-          "the existing Construction observation publishes a current saving target and exact native cost once one exists; it is replaceable and must be revalidated",
-      },
-      research: {
-        baselineCurrentOffers: [],
-        evidence:
-          "no native Research rows or current offer prices exist at the first stall; no Research action is invoked",
-        policy:
-          "affordable-first; an unaffordable offer would not authorize Gather",
-      },
-      other:
-        "no current production-owner request was published at the initial stall",
-      missingAuthority:
-        "there is no current owner declaration for the initial material gathering needed to create population and unlock Construction or Research; Gather exposes controls but does not publish a resource demand",
-    },
-    candidate,
-    candidateDeterminism: {
-      repeatedExportSha256: duplicateCandidate.finalExportSha256,
-      controlUsage: duplicateCandidate.controlUsage,
-      researchInvocations: duplicateCandidate.researchInvocations,
-      constructionInvocations: duplicateCandidate.constructionInvocations,
-      randomCalls: duplicateCandidate.randomCalls,
-      finalRngState: duplicateCandidate.finalRngState,
-      matched: true,
-    },
-    outcomeClassification: {
-      decision,
-      firstAllocationAuthorization,
-      firstAuthorityDisagreement,
-      lateAuthorityMismatch,
-      lastConstructionOwnerTargetId:
-        lastConstructionOwnerObservation?.targetId ?? null,
-      latestPublishedTargetId,
-      bootstrapActivatedOwners,
-      downstreamFoodBlocker,
-      additionalConstructionPurchases,
-      additionalCompetingConstructionPurchases,
-      additionalResearchPurchases,
-      candidateGatherClicksAt5000: gatherCallsAt(candidateAt5000),
-      alwaysClickGatherClicksAt5000: gatherCallsAt(diagnosticAt5000),
-      firstObservedResearchOfferPeriod:
-        firstResearchOfferCheckpoint?.period ?? null,
-      firstResearchPurchase: candidate.researchInvocations[0] ?? null,
-      firstConstructionPurchase: candidate.constructionInvocations[0] ?? null,
-      publicationChronology: {
-        period5000: ownerAt5000
-          ? {
-              requestPhase: ownerAt5000.phase,
-              workCycleId: ownerAt5000.workCycleId,
-              requestTargetId: ownerAt5000.targetId,
-              requestPrice: ownerAt5000.requestPrice,
-              publicationWorkCycleId: ownerAt5000.publicationWorkCycleId,
-              consumedPublication: consumedTargetAt5000,
-              publicationCurrent: ownerAt5000.publicationCurrent,
-              priceAuthorityValid: ownerAt5000.priceAuthorityValid,
-              moneyStock: ownerAt5000.resources?.Money?.amount ?? null,
-            }
-          : null,
-        firstAuthorityDisagreement,
-      },
-    },
-    productionBundleParity: {
-      requiredSha256:
-        "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
-      currentSha256: currentBundleHash,
+          );
+    const evidence = {
+      experiment: "P20.2 same-bundle P19 parity and Construction attribution",
+      pinnedGame: "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+      seed,
+      epoch,
+      fixtureSha256: retainedFixtureSha256,
+      settingsSha256: hash(settingsText),
       testSurfaceBundleSha256,
-      byteIdentical:
-        currentBundleHash ===
-        "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
-    },
-  };
-  await mkdir(path.dirname(evidencePath), { recursive: true });
-  await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
-  assert.ok(
-    diagnosticFinal.population > 0,
-    "always-click must enable native downstream production",
-  );
-  assert.ok(diagnosticFinal.tech.axe >= 1);
-  process.stdout.write(
-    `${JSON.stringify({
-      decision: evidence.decision,
-      fixture: evidence.fixture,
-      baseline: {
+      productionBundleSha256,
+      sourceAggregateSha256,
+      checkpoints,
+      arms: Object.fromEntries(
+        Object.entries({ A: armA, B: armB, C: armC, CRepeat: armCRepeat }).map(
+          ([key, arm]) => {
+            const checkpointSummaries = arm.checkpoints.map((checkpoint) => ({
+              period: checkpoint.period,
+              workCycles: checkpoint.workCycles,
+              population: checkpoint.population,
+              resourceStocks: checkpoint.resourceStocks,
+              tech: checkpoint.tech,
+              jobs: checkpoint.native.jobs,
+              buildings: checkpoint.native.buildings,
+              foodProduction: checkpoint.native.foodProduction,
+              foodConsumption: checkpoint.native.foodConsumption,
+              starved: checkpoint.native.starved,
+              deaths: checkpoint.native.deaths,
+              invocations: countInvocationsByControl(
+                checkpoint.nativeInvocations,
+              ),
+              rngCalls: checkpoint.randomCalls,
+              rngState: checkpoint.rngState,
+            }));
+            const allocationClicks = new Map();
+            const allocationEvents = [];
+            for (const event of arm.constructionAllocationEvents) {
+              if (event.phase !== "gather-click") {
+                allocationEvents.push(event);
+                continue;
+              }
+              const groupKey = `${event.period}:${event.targetId}:${event.resourceId}`;
+              const group = allocationClicks.get(groupKey) ?? {
+                period: event.period,
+                targetId: event.targetId,
+                resourceId: event.resourceId,
+                clicks: 0,
+              };
+              group.clicks += 1;
+              allocationClicks.set(groupKey, group);
+            }
+            const controlCallCounts = Object.fromEntries(
+              Object.entries(arm.controlUsage).map(([controlId, usage]) => [
+                controlId,
+                Number(usage.returned ?? 0) + Number(usage.threw ?? 0),
+              ]),
+            );
+            return [
+              key,
+              {
+                name: arm.name,
+                checkpoints: checkpointSummaries,
+                bootstrapEvents:
+                  arm.checkpoints.at(-1)?.native.civilizationBootstrapEvents ??
+                  [],
+                handoffEvents:
+                  arm.checkpoints.at(-1)?.native.civilizationHandoffEvents ??
+                  [],
+                allocationEvents,
+                allocationClicks: [...allocationClicks.values()],
+                allocationGateRejections:
+                  arm.constructionAllocationGateRejections,
+                researchActions: groupInvocations(
+                  arm.researchInvocations.map((entry) => ({
+                    ...entry,
+                    method: "action",
+                  })),
+                ),
+                constructionActions: groupInvocations(
+                  arm.constructionInvocations.map((entry) => ({
+                    ...entry,
+                    method: "action",
+                  })),
+                ),
+                gatherCalls: arm.gatherCalls,
+                controlCallCounts,
+                totalNativeCalls: Object.values(controlCallCounts).reduce(
+                  (sum, calls) => sum + calls,
+                  0,
+                ),
+                nativeFailures: arm.nativeFailures,
+                staleOrThrewControls: arm.staleOrThrewControls,
+                rngCalls: arm.randomCalls,
+                rngState: arm.finalRngState,
+                exportedSaveSha256: arm.finalExportSha256,
+              },
+            ];
+          },
+        ),
+      ),
+      parity: {
+        observerEquivalent: observerDifference === undefined,
+        firstObserverDifference: observerDifference,
+        observerBuildQueueProbeCalls: observerProbeCalls,
+        firstValidCandidateMaterialClickPeriod:
+          firstCandidateClickPeriod ?? null,
+        candidateEquivalentBeforeFirstValidClick:
+          candidateBeforeClick === undefined,
+        firstCandidateDifferenceBeforeClick: candidateBeforeClick,
+        firstCandidateDifferenceAfterClick:
+          firstCandidateDifferenceTrace ?? null,
+        candidateRepeatable: candidateRepeatDifference === undefined,
+        candidateRepeatDifference: candidateRepeatDifference ?? null,
+        farmPurchasePeriod: p19FarmInvocation?.period ?? null,
+        p1000Farmers: at1000?.native.jobs?.farmer ?? 0,
+        p1000FarmerFoodProduction:
+          at1000?.native.foodProduction?.Farmer ?? null,
+      },
+    };
+    const parityEvidencePath = path.join(
+      root,
+      "experiments/p20-2-construction-handoff-parity-evidence.json",
+    );
+    await writeFile(
+      parityEvidencePath,
+      `${JSON.stringify(evidence, null, 2)}\n`,
+    );
+    console.log(
+      JSON.stringify(
+        {
+          testSurfaceBundleSha256,
+          observerEquivalent: evidence.parity.observerEquivalent,
+          firstObserverDifference: observerDifference
+            ? {
+                period: observerDifference.period,
+                p19: {
+                  resourceStocks: observerDifference.left.resourceStocks,
+                  controlUsage: observerDifference.left.controlUsage,
+                  tech: observerDifference.left.tech,
+                  jobs: observerDifference.left.jobs,
+                  buildings: observerDifference.left.buildings,
+                  randomCalls: observerDifference.left.randomCalls,
+                  rngState: observerDifference.left.rngState,
+                },
+                observer: {
+                  resourceStocks: observerDifference.right.resourceStocks,
+                  controlUsage: observerDifference.right.controlUsage,
+                  tech: observerDifference.right.tech,
+                  jobs: observerDifference.right.jobs,
+                  buildings: observerDifference.right.buildings,
+                  randomCalls: observerDifference.right.randomCalls,
+                  rngState: observerDifference.right.rngState,
+                },
+              }
+            : null,
+          firstValidCandidateMaterialClickPeriod:
+            evidence.parity.firstValidCandidateMaterialClickPeriod,
+          candidateEquivalentBeforeFirstValidClick:
+            evidence.parity.candidateEquivalentBeforeFirstValidClick,
+          candidateRepeatable: evidence.parity.candidateRepeatable,
+          farmPurchasePeriod: evidence.parity.farmPurchasePeriod,
+          farmersAt1000: evidence.parity.p1000Farmers,
+          evidence: parityEvidencePath,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    const baseline =
+      previousEvidence?.normalBaseline ??
+      (await replay("normal-baseline", false));
+    const stoneTen =
+      previousEvidence?.nativeStoneTen ??
+      (await replay("native-stone-ten", false, 5_000, [
+        ["undefined-stone", 10],
+      ]));
+    const starterPacket =
+      previousEvidence?.nativeStarterPacket ??
+      (await replay("native-food-lumber-stone-packet", false, 5_000, [
+        ["undefined-food", 10],
+        ["city-lumber", 10],
+        ["undefined-stone", 10],
+      ]));
+    const candidate = await replay(
+      "p20-1-corrected-construction-authority",
+      false,
+      10_000,
+      [],
+      {
+        authorizationId: "p19-human-candidate-1",
+        constructionHandoffEnabled: true,
+        constructionAllocation: {
+          enabled: true,
+          maxEpisodes: 3,
+          maxEpisodeClicks: 80,
+          maxTotalClicks: 140,
+        },
+      },
+    );
+    const duplicateCandidate = await replay(
+      "p20-1-corrected-construction-authority-repeat",
+      false,
+      10_000,
+      [],
+      {
+        authorizationId: "p19-human-candidate-2",
+        constructionHandoffEnabled: true,
+        constructionAllocation: {
+          enabled: true,
+          maxEpisodes: 3,
+          maxEpisodeClicks: 80,
+          maxTotalClicks: 140,
+        },
+      },
+    );
+    await mkdir(path.dirname(interimEvidencePath), { recursive: true });
+    await writeFile(
+      interimEvidencePath,
+      `${JSON.stringify({ candidate, duplicateCandidate }, null, 2)}\n`,
+    );
+    const diagnostic =
+      previousEvidence?.alwaysClickDiagnostic ??
+      (await replay("always-click-diagnostic", true));
+    const duplicateDiagnostic =
+      previousEvidence?.alwaysClickDuplicate ??
+      (await replay("always-click-diagnostic-repeat", true));
+    assert.equal(
+      diagnostic.finalExportSha256,
+      duplicateDiagnostic.finalExportSha256,
+      "matched always-click diagnostic exports should be deterministic",
+    );
+    assert.deepEqual(
+      diagnostic.controlUsage,
+      duplicateDiagnostic.controlUsage,
+      "matched always-click native control use should be deterministic",
+    );
+    if (duplicateDiagnostic.constructionSavingTargetObservations !== undefined)
+      assert.deepEqual(
+        diagnostic.constructionSavingTargetObservations,
+        duplicateDiagnostic.constructionSavingTargetObservations,
+        "matched always-click Construction demand observations should be deterministic",
+      );
+    assert.equal(
+      candidate.finalExportSha256,
+      duplicateCandidate.finalExportSha256,
+      "the bounded candidate exports should be deterministic",
+    );
+    assert.deepEqual(
+      candidate.controlUsage,
+      duplicateCandidate.controlUsage,
+      "the bounded candidate native control use should be deterministic",
+    );
+    assert.deepEqual(
+      candidate.researchInvocations,
+      duplicateCandidate.researchInvocations,
+      "the bounded candidate native Research periods should be deterministic",
+    );
+    assert.deepEqual(
+      candidate.constructionInvocations,
+      duplicateCandidate.constructionInvocations,
+      "the bounded candidate native Construction periods should be deterministic",
+    );
+    assert.equal(
+      candidate.finalRngState,
+      duplicateCandidate.finalRngState,
+      "the bounded candidate final RNG state should be deterministic",
+    );
+    assert.equal(
+      candidate.randomCalls,
+      duplicateCandidate.randomCalls,
+      "the bounded candidate random-call count should be deterministic",
+    );
+    assert.deepEqual(
+      candidate.constructionSavingTargetObservations,
+      duplicateCandidate.constructionSavingTargetObservations,
+      "the bounded candidate Construction observations should be deterministic",
+    );
+    const candidateFinalNative = candidate.checkpoints.at(-1)?.native;
+    assert.equal(
+      candidateFinalNative?.civilizationBootstrapEvents.length,
+      10,
+      "bootstrap stops after its ten native Gather clicks",
+    );
+    const authorizationEvents = candidate.constructionAllocationEvents.filter(
+      (event) => event.phase === "authorized",
+    );
+    const allocationClicks = candidate.constructionAllocationEvents.filter(
+      (event) => event.phase === "gather-click",
+    );
+    assert.ok(authorizationEvents.length <= 3);
+    assert.ok(allocationClicks.length <= 140);
+    assert.ok(
+      authorizationEvents.every(
+        (event, index) =>
+          authorizationEvents.findIndex(
+            (other) => other.targetId === event.targetId,
+          ) === index,
+      ),
+      "repeated unchanged targets cannot reset an exhausted episode budget",
+    );
+    assert.ok(
+      allocationClicks.every((event) => event.episodeClicks <= 80),
+      "episode click budgets are enforced",
+    );
+    const clicksByWorkCycle = new Map();
+    for (const event of allocationClicks)
+      clicksByWorkCycle.set(
+        event.workCycleId,
+        (clicksByWorkCycle.get(event.workCycleId) ?? 0) + 1,
+      );
+    assert.ok(
+      [...clicksByWorkCycle.values()].every((count) => count <= 5),
+      "per-cycle click budgets are enforced",
+    );
+    assert.equal(
+      candidate.checkpoints.at(-1)?.native.civilizationHandoffEvents.length,
+      10,
+      "the P19 Construction handoff remains bounded at ten clicks",
+    );
+    const candidateAt1000 = candidate.checkpoints.find(
+      (checkpoint) => checkpoint.period === 1_000,
+    );
+    const candidateAt5000 = candidate.checkpoints.find(
+      (checkpoint) => checkpoint.period === 5_000,
+    );
+    const diagnosticAt5000 = diagnostic.checkpoints.find(
+      (checkpoint) => checkpoint.period === 5_000,
+    );
+    const gatherCallsAt = (checkpoint) =>
+      ["undefined-food.action", "city-lumber.action", "undefined-stone.action"]
+        .map((id) => checkpoint?.controlUsage?.[id]?.returned ?? 0)
+        .reduce((sum, count) => sum + count, 0);
+    const bootstrapActivatedOwners =
+      candidateAt1000?.native.population > 0 &&
+      candidateAt1000?.native.jobs?.farmer > 0 &&
+      candidateAt1000?.native.buildings?.farm > 0 &&
+      candidateAt1000?.controlUsage?.["tech-sundial.action"]?.returned === 1;
+    const downstreamFoodBlocker =
+      candidateAt5000?.native.starved > 0 &&
+      candidateAt5000?.native.resources?.Food?.diff < 0 &&
+      candidateAt5000?.native.foodProduction !== null &&
+      candidateAt5000?.native.foodConsumption !== null;
+    const additionalInvocations = (actual, baseline) => {
+      const baselineCounts = new Map();
+      for (const entry of baseline)
+        baselineCounts.set(
+          entry.elementId,
+          (baselineCounts.get(entry.elementId) ?? 0) + 1,
+        );
+      const actualCounts = new Map();
+      return actual.filter((entry) => {
+        const count = (actualCounts.get(entry.elementId) ?? 0) + 1;
+        actualCounts.set(entry.elementId, count);
+        return count > (baselineCounts.get(entry.elementId) ?? 0);
+      });
+    };
+    const additionalConstructionPurchases = additionalInvocations(
+      candidate.constructionInvocations,
+      previousEvidence.candidate.constructionInvocations,
+    );
+    const additionalResearchPurchases = additionalInvocations(
+      candidate.researchInvocations,
+      previousEvidence.candidate.researchInvocations,
+    );
+    const lastConstructionOwnerObservation =
+      candidate.constructionOwnerEvidence.at(-1);
+    const ownerAt5000 = candidate.constructionOwnerEvidence.find(
+      (entry) => entry.period === 5_000,
+    );
+    const consumedTargetAt5000 =
+      ownerAt5000?.publicationConsumedByGather?.target;
+    const latestPublishedTargetId =
+      candidateFinalNative?.currentConstructionSavingTargetObservation?.target
+        ?.name ?? null;
+    const lateAuthorityMismatch =
+      ownerAt5000 !== undefined &&
+      (ownerAt5000.publicationCurrent !== true ||
+        ownerAt5000.workCycleId !== ownerAt5000.publicationWorkCycleId + 1 ||
+        ownerAt5000.targetId !== ownerAt5000.publishedTargetId ||
+        ownerAt5000.targetId !== consumedTargetAt5000?.name ||
+        JSON.stringify(ownerAt5000.requestPrice) !==
+          JSON.stringify(ownerAt5000.publicationPrice) ||
+        JSON.stringify(ownerAt5000.requestPrice) !==
+          JSON.stringify(ownerAt5000.nativePrice) ||
+        ownerAt5000.requestPool !== ownerAt5000.publicationPool ||
+        ownerAt5000.requestPool !== ownerAt5000.nativePool);
+    const firstAllocationAuthorization =
+      candidate.constructionAllocationEvents.find(
+        (event) => event.phase === "authorized",
+      ) ?? null;
+    const firstAuthorityDisagreement =
+      candidate.constructionAllocationEvents.find(
+        (event) => event.phase === "authority-disagreement",
+      ) ?? null;
+    const additionalCompetingConstructionPurchases =
+      additionalConstructionPurchases.filter(
+        (entry) => entry.period > 576 && entry.elementId !== "city-rock_quarry",
+      );
+    const decision =
+      lateAuthorityMismatch || firstAuthorityDisagreement !== null
+        ? "C"
+        : additionalConstructionPurchases.length > 0 ||
+            additionalResearchPurchases.length > 0
+          ? "A"
+          : allocationClicks.length > 0
+            ? "B"
+            : "C";
+    const firstResearchOfferCheckpoint = candidate.checkpoints.find(
+      (checkpoint) => checkpoint.native.researchOffers.length > 0,
+    );
+    assert.ok(baseline.constructionSavingTargetObservationCount > 0);
+    assert.ok(
+      baseline.constructionSavingTargetObservations.every(
+        (observation) => observation.target === null,
+      ),
+      "the baseline must not invent a Construction target",
+    );
+    assert.ok(
+      diagnostic.constructionSavingTargetObservations.some(
+        (observation) => observation.target !== null,
+      ),
+      "the diagnostic must record the first published Construction saving target",
+    );
+    const baselineFinal = baseline.checkpoints.at(-1);
+    const diagnosticFinal = diagnostic.checkpoints.at(-1);
+    const workEvidence = {
+      sourceFileCount: sourceFiles.length,
+      sourceAggregateSha256,
+      sourceFiles: Object.fromEntries(
+        await Promise.all(
+          sourceFiles.map(async (file) => [
+            path.relative(root, file).replaceAll("\\", "/"),
+            await sha256File(file),
+          ]),
+        ),
+      ),
+      productionBundleSha256,
+      testSurfaceBundleSha256,
+      currentBundleSha256: currentBundleHash,
+      gameSha256: hash(gameBytes),
+      fixtureSha256: hash(fixtureBytes),
+      baseSettingsSha256: hash(baseSettingsText),
+      settingsSha256: hash(settingsText),
+      runner: runner.inputs,
+    };
+    const evidence = {
+      experiment: "P20.1 Construction allocation authority correction",
+      decision,
+      runner: "chromium-exact",
+      seed,
+      epoch,
+      pinnedGame: "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+      fixture: {
+        path: path.relative(root, fixturePath).replaceAll("\\", "/"),
+        sha256: hash(fixtureBytes),
+        bytes: fixture.exportedSaveBytes,
+        firstHumanCheckpoint: fixture.firstHumanCheckpoint,
+        nativeLineage: fixture.native,
+        humanoidGenusAction: fixture.genusAction,
+        saveMutation:
+          "none; debug expose was set only on in-memory replay copies",
+      },
+      settings: {
+        path: path.relative(root, settingsPath).replaceAll("\\", "/"),
+        sha256: hash(settingsText),
+        basePath: path.relative(root, baseSettingsPath).replaceAll("\\", "/"),
+        baseSha256: hash(baseSettingsText),
+        configuredOwners,
+        overrides: {
+          userEvolutionTarget: {
+            from: baseSettings.userEvolutionTarget,
+            to: settings.userEvolutionTarget,
+            reason: "requested Human target",
+          },
+          firstEvolutionQueueTarget: {
+            from: baseSettings.evolutionQueue[0].userEvolutionTarget,
+            to: settings.evolutionQueue[0].userEvolutionTarget,
+            reason: "the enabled queue is applied before target selection",
+          },
+          firstEvolutionQueueGenus: {
+            from: baseSettings.evolutionQueue[0].userEvolutionGenus,
+            to: settings.evolutionQueue[0].userEvolutionGenus,
+            reason:
+              "make the queued Human row select its native Humanoid genus",
+          },
+          buildingAlwaysClick: false,
+        },
+        queueEnabled: settings.evolutionQueueEnabled,
+        queueRepeat: settings.evolutionQueueRepeat,
+      },
+      inputHashes: workEvidence,
+      normalBaseline: baseline,
+      nativeStoneTen: stoneTen,
+      nativeStarterPacket: starterPacket,
+      candidate,
+      comparison: {
+        p19AcceptedCandidate: {
+          evidencePath: "experiments/p19-civilization-bootstrap-evidence.json",
+          decision: previousEvidence.decision,
+          candidate: {
+            periods: previousEvidence.candidate.periods,
+            finalExportSha256: previousEvidence.candidate.finalExportSha256,
+            finalRngState: previousEvidence.candidate.finalRngState,
+            randomCalls: previousEvidence.candidate.randomCalls,
+            gatherCalls: previousEvidence.candidate.gatherCalls,
+            constructionInvocations:
+              previousEvidence.candidate.constructionInvocations,
+            researchInvocations: previousEvidence.candidate.researchInvocations,
+            checkpoints: previousEvidence.candidate.checkpoints.map(
+              ({ period, population, tech, resourceStocks, native }) => ({
+                period,
+                population,
+                tech,
+                resourceStocks,
+                foodProduction: native.foodProduction,
+                starved: native.starved,
+                deaths: native.deaths,
+                jobs: native.jobs,
+                buildings: native.buildings,
+              }),
+            ),
+          },
+        },
+        p20OriginalHistorical: {
+          evidencePath:
+            "experiments/p20-standard-human-sustained-allocation-evidence.json",
+          decision: historicalP20.decision,
+          candidate: {
+            periods: historicalP20.candidate.periods,
+            finalExportSha256: historicalP20.candidate.finalExportSha256,
+            finalRngState: historicalP20.candidate.finalRngState,
+            randomCalls: historicalP20.candidate.randomCalls,
+            constructionAllocationEvents:
+              historicalP20.candidate.constructionAllocationEvents,
+            constructionInvocations:
+              historicalP20.candidate.constructionInvocations,
+            researchInvocations: historicalP20.candidate.researchInvocations,
+          },
+          admissible: false,
+        },
+      },
+      duplicateCandidate: {
+        finalExportSha256: duplicateCandidate.finalExportSha256,
+        controlUsage: duplicateCandidate.controlUsage,
+        matched:
+          candidate.finalExportSha256 === duplicateCandidate.finalExportSha256,
+      },
+      alwaysClickDiagnostic: diagnostic,
+      alwaysClickDuplicate: {
+        finalExportSha256: duplicateDiagnostic.finalExportSha256,
+        controlUsage: duplicateDiagnostic.controlUsage,
+        matched: true,
+      },
+      stalledBoundary: {
         period: baselineFinal.period,
         population: baselineFinal.population,
-        tech: baselineFinal.tech,
         resources: baselineFinal.resourceStocks,
+        tech: baselineFinal.tech,
+        researchOffers: baselineFinal.native.researchOffers,
+        constructionOffers: baselineFinal.native.constructionOffers,
+        gatherControls: baselineFinal.native.gatherControls,
+        marketControls: baselineFinal.native.marketControls,
+        smelterControls: baselineFinal.native.smelterControls,
+        storageControls: baselineFinal.native.storageControls,
+        jobs: baselineFinal.native.jobs,
+        buildings: baselineFinal.native.buildings,
+        workCycles: baselineFinal.workCycles,
+        nativeErrors: baselineFinal.nativeErrors,
+        staleOrThrewControls: baselineFinal.staleOrThrewControls,
       },
-      diagnostic: {
-        period: diagnosticFinal.period,
-        population: diagnosticFinal.population,
-        tech: diagnosticFinal.tech,
-        gatherCalls: diagnostic.gatherCalls,
-        totalGatherCalls: Object.values(diagnostic.gatherCalls).reduce(
-          (sum, count) => sum + count.returned,
-          0,
-        ),
+      ownerAuthority: {
+        construction: {
+          baselineSavingTargetObservations:
+            baseline.constructionSavingTargetObservations,
+          baselineObservationCount:
+            baseline.constructionSavingTargetObservationCount,
+          diagnosticSavingTargetObservations:
+            diagnostic.constructionSavingTargetObservations,
+          diagnosticObservationCount:
+            diagnostic.constructionSavingTargetObservationCount,
+          evidence:
+            "the compile-time-only observer reads Construction's published saving target and exact price after each successful native Construction cycle; no native building action or Build control is offered at the first stall",
+          laterAuthority:
+            "the existing Construction observation publishes a current saving target and exact native cost once one exists; it is replaceable and must be revalidated",
+        },
+        research: {
+          baselineCurrentOffers: [],
+          evidence:
+            "no native Research rows or current offer prices exist at the first stall; no Research action is invoked",
+          policy:
+            "affordable-first; an unaffordable offer would not authorize Gather",
+        },
+        other:
+          "no current production-owner request was published at the initial stall",
+        missingAuthority:
+          "there is no current owner declaration for the initial material gathering needed to create population and unlock Construction or Research; Gather exposes controls but does not publish a resource demand",
       },
-      fixtureSha256: hash(fixtureBytes),
-      settingsSha256: hash(settingsText),
-      gameSha256: hash(gameBytes),
-      sourceAggregateSha256,
-      productionBundleSha256,
-      evidencePath: path.relative(root, evidencePath).replaceAll("\\", "/"),
-    })}\n`,
-  );
+      candidate,
+      candidateDeterminism: {
+        repeatedExportSha256: duplicateCandidate.finalExportSha256,
+        controlUsage: duplicateCandidate.controlUsage,
+        researchInvocations: duplicateCandidate.researchInvocations,
+        constructionInvocations: duplicateCandidate.constructionInvocations,
+        randomCalls: duplicateCandidate.randomCalls,
+        finalRngState: duplicateCandidate.finalRngState,
+        matched: true,
+      },
+      outcomeClassification: {
+        decision,
+        firstAllocationAuthorization,
+        firstAuthorityDisagreement,
+        lateAuthorityMismatch,
+        lastConstructionOwnerTargetId:
+          lastConstructionOwnerObservation?.targetId ?? null,
+        latestPublishedTargetId,
+        bootstrapActivatedOwners,
+        downstreamFoodBlocker,
+        additionalConstructionPurchases,
+        additionalCompetingConstructionPurchases,
+        additionalResearchPurchases,
+        candidateGatherClicksAt5000: gatherCallsAt(candidateAt5000),
+        alwaysClickGatherClicksAt5000: gatherCallsAt(diagnosticAt5000),
+        firstObservedResearchOfferPeriod:
+          firstResearchOfferCheckpoint?.period ?? null,
+        firstResearchPurchase: candidate.researchInvocations[0] ?? null,
+        firstConstructionPurchase: candidate.constructionInvocations[0] ?? null,
+        publicationChronology: {
+          period5000: ownerAt5000
+            ? {
+                requestPhase: ownerAt5000.phase,
+                workCycleId: ownerAt5000.workCycleId,
+                requestTargetId: ownerAt5000.targetId,
+                requestPrice: ownerAt5000.requestPrice,
+                publicationWorkCycleId: ownerAt5000.publicationWorkCycleId,
+                consumedPublication: consumedTargetAt5000,
+                publicationCurrent: ownerAt5000.publicationCurrent,
+                priceAuthorityValid: ownerAt5000.priceAuthorityValid,
+                moneyStock: ownerAt5000.resources?.Money?.amount ?? null,
+              }
+            : null,
+          firstAuthorityDisagreement,
+        },
+      },
+      productionBundleParity: {
+        requiredSha256:
+          "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+        currentSha256: currentBundleHash,
+        testSurfaceBundleSha256,
+        byteIdentical:
+          currentBundleHash ===
+          "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+      },
+    };
+    await mkdir(path.dirname(evidencePath), { recursive: true });
+    await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+    assert.ok(
+      diagnosticFinal.population > 0,
+      "always-click must enable native downstream production",
+    );
+    assert.ok(diagnosticFinal.tech.axe >= 1);
+    process.stdout.write(
+      `${JSON.stringify({
+        decision: evidence.decision,
+        fixture: evidence.fixture,
+        baseline: {
+          period: baselineFinal.period,
+          population: baselineFinal.population,
+          tech: baselineFinal.tech,
+          resources: baselineFinal.resourceStocks,
+        },
+        diagnostic: {
+          period: diagnosticFinal.period,
+          population: diagnosticFinal.population,
+          tech: diagnosticFinal.tech,
+          gatherCalls: diagnostic.gatherCalls,
+          totalGatherCalls: Object.values(diagnostic.gatherCalls).reduce(
+            (sum, count) => sum + count.returned,
+            0,
+          ),
+        },
+        fixtureSha256: hash(fixtureBytes),
+        settingsSha256: hash(settingsText),
+        gameSha256: hash(gameBytes),
+        sourceAggregateSha256,
+        productionBundleSha256,
+        evidencePath: path.relative(root, evidencePath).replaceAll("\\", "/"),
+      })}\n`,
+    );
+  }
 } finally {
   await Promise.all(sessions.map((session) => session.close()));
   await runner.close();

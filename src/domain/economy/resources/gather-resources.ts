@@ -36,11 +36,25 @@ export interface GatherResourcesInput {
       quantity: number;
       clickBudget: number;
       preserveMana?: boolean;
+      constructionProvenance?: Readonly<{
+        actionId: string;
+        resourceId: "Lumber";
+        price: number;
+        targetGeneration: number;
+        resourceControlGeneration: number;
+      }>;
     }>;
     readonly Stone?: Readonly<{
       quantity: number;
       clickBudget: number;
       preserveMana?: boolean;
+      constructionProvenance?: Readonly<{
+        actionId: string;
+        resourceId: "Stone";
+        price: number;
+        targetGeneration: number;
+        resourceControlGeneration: number;
+      }>;
     }>;
   }>;
   readonly testOnlyBootstrapTarget?: Readonly<{
@@ -65,6 +79,15 @@ export interface GatherOperation {
   readonly bootstrap?: boolean;
   /** Test-only Construction responses must use ordinary clicks and preserve Mana. */
   readonly preserveMana?: boolean;
+  /** Test-surface provenance for a material shortage authorized by one validated Construction target. */
+  readonly constructionProvenance?: Readonly<{
+    readonly actionId: string;
+    readonly resourceId: "Lumber" | "Stone";
+    readonly price: number;
+    readonly targetGeneration: number;
+    readonly resourceControlGeneration: number;
+    readonly stockTracker: { quantity: number };
+  }>;
   readonly beforeAction: readonly GatherResourceAssignment[];
   readonly afterAction: readonly GatherResourceAssignment[];
 }
@@ -434,6 +457,14 @@ export function planGatherResources(
           actionId,
           amount,
           ...(target.preserveMana === true ? { preserveMana: true } : {}),
+          ...(target.constructionProvenance === undefined
+            ? {}
+            : {
+                constructionProvenance: Object.freeze({
+                  ...target.constructionProvenance,
+                  stockTracker: { quantity: current },
+                }),
+              }),
           beforeAction: Object.freeze([
             Object.freeze({
               resourceId,

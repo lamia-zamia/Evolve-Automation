@@ -2612,7 +2612,7 @@ export function startCapturedRuntime({
                   actionId,
                   cost: Object.freeze({ ...nativeCost }),
                   resourceClickBudget: 5,
-                  controlGeneration: targetControl.generation,
+                  controlGeneration: targetControl!.generation,
                   isCurrent: targetIsCurrent,
                 });
             }
@@ -2628,6 +2628,30 @@ export function startCapturedRuntime({
                 gatherTestHooks,
                 "constructionAllocation",
               );
+              const bootstrapAuthorization = readProperty(
+                gatherTestHooks,
+                "civilizationBootstrap",
+              );
+              const bootstrapState = readProperty(
+                bootstrapAuthorization,
+                "state",
+              );
+              const handoffClicks = readProperty(
+                bootstrapState,
+                "handoffClicks",
+              );
+              const handoffLimit = readProperty(bootstrapState, "handoffLimit");
+              const p19HandoffPending =
+                readProperty(gatherTestHooks, "constructionHandoffEnabled") ===
+                  true &&
+                readProperty(bootstrapAuthorization, "authorized") === true &&
+                (readProperty(bootstrapState, "phase") === "active" ||
+                  readProperty(bootstrapState, "phase") === "handoff") &&
+                typeof handoffClicks === "number" &&
+                Number.isSafeInteger(handoffClicks) &&
+                typeof handoffLimit === "number" &&
+                Number.isSafeInteger(handoffLimit) &&
+                handoffClicks < handoffLimit;
               const root = pageCapture.rootState.readRoot();
               const rootGeneration = progression.readRootGeneration();
               const progressionGeneration = progression.readProgressionEpoch();
@@ -2821,7 +2845,10 @@ export function startCapturedRuntime({
                   expires:
                     "target-price-root-progression-control-queue-or-permission-change",
                 });
+              let lastRevalidationFailureReason =
+                "changed-state-during-revalidation";
               const isNativeRequestCurrent = () => {
+                let failureReason = "changed-state-during-revalidation";
                 try {
                   const now = readDemand("pre-Gather").savingTarget;
                   const nowPublished =
@@ -2872,47 +2899,135 @@ export function startCapturedRuntime({
                     typeof targetId === "string"
                       ? pageCapture.controls.resolve(targetId)
                       : undefined;
-                  return (
-                    pageCapture.rootState.readRoot() === root &&
-                    progression.readRootGeneration() === rootGeneration &&
-                    progression.readProgressionEpoch() ===
-                      progressionGeneration &&
-                    nowAuthority !== undefined &&
-                    JSON.stringify(nowAuthority.cost) ===
-                      JSON.stringify(authority?.cost) &&
-                    nowAuthority.pool === authority?.pool &&
-                    nowControl?.methods.includes("action") === true &&
-                    nowControl.generation === targetControl?.generation &&
-                    ["queue", "r_queue"].every((queueId) => {
+                  if (pageCapture.rootState.readRoot() !== root) {
+                    failureReason = "root-changed-during-revalidation";
+                    return false;
+                  }
+                  if (
+                    progression.readRootGeneration() !== rootGeneration ||
+                    progression.readProgressionEpoch() !== progressionGeneration
+                  ) {
+                    failureReason = "epoch-changed-during-revalidation";
+                    return false;
+                  }
+                  if (nowAuthority === undefined) {
+                    failureReason = nowPublicationCurrent
+                      ? "target-price-pool-changed-during-revalidation"
+                      : "publication-missing-or-invalid-epoch";
+                    return false;
+                  }
+                  if (
+                    JSON.stringify(nowAuthority.cost) !==
+                      JSON.stringify(authority?.cost) ||
+                    nowAuthority.pool !== authority?.pool
+                  ) {
+                    failureReason =
+                      "target-price-pool-changed-during-revalidation";
+                    return false;
+                  }
+                  if (
+                    nowControl?.methods.includes("action") !== true ||
+                    nowControl.generation !== targetControl?.generation
+                  ) {
+                    failureReason =
+                      "construction-control-unavailable-or-changed";
+                    return false;
+                  }
+                  if (
+                    !["queue", "r_queue"].every((queueId) => {
                       const entries = readProperty(
                         readProperty(root, queueId),
                         "queue",
                       );
                       return Array.isArray(entries) && entries.length === 0;
-                    }) &&
-                    noClaims &&
-                    readProperty(settingsStore.readRaw(), "autoBuild") === true
-                  );
+                    })
+                  ) {
+                    failureReason = "queue-conflict-during-revalidation";
+                    return false;
+                  }
+                  if (!noClaims) {
+                    failureReason = "claim-conflict-during-revalidation";
+                    return false;
+                  }
+                  if (
+                    readProperty(settingsStore.readRaw(), "autoBuild") !== true
+                  ) {
+                    failureReason = "permission-changed-during-revalidation";
+                    return false;
+                  }
+                  return true;
                 } catch {
+                  failureReason = "revalidation-threw";
                   return false;
+                } finally {
+                  lastRevalidationFailureReason = failureReason;
                 }
               };
-              const otherCostsAffordable = authority !== undefined;
               const authorize = readProperty(allocation, "authorize");
+              const missingNonMaterialCost =
+                isRecord(request?.cost) &&
+                Object.entries(request.cost).some(
+                  ([resourceId, amount]) =>
+                    resourceId !== "Lumber" &&
+                    resourceId !== "Stone" &&
+                    typeof amount === "number" &&
+                    Number(stock[resourceId] ?? 0) < amount,
+                );
+              const missingGatherControl = Object.entries(shortage).some(
+                ([resourceId, amount]) =>
+                  amount > 0 && bindings[resourceId] === null,
+              );
+              const insufficientGatherCapacity = Object.entries(shortage).some(
+                ([resourceId, amount]) =>
+                  amount > 0 && Number(capacity[resourceId] ?? 0) < amount,
+              );
+              let allocationRejectionReason: string | undefined;
+              if (p19HandoffPending)
+                allocationRejectionReason = "civilization-handoff-pending";
+              else if (!publicationIsCurrent)
+                allocationRejectionReason =
+                  "publication-missing-or-invalid-epoch";
+              else if (
+                typeof targetId !== "string" ||
+                !targetId.startsWith("city-") ||
+                !requestMatchesPublication ||
+                !currentSavingTargetMatchesPublication ||
+                authority === undefined
+              )
+                allocationRejectionReason = missingNonMaterialCost
+                  ? "non-material-affordability"
+                  : "target-price-pool-mismatch";
+              else if (targetControl?.methods.includes("action") !== true)
+                allocationRejectionReason = "construction-control-unavailable";
+              else if (missingGatherControl)
+                allocationRejectionReason = "gather-control-unavailable";
+              else if (insufficientGatherCapacity)
+                allocationRejectionReason = "gather-capacity-unavailable";
+              else if (!queuesEmpty)
+                allocationRejectionReason = "queue-conflict";
+              else if (!noClaims) allocationRejectionReason = "claim-conflict";
+              else if (!autoBuild)
+                allocationRejectionReason = "permission-denied";
+              else if (!progression.observations.hasCompletedOrdering())
+                allocationRejectionReason = "ordering-incomplete";
+              else if (!isNativeRequestCurrent())
+                allocationRejectionReason = lastRevalidationFailureReason;
+              else if (typeof authorize !== "function")
+                allocationRejectionReason =
+                  "authorization-callback-unavailable";
+
+              const rejectAllocation = readProperty(allocation, "onRejected");
               if (
-                typeof targetId === "string" &&
-                targetId.startsWith("city-") &&
-                authority !== undefined &&
-                targetControl?.methods.includes("action") === true &&
-                otherCostsAffordable &&
-                queuesEmpty &&
-                noClaims &&
-                requestMatchesPublication &&
-                readProperty(settingsStore.readRaw(), "autoBuild") === true &&
-                progression.observations.hasCompletedOrdering() &&
-                isNativeRequestCurrent() &&
-                typeof authorize === "function"
-              ) {
+                allocationRejectionReason !== undefined &&
+                typeof rejectAllocation === "function"
+              )
+                rejectAllocation({
+                  targetId,
+                  workCycleId: automationCycle,
+                  reason: allocationRejectionReason,
+                });
+
+              if (allocationRejectionReason === undefined) {
                 const contract = Object.freeze({
                   ownerId: "construction",
                   targetId,
@@ -2946,11 +3061,11 @@ export function startCapturedRuntime({
                   resourceAuthority: "native-gather-owner-controls",
                   rootGeneration,
                   progressionGeneration,
-                  controlGeneration: targetControl.generation,
+                  controlGeneration: targetControl!.generation,
                   queuesEmpty,
                   permissions: Object.freeze({
                     autoBuild,
-                    controlAction: targetControl.methods.includes("action"),
+                    controlAction: targetControl!.methods.includes("action"),
                   }),
                   competingClaims: !noClaims,
                   materialShortage: Object.freeze(shortage),
@@ -2959,7 +3074,28 @@ export function startCapturedRuntime({
                   expires:
                     "target-price-root-progression-control-queue-or-permission-change",
                 });
-                const decision = authorize(contract);
+                let decision: unknown;
+                let authorizationCallbackFailure: string | undefined;
+                try {
+                  decision = (authorize as (value: typeof contract) => unknown)(
+                    contract,
+                  );
+                } catch (error) {
+                  authorizationCallbackFailure =
+                    error instanceof Error
+                      ? error.message.slice(0, 160)
+                      : "non-error-throwable";
+                }
+                if (
+                  authorizationCallbackFailure !== undefined &&
+                  typeof rejectAllocation === "function"
+                )
+                  rejectAllocation({
+                    targetId,
+                    workCycleId: automationCycle,
+                    reason: "authorization-callback-threw",
+                    detail: authorizationCallbackFailure,
+                  });
                 const cycleBudget = Number(
                   readProperty(decision, "clickBudget"),
                 );
@@ -2972,14 +3108,27 @@ export function startCapturedRuntime({
                 )
                   standardConstructionTarget = Object.freeze({
                     actionId: targetId,
+                    allocationAuthorized: true,
                     cost: Object.freeze({ ...price }),
                     resourceClickBudget: cycleBudget,
-                    controlGeneration: targetControl.generation,
+                    controlGeneration: targetControl!.generation,
                     isCurrent: () =>
                       isNativeRequestCurrent() &&
                       (typeof isCurrent !== "function" ||
                         isCurrent(contract) === true),
                     onClick: readProperty(decision, "onClick"),
+                  });
+                else if (
+                  authorizationCallbackFailure === undefined &&
+                  typeof rejectAllocation === "function"
+                )
+                  rejectAllocation({
+                    targetId,
+                    workCycleId: automationCycle,
+                    reason:
+                      decision === undefined
+                        ? "budget-or-policy-denial"
+                        : "invalid-click-budget",
                   });
               }
             }

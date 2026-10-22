@@ -97,6 +97,7 @@ interface TestStandardResearchTarget {
 
 interface TestStandardConstructionTarget {
   readonly actionId: string;
+  readonly allocationAuthorized?: boolean;
   readonly cost: Readonly<Record<string, number>>;
   readonly resourceClickBudget: number;
   readonly controlGeneration: number;
@@ -515,7 +516,8 @@ export function createCapturedGatherResourcesAdapter({
           readProperty(
             readProperty(testIntervention, "constructionAllocation"),
             "enabled",
-          ) === true;
+          ) === true &&
+          readProperty(constructionTarget, "allocationAuthorized") === true;
         const remainingHandoffClicks =
           storedBootstrapState !== undefined &&
           (storedBootstrapState.phase === "active" ||
@@ -946,96 +948,99 @@ export function createCapturedGatherResourcesAdapter({
         ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
         (testStandardResearchTarget !== undefined ||
-          (readProperty(
+          readProperty(
             testIntervention,
             "validatedStandardConstructionTarget",
-          ) as TestStandardConstructionTarget | undefined) !== undefined)
-          ? {
-              ...((readProperty(
+          ) !== undefined)
+          ? (() => {
+              const validatedConstructionTarget = readProperty(
                 testIntervention,
                 "validatedStandardConstructionTarget",
-              ) as TestStandardConstructionTarget | undefined) !== undefined
-                ? {
-                    testOnlyMaterialTarget: Object.freeze({
-                      ...((readProperty(
-                        testIntervention,
-                        "validatedStandardConstructionTarget",
-                      ) as TestStandardConstructionTarget | undefined)!.cost
-                        .Lumber === undefined
-                        ? {}
-                        : {
-                            Lumber: Object.freeze({
-                              quantity: (readProperty(
-                                testIntervention,
-                                "validatedStandardConstructionTarget",
-                              ) as TestStandardConstructionTarget | undefined)!
-                                .cost.Lumber!,
-                              clickBudget: (readProperty(
-                                testIntervention,
-                                "validatedStandardConstructionTarget",
-                              ) as TestStandardConstructionTarget | undefined)!
-                                .resourceClickBudget,
-                              preserveMana: true,
-                            }),
-                          }),
-                      ...((readProperty(
-                        testIntervention,
-                        "validatedStandardConstructionTarget",
-                      ) as TestStandardConstructionTarget | undefined)!.cost
-                        .Stone === undefined
-                        ? {}
-                        : {
-                            Stone: Object.freeze({
-                              quantity: (readProperty(
-                                testIntervention,
-                                "validatedStandardConstructionTarget",
-                              ) as TestStandardConstructionTarget | undefined)!
-                                .cost.Stone!,
-                              clickBudget: (readProperty(
-                                testIntervention,
-                                "validatedStandardConstructionTarget",
-                              ) as TestStandardConstructionTarget | undefined)!
-                                .resourceClickBudget,
-                              preserveMana: true,
-                            }),
-                          }),
-                    }),
-                  }
-                : testStandardResearchTarget!.actionId === "tech-sundial"
+              ) as TestStandardConstructionTarget | undefined;
+              const constructionMaterialTarget = (
+                resourceId: "Lumber" | "Stone",
+                actionId: "lumber" | "stone",
+              ) => {
+                const target = validatedConstructionTarget;
+                const price = target?.cost[resourceId];
+                const resourceControlGeneration =
+                  target?.resourceControlGenerations[actionId];
+                if (
+                  target === undefined ||
+                  typeof price !== "number" ||
+                  typeof resourceControlGeneration !== "number"
+                )
+                  return undefined;
+                return Object.freeze({
+                  quantity: price,
+                  clickBudget: target.resourceClickBudget,
+                  preserveMana: true,
+                  constructionProvenance: Object.freeze({
+                    actionId: target.actionId,
+                    resourceId,
+                    price,
+                    targetGeneration: target.controlGeneration,
+                    resourceControlGeneration,
+                  }),
+                });
+              };
+              const lumberTarget =
+                validatedConstructionTarget === undefined
+                  ? undefined
+                  : constructionMaterialTarget("Lumber", "lumber");
+              const stoneTarget =
+                validatedConstructionTarget === undefined
+                  ? undefined
+                  : constructionMaterialTarget("Stone", "stone");
+              return {
+                ...(validatedConstructionTarget !== undefined
                   ? {
-                      testOnlyStoneTarget: Object.freeze({
-                        quantity: testStandardResearchTarget!.cost.Stone ?? 0,
-                        clickBudget: testStandardResearchTarget!.clickBudget,
+                      testOnlyMaterialTarget: Object.freeze({
+                        ...(lumberTarget === undefined
+                          ? {}
+                          : { Lumber: lumberTarget }),
+                        ...(stoneTarget === undefined
+                          ? {}
+                          : { Stone: stoneTarget }),
                       }),
                     }
-                  : {
-                      testOnlyMaterialTarget: Object.freeze({
-                        ...(testStandardResearchTarget!.cost.Lumber ===
-                        undefined
-                          ? {}
-                          : {
-                              Lumber: Object.freeze({
-                                quantity:
-                                  testStandardResearchTarget!.cost.Lumber,
-                                clickBudget:
-                                  testStandardResearchTarget!
-                                    .resourceClickBudget,
+                  : testStandardResearchTarget!.actionId === "tech-sundial"
+                    ? {
+                        testOnlyStoneTarget: Object.freeze({
+                          quantity: testStandardResearchTarget!.cost.Stone ?? 0,
+                          clickBudget: testStandardResearchTarget!.clickBudget,
+                        }),
+                      }
+                    : {
+                        testOnlyMaterialTarget: Object.freeze({
+                          ...(testStandardResearchTarget!.cost.Lumber ===
+                          undefined
+                            ? {}
+                            : {
+                                Lumber: Object.freeze({
+                                  quantity:
+                                    testStandardResearchTarget!.cost.Lumber,
+                                  clickBudget:
+                                    testStandardResearchTarget!
+                                      .resourceClickBudget,
+                                }),
                               }),
-                            }),
-                        ...(testStandardResearchTarget!.cost.Stone === undefined
-                          ? {}
-                          : {
-                              Stone: Object.freeze({
-                                quantity:
-                                  testStandardResearchTarget!.cost.Stone,
-                                clickBudget:
-                                  testStandardResearchTarget!
-                                    .resourceClickBudget,
+                          ...(testStandardResearchTarget!.cost.Stone ===
+                          undefined
+                            ? {}
+                            : {
+                                Stone: Object.freeze({
+                                  quantity:
+                                    testStandardResearchTarget!.cost.Stone,
+                                  clickBudget:
+                                    testStandardResearchTarget!
+                                      .resourceClickBudget,
+                                }),
                               }),
-                            }),
+                        }),
                       }),
-                    }),
-            }
+              };
+            })()
           : {}),
         fursUnlocked: Boolean(readProperty(furs, "display")),
         clickable: Object.freeze({
@@ -1195,21 +1200,38 @@ export function createCapturedGatherResourcesAdapter({
             );
           if (
             typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-            __EA_TEST_SURFACE_ENABLED__ === true &&
-            active.testStandardConstructionTarget !== undefined &&
-            active.testStandardConstructionTarget.resourceControlGenerations[
-              operation.actionId
-            ] !== undefined &&
-            (handle.generation !==
-              active.testStandardConstructionTarget.resourceControlGenerations[
-                operation.actionId
-              ] ||
-              active.testStandardConstructionTarget.isCurrent() !== true)
-          )
-            return stale(
-              "gather-construction-target-stale",
-              "current Compost saving target or Gather control changed",
-            );
+            __EA_TEST_SURFACE_ENABLED__ === true
+          ) {
+            const constructionProvenance = operation.constructionProvenance;
+            if (constructionProvenance !== undefined) {
+              const target = active.testStandardConstructionTarget;
+              const expectedActionId =
+                constructionProvenance.resourceId === "Lumber"
+                  ? "lumber"
+                  : "stone";
+              if (
+                target === undefined ||
+                operation.actionId !== expectedActionId ||
+                operation.preserveMana !== true ||
+                constructionProvenance.actionId !== target.actionId ||
+                constructionProvenance.targetGeneration !==
+                  target.controlGeneration ||
+                constructionProvenance.resourceControlGeneration !==
+                  target.resourceControlGenerations[operation.actionId] ||
+                constructionProvenance.price !==
+                  target.cost[constructionProvenance.resourceId] ||
+                target.isCurrent() !== true ||
+                currentQuantity(
+                  rootState.readRoot(),
+                  constructionProvenance.resourceId,
+                ) >= constructionProvenance.price
+              )
+                return stale(
+                  "gather-construction-target-stale",
+                  "current Construction material shortage or Gather control changed",
+                );
+            }
+          }
           if (
             typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
             __EA_TEST_SURFACE_ENABLED__ === true &&
@@ -1242,22 +1264,34 @@ export function createCapturedGatherResourcesAdapter({
               );
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-              __EA_TEST_SURFACE_ENABLED__ === true &&
-              active.testStandardConstructionTarget !== undefined
+              __EA_TEST_SURFACE_ENABLED__ === true
             ) {
-              const expectedGeneration =
-                active.testStandardConstructionTarget
-                  .resourceControlGenerations[operation.actionId];
-              const currentControl = controls.resolve(elementId);
-              if (
-                (expectedGeneration !== undefined &&
-                  currentControl?.generation !== expectedGeneration) ||
-                active.testStandardConstructionTarget.isCurrent() !== true
-              )
-                return stale(
-                  "gather-construction-target-stale",
-                  "current Construction saving target or Gather control changed",
+              const constructionProvenance = operation.constructionProvenance;
+              if (constructionProvenance !== undefined) {
+                const targetStock = currentQuantity(
+                  beforeClickRoot,
+                  constructionProvenance.resourceId,
                 );
+                const target = active.testStandardConstructionTarget;
+                const expectedGeneration =
+                  constructionProvenance.resourceControlGeneration;
+                const currentControl = controls.resolve(elementId);
+                if (
+                  target === undefined ||
+                  currentControl?.generation !== expectedGeneration ||
+                  target.controlGeneration !==
+                    constructionProvenance.targetGeneration ||
+                  target.cost[constructionProvenance.resourceId] !==
+                    constructionProvenance.price ||
+                  target.isCurrent() !== true ||
+                  targetStock >= constructionProvenance.price
+                )
+                  return stale(
+                    "gather-construction-target-stale",
+                    "current Construction material shortage or Gather control changed",
+                  );
+                constructionProvenance.stockTracker.quantity = targetStock;
+              }
             }
             const manaBefore = readResource(
               beforeClickRoot,
@@ -1332,6 +1366,48 @@ export function createCapturedGatherResourcesAdapter({
             }
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+              __EA_TEST_SURFACE_ENABLED__ === true
+            ) {
+              const constructionProvenance = operation.constructionProvenance;
+              if (constructionProvenance !== undefined) {
+                const afterConstructionRoot = rootState.readRoot();
+                const target = active.testStandardConstructionTarget;
+                const resourceAfter = currentQuantity(
+                  afterConstructionRoot,
+                  constructionProvenance.resourceId,
+                );
+                if (afterConstructionRoot !== active.root)
+                  return stale(
+                    "gather-root-changed",
+                    "captured game root changed after Construction-targeted Gather",
+                  );
+                if (
+                  !Number.isFinite(resourceAfter) ||
+                  resourceAfter <= constructionProvenance.stockTracker.quantity
+                )
+                  return stale(
+                    "gather-construction-stock-postcondition",
+                    `Construction-targeted ${operation.actionId} did not increase ${constructionProvenance.resourceId}`,
+                  );
+                constructionProvenance.stockTracker.quantity = resourceAfter;
+                if (
+                  target === undefined ||
+                  target.controlGeneration !==
+                    constructionProvenance.targetGeneration ||
+                  target.cost[constructionProvenance.resourceId] !==
+                    constructionProvenance.price ||
+                  target.resourceControlGenerations[operation.actionId] !==
+                    constructionProvenance.resourceControlGeneration ||
+                  target.isCurrent() !== true
+                )
+                  return stale(
+                    "gather-construction-target-invalidated",
+                    "current Construction saving target changed during Gather",
+                  );
+              }
+            }
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
               operation.bootstrap === true &&
               active.testBootstrap !== undefined
@@ -1356,8 +1432,10 @@ export function createCapturedGatherResourcesAdapter({
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
+              operation.constructionProvenance !== undefined &&
               active.testStandardConstructionTarget !== undefined
             ) {
+              const constructionProvenance = operation.constructionProvenance!;
               const isCivilizationHandoffClick =
                 active.testBootstrap !== undefined &&
                 active.testBootstrap.handoffClicks <
@@ -1376,6 +1454,7 @@ export function createCapturedGatherResourcesAdapter({
                       limit: active.testBootstrap!.handoffLimit,
                       target: active.testStandardConstructionTarget.actionId,
                       actionId: operation.actionId,
+                      resourceId: constructionProvenance.resourceId,
                     }),
                   );
               }
@@ -1387,8 +1466,7 @@ export function createCapturedGatherResourcesAdapter({
                 active.testStandardConstructionTarget.onClick(
                   Object.freeze({
                     actionId: active.testStandardConstructionTarget.actionId,
-                    resourceId:
-                      operation.actionId === "lumber" ? "Lumber" : "Stone",
+                    resourceId: constructionProvenance.resourceId,
                     clickCount: 1,
                   }),
                 );
@@ -1427,19 +1505,17 @@ export function createCapturedGatherResourcesAdapter({
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
-              active.testStandardConstructionTarget !== undefined &&
-              active.testStandardConstructionTarget.resourceControlGenerations[
-                operation.actionId
-              ] !== undefined
+              operation.constructionProvenance !== undefined &&
+              active.testStandardConstructionTarget !== undefined
             ) {
+              const constructionProvenance = operation.constructionProvenance!;
               const afterTargetClickRoot = rootState.readRoot();
               if (afterTargetClickRoot !== active.root)
                 return stale(
                   "gather-root-changed",
                   "captured game root changed after Compost-targeted Gather",
                 );
-              const resourceId =
-                operation.actionId === "lumber" ? "Lumber" : "Stone";
+              const resourceId = constructionProvenance.resourceId;
               const resourceAfter = currentQuantity(
                 afterTargetClickRoot,
                 resourceId,
@@ -1458,8 +1534,7 @@ export function createCapturedGatherResourcesAdapter({
                     `Mana changed during Construction-targeted ${operation.actionId}`,
                   );
               }
-              const resourcePrice =
-                active.testStandardConstructionTarget.cost[resourceId];
+              const resourcePrice = constructionProvenance.price;
               if (
                 typeof resourcePrice === "number" &&
                 resourceAfter >= resourcePrice

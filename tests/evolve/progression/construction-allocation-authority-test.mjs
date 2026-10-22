@@ -102,6 +102,7 @@ function constructContract(input) {
   if (authority === undefined) return undefined;
   return {
     actionId: authority.targetId,
+    allocationAuthorized: true,
     cost: authority.cost,
     clickBudget: allocationClickBudget({
       episodeClicks: 0,
