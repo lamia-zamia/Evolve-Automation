@@ -1,0 +1,174 @@
+{
+  "experiment": "P21 bounded Construction decision-quality analysis",
+  "decision": "C",
+  "sourceEvidence": "experiments/p20-2-construction-handoff-parity-evidence.json",
+  "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+  "settingsSha256": "4badd36cc3e3cad887d09f9710a23599e8f890f53eae286736141b91c8f92e32",
+  "testSurfaceBundleSha256": "f8f9e4ecf55e4a0e00f4d1930531e9019451c709727988e9e4ea3b09865098ec",
+  "seed": 44,
+  "epoch": "2026-09-21T00:00:00.000Z",
+  "allocationEnabled": {
+    "A": false,
+    "C": true
+  },
+  "firstDivergence": {
+    "period": 80,
+    "cause": "retired generic allocator material click",
+    "allocationClicks": [
+      {
+        "period": 80,
+        "targetId": "city-farm",
+        "resourceId": "Stone",
+        "clicks": 5
+      },
+      {
+        "period": 88,
+        "targetId": "city-farm",
+        "resourceId": "Stone",
+        "clicks": 5
+      },
+      {
+        "period": 96,
+        "targetId": "city-farm",
+        "resourceId": "Stone",
+        "clicks": 3
+      }
+    ],
+    "stocksAtP80": {
+      "A": { "Food": 40, "Lumber": 67, "Stone": 0, "Money": 0, "Knowledge": 6 },
+      "C": { "Food": 40, "Lumber": 67, "Stone": 5, "Money": 0, "Knowledge": 6 }
+    }
+  },
+  "constructionDecisions": [
+    {
+      "period": 72,
+      "armA": "city-farm",
+      "armC": "city-farm",
+      "meaning": "shared P19 purchase"
+    },
+    {
+      "period": 96,
+      "armA": ["city-basic_housing"],
+      "armC": ["city-basic_housing", "city-farm"],
+      "meaning": "C records an additional Farm action alongside Cabin calls; p112 building counts show an additional Farm but do not explain the Cabin outcome"
+    }
+  ],
+  "checkpoints": [
+    {
+      "period": 112,
+      "A": {
+        "population": 2,
+        "jobs": { "farmer": 2 },
+        "buildings": { "farm": 1, "basic_housing": 2 },
+        "stocks": {
+          "Food": 43.6501,
+          "Lumber": 30,
+          "Stone": 0,
+          "Money": 0,
+          "Knowledge": 4
+        },
+        "starved": 0,
+        "deaths": 0
+      },
+      "C": {
+        "population": 1,
+        "jobs": { "farmer": 1 },
+        "buildings": { "farm": 2, "basic_housing": 1 },
+        "stocks": {
+          "Food": 43.5265,
+          "Lumber": 30,
+          "Stone": 0,
+          "Money": 0,
+          "Knowledge": 4
+        },
+        "starved": 0,
+        "deaths": 0
+      }
+    },
+    {
+      "period": 272,
+      "A": {
+        "population": 3,
+        "capacity": 3,
+        "jobs": { "farmer": 3 },
+        "buildings": { "farm": 1, "basic_housing": 3 },
+        "foodProduction": "3.732",
+        "foodConsumption": -3,
+        "stocks": {
+          "Food": 73.879672,
+          "Lumber": 20,
+          "Stone": 0,
+          "Money": 24,
+          "Knowledge": 1.571
+        }
+      },
+      "C": {
+        "population": 1,
+        "capacity": 1,
+        "jobs": { "farmer": 1 },
+        "buildings": { "farm": 2, "basic_housing": 1 },
+        "foodProduction": "1.764",
+        "foodConsumption": -1,
+        "stocks": {
+          "Food": 81.1425,
+          "Lumber": 20,
+          "Stone": 0,
+          "Money": 8.8,
+          "Knowledge": 2
+        }
+      }
+    },
+    {
+      "period": 1000,
+      "A": {
+        "population": 3,
+        "jobs": { "farmer": 3 },
+        "buildings": { "farm": 1, "basic_housing": 3 },
+        "foodProduction": "4.332",
+        "foodConsumption": -3
+      },
+      "C": {
+        "population": 1,
+        "jobs": { "farmer": 1 },
+        "buildings": { "farm": 2, "basic_housing": 1 },
+        "foodProduction": "2.364",
+        "foodConsumption": -1
+      }
+    }
+  ],
+  "research": {
+    "grantsByP5000": { "A": 11, "C": 11 },
+    "CGrantsOneWorkCycleEarlier": ["currency", "storage", "mining", "science"],
+    "additionalGrants": 0,
+    "firstGrantPeriod": { "A": 16, "C": 16 },
+    "lastGrantPeriod": { "A": 1896, "C": 1896 }
+  },
+  "workAndDeterminism": {
+    "allocationClicksC": 140,
+    "countedNativeControlCallsThroughP5000": { "A": 21238, "C": 23622 },
+    "CRepeatMatches": true,
+    "CExportSha256": "cbe45bfbd939ecbd099f72f2fc3ab914eed4a860f82e95708f5ad45427c02fbd"
+  },
+  "decisionSnapshotAvailability": {
+    "capturedAtRelevantCycles": false,
+    "missing": [
+      "full eligible Construction candidate order at p80-p112",
+      "population capacity at the relevant decision/checkpoint boundaries",
+      "final effective weight per candidate at p80-p112",
+      "current native cost and affordability per candidate at p80-p112",
+      "saving target, queue/trigger reservations and competing resource obligations at p96",
+      "Money/Lumber/Stone/Knowledge stocks at the p96 decision boundary",
+      "Farm count, Food production and consumption sampled at p96",
+      "housing capacity, population, available jobs and assignment at p96",
+      "Research offers and blockers at p96"
+    ],
+    "availableOnlyAtCheckpointOrTraceLevel": true
+  },
+  "policyHypothesis": {
+    "tested": false,
+    "reason": "No inappropriate effective weight or existing authoritative economic predicate was established; a housing static priority change would not test the observed allocator-caused divergence.",
+    "gameplaySourceChanged": false,
+    "genericConstructionAllocationEnabledForP21": false
+  }
+}
