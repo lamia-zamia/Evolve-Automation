@@ -1,0 +1,1714 @@
+{
+  "stage": "P24 test-surface pure planner cost isolation",
+  "fixture": "test-artifacts/benchmark/slice0/saves/mad-tech-offered-blocked.json",
+  "settings": "test-artifacts/benchmark/slice0/settings/current-full.json",
+  "saveSha256": "7eb43bc6cd1e7267561ceb21aaaa7b8c5eee9a4aa7c700ef9d579063a26cf090",
+  "settingsSha256": "ecaf13f665c1029cacdb544f21f070ebdd5cc709f07bec852489b26aa7333b7c",
+  "gameSnapshotSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+  "productionBundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+  "testSurfaceBundleSha256": "efb83cc1794cffdad117b1c7b857f2466675e70dffc9579872a27cb5ddac144b",
+  "controlTestSurfaceBundleSha256": "ed7dcad96fb3e756ef8b95df3ecbd9ca8f7870b6af909d07f7678714e0e019c6",
+  "chromium": "HeadlessChrome/151.0.7922.71",
+  "seed": 42,
+  "epoch": "2026-09-21T00:00:00.000Z",
+  "periods": 800,
+  "baseline": {
+    "mode": "same test-surface build without P24 timing transforms",
+    "workTicks": 100,
+    "randomCalls": 2194,
+    "nativeInvocationCount": 243390,
+    "nativeInvocationSha256": "88f247327e9a7c53a86ca4d71acac7c0d7e52b23bef2ead662408fa5de36dc42",
+    "stateSha256": "26f08bef03ea462ce0a1237249b4aed4a9f8b85ee46d325a85c9fe5ee42361a8",
+    "exportSha256": "a99e0f35aa7cb5b4c9f3f3a7ed93963f5b3382cf4194737218474e927c48168a"
+  },
+  "instrumentationParity": {
+    "workTicks": 100,
+    "randomCalls": 2194,
+    "nativeInvocationCount": 243390,
+    "nativeInvocationSha256": "88f247327e9a7c53a86ca4d71acac7c0d7e52b23bef2ead662408fa5de36dc42",
+    "stateSha256": "26f08bef03ea462ce0a1237249b4aed4a9f8b85ee46d325a85c9fe5ee42361a8",
+    "exportSha256": "a99e0f35aa7cb5b4c9f3f3a7ed93963f5b3382cf4194737218474e927c48168a",
+    "exactParity": true
+  },
+  "jobs": {
+    "path": "full",
+    "invocationCount": 100,
+    "capture": {
+      "sampleCount": 100,
+      "p50Ms": 15.9,
+      "p95Ms": 22.2,
+      "p99Ms": 35,
+      "maximumMs": 37.4
+    },
+    "purePlanning": {
+      "sampleCount": 100,
+      "p50Ms": 0.1,
+      "p95Ms": 0.2,
+      "p99Ms": 0.3,
+      "maximumMs": 1.1
+    },
+    "execution": {
+      "sampleCount": 100,
+      "p50Ms": 0.2,
+      "p95Ms": 0.7,
+      "p99Ms": 4.3,
+      "maximumMs": 6.2
+    },
+    "totalOwnerEstimate": {
+      "sampleCount": 100,
+      "p50Ms": 16.3,
+      "p95Ms": 24.4,
+      "p99Ms": 35.5,
+      "maximumMs": 37.6
+    },
+    "nullDecisionCount": 0,
+    "noAssignmentChangeCount": 57,
+    "changedDecisionCount": 43,
+    "planningFractionOfMeasuredSegments": 0.006616,
+    "theoreticalMainThreadCallbackRemovalFraction": 0.006616,
+    "captureAndPlanningSameOwnerCallback": true,
+    "nextDecisionDeadline": "before the current synchronous autoJobs with autoCraftsmen owner returns and before later owners run",
+    "delayedDecisionSemantics": "not established; settings, prices, resources, controls and preceding-owner mutations can change",
+    "plannerTransferability": "JobsCycleInput and JobsDecision are structured-clone-compatible records of primitives and arrays; planJobs only computes over the input and creates local Maps. It does not depend on DOM/native objects or closures.",
+    "resultAuthority": [
+      "prepared generation must remain current and the one-shot prepared execution must not have been consumed",
+      "captured game root identity must remain unchanged",
+      "native multiplier latch must be none-latched",
+      "current catalog, settings, and full Jobs input must still match the captured snapshot",
+      "required current native control methods must be available",
+      "native assignment must pass the existing postcondition before the owner publishes coherent plan state"
+    ],
+    "otherPolicyChecks": [
+      "Jobs settings determine whether the combined full path or split ordinary/craftsmen paths own the cycle",
+      "current demand and building-price observations contribute to foundry policy capture",
+      "a successful ordinary plan publishes the prospective Space Miner cap for later owners"
+    ]
+  },
+  "transfer": {
+    "structuredCloneCompatible": true,
+    "capturedInputCount": 100,
+    "jsonUtf8Bytes": {
+      "minimum": 14737,
+      "p50": 14747,
+      "maximum": 14754
+    },
+    "structuredCloneInPage": {
+      "sampleCount": 500,
+      "p50Ms": 0.1,
+      "p95Ms": 0.2,
+      "p99Ms": 0.3,
+      "maximumMs": 0.3
+    }
+  },
+  "artificialMicrobenchmark": {
+    "label": "artificial repeated-input compute-throughput measurement; not per-cycle savings",
+    "invocationsPerRun": 1000,
+    "runP50Ms": 0.029100000001490114,
+    "runsMsPerInvocation": [
+      0.03230000000074506, 0.029100000001490114, 0.03, 0.028099999997764826,
+      0.029
+    ]
+  },
+  "samples": [
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15,
+      "planningMs": 1.0999999977648258,
+      "nullDecision": false,
+      "changedAssignments": 9
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 4.300000000745058,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 9
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 22.199999999254942,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 7
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 2.300000000745058,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 7
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 9.5,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 5
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 1.199999999254942,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 5
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 20.599999997764826,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.899999998509884,
+      "planningMs": 0.20000000298023224,
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 6.199999999254942,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 35,
+      "planningMs": 0.30000000074505806,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.199999999254942,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.4000000022351742,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.300000000745058,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.400000002235174,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.899999998509884,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 18.300000000745058,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.5,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.20000000298023224,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.099999997764826,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.5,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.5,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.600000001490116,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.599999997764826,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.300000000745058,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.300000000745058,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.199999999254942,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.399999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.6999999992549419,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.400000002235174,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.5,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.600000001490116,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.099999997764826,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.100000001490116,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.4000000022351742,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.099999997764826,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.300000000745058,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 18.399999998509884,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.400000002235174,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 19.199999999254942,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.299999997019768,
+      "planningMs": 0.20000000298023224,
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5999999977648258,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.5,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.200000002980232,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.699999999254942,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 12.899999998509884,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.899999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5999999977648258,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.900000002235174,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.100000001490116,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.4000000022351742,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 13.5,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.20000000298023224,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.5,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.799999997019768,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.099999997764826,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 12.899999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.5,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5999999977648258,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.600000001490116,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 12.800000000745058,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.199999999254942,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.699999999254942,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.399999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 13.899999998509884,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.300000000745058,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.299999997019768,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 18.100000001490116,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.30000000074505806,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.5,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.800000000745058,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.399999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.899999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 32.5,
+      "planningMs": 0.20000000298023224,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 34.19999999925494,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.899999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.699999999254942,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 19.699999999254942,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.400000002235174,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.6000000014901161,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.6000000014901161,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.400000002235174,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.600000001490116,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 1.800000000745058,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.100000001490116,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.400000002235174,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.699999999254942,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.699999999254942,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.6000000014901161,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.600000001490116,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.100000001490116,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.4000000022351742,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 37.400000002235174,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.5,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.900000002235174,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.4000000022351742,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 23.899999998509884,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.30000000074505806,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 13.800000000745058,
+      "planningMs": 0.19999999925494194,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.199999999254942,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16.699999999254942,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.6000000014901161,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 3
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.300000000745058,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.19999999925494194,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.399999998509884,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.20000000298023224,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.699999999254942,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.300000000745058,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.5,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.300000000745058,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.4000000022351742,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.600000001490116,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.09999999776482582,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 14.800000000745058,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.3999999985098839,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 16,
+      "planningMs": 0.09999999776482582,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.10000000149011612,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.5,
+      "planningMs": 0.10000000149011612,
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.4000000022351742,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 2
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 15.399999998509884,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.20000000298023224,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "plan-timing",
+      "path": "full",
+      "captureMs": 17.199999999254942,
+      "planningMs": 0,
+      "nullDecision": false,
+      "changedAssignments": 0
+    },
+    {
+      "kind": "execution-timing",
+      "path": "full",
+      "executionMs": 0.20000000298023224,
+      "outcome": "succeeded",
+      "nullDecision": false,
+      "changedAssignments": 0
+    }
+  ]
+}
