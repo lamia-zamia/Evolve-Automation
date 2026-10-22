@@ -10,7 +10,7 @@ The defect reproduced through the captured Gather adapter: with an active Farm t
 
 Construction operations now carry per-operation provenance for the validated target, material, positive shortage, target control generation, and Gather control generation. The executor applies Construction freshness, price, control, Mana, budget, and callback rules only to those operations. Emergency Food remains independent. Target stock must increase after each successful native invocation before the handoff or allocation click is reported; no-op and failed controls cannot count as acquired material.
 
-The captured adapter regressions cover the mixed Food/Lumber/Stone plan, independent handoff and dynamic budgets, stale targets, repricing, control rebinding, failed and no-op controls, Mana preservation, and P19’s ten-click bootstrap handoff. Food executes before a later stale material operation and does not spend either Construction budget or invoke its callback.
+The captured adapter regressions retain the synthetic Shed scenario and now include the observed Farm boundary at its native price of 20 Lumber / 10 Stone. The Farm case plans emergency Food before both materials, verifies Farm/resource/price/control-generation provenance, and proves Food does not spend either the remaining handoff budget or the separate dynamic allocation budget. A mutable live Farm catalog price is checked through the shared authority validator before the first click and immediately after the first verified click; both reprices stop stale work. A no-stock-change invocation earns no handoff or allocation credit. A stale Farm material operation also cannot prevent the earlier valid Food operation from executing.
 
 ## P19 parity and same-bundle comparison
 
@@ -34,16 +34,24 @@ Through p5000, total counted native control calls were A 21,238, B 23,668, and C
 
 ## Zero-authorization diagnosis
 
-P20.1’s coherent p5000 Farm request did not authorize because its Chromium-injected callback referenced the Node module helper `allocationDenialReason`. That helper was not in the page callback’s scope; the callback threw `allocationDenialReason is not defined`. The runtime now catches callback throws, fails closed, and emits the bounded test-only rejection `authorization-callback-threw` with a truncated detail. The P20.2 test callback defines its budget checks in the injected page scope, so arm C authorized its first Farm request at p80.
+The P20.1 injected callback referenced the Node-scoped helper `allocationDenialReason`, which was not available in the browser callback scope. This is a plausible source-level explanation for zero authorizations. The historical P20.1 trace did not directly capture a thrown exception, so the report does not treat that explanation as an observed runtime event. The P20.2 callback defines its budget checks in the injected page scope, and its first authorized Farm request occurred at p80. The runtime's callback exception path fails closed; the retained P20.1 record does not show that path firing.
 
 Arm C also records bounded first rejection reasons at the runtime gates. The observed examples were missing or invalid publication epoch at p8, pending P19 handoff at p8 and p64, policy or budget denial after Farm repricing, non-material affordability for the Shed request at p272, and missing or invalid publication epoch for the Rock Quarry request at p1064. Freshness checks remain fail-closed. The P19 handoff is allowed to finish before dynamic authorization can replace its target.
 
+## Final retirement decision
+
+Outcome B remains final. Retain the bounded P19 bootstrap and Construction handoff as a successful test-only capability. Retire generic Construction allocation as an experimental direction; no production integration is authorized. Keep the P20.1 complete-price authority regressions and P20.2 Gather attribution, repricing, stock-postcondition, and handoff safety regressions. No further selector optimization or replay campaign is justified without an independent benefit case.
+
+The observer-only Arm B overhead was 2,430 additional counted `buildQueue.setData` control calls through p5000. This is a control-call count; no renderer CPU percentage was measured from it. The missing legacy native parity fixture remains a documented limitation.
+
 ## Verification and limitations
 
-- Focused captured Gather and Construction allocation tests passed.
+- `npm run test -- captured-gather-resources-test construction-allocation-authority-test` passed, including the Farm attribution/repricing regressions and retained P19 ten-click handoff coverage.
+- `node tools/chromium-evolve-runner-test.mjs` passed all Chromium runner contract checks.
 - Same-bundle exact Chromium comparison completed through p5000, including a duplicate C replay.
-- `npm run build` produced the required production bundle SHA-256: `47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b`.
-- Full `npm run check` passed all five stages, including type checks, lint, formatting, and 361 test files.
+- `npm run build` produced the required byte-identical production bundle SHA-256: `47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b`.
+- Full `npm run check` passed all five stages: type checks, architecture checks, lint, formatting, and 361 test files.
+- `git diff --check` passed.
 - Native parity using the missing legacy fixture remains unverified. No replacement save or settings were fabricated; the accepted P19 behavior was reproduced with the retained authentic P18 fixture and frozen settings.
 
 Compact machine-readable events and checkpoint parity are in [p20-2-construction-handoff-parity-evidence.json](./p20-2-construction-handoff-parity-evidence.json).
