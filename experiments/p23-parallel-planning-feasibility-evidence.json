@@ -1,0 +1,87 @@
+{
+  "stage": "P23 Web Worker feasibility",
+  "decision": "C: pure planner isolation and exact-runner Worker behavior are insufficiently measured",
+  "repository": {
+    "branch": "deadspace",
+    "startingHead": "e66e6467df37ed7421e9ce86a7980a9a580d0317",
+    "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f"
+  },
+  "baseline": {
+    "source": "experiments/p22-production-performance-evidence.json",
+    "save": "test-artifacts/benchmark/slice0/saves/mad-tech-offered-blocked.json",
+    "settings": "test-artifacts/benchmark/slice0/settings/current-full.json",
+    "seed": 42,
+    "epoch": "2026-09-21T00:00:00.000Z",
+    "periods": 800,
+    "workTicks": 100,
+    "chromium": "HeadlessChrome/151.0.7922.71",
+    "productionBundleSha256": "47db27fa5185d9ffe79f9f03fc26c499d7ba09a0fd01396f7a5a6d5bf485fb0b",
+    "rendererCpuControlRangePercentOfMean": 3.23,
+    "taskDurationControlRangePercentOfMean": 3.91
+  },
+  "candidates": {
+    "jobs": {
+      "ownerCalls": 100,
+      "buildingCostNativeReads": 7200,
+      "craftCostNativeReads": 1100,
+      "nativeBuildingWeightingPriceReadMsPerWorkTick": 7.76,
+      "purePlannerMsPerWorkTick": null,
+      "snapshotBytes": null,
+      "serializationCostMs": null,
+      "requiresSameCycleExecution": true
+    },
+    "marketTradeRoutes": {
+      "ownerCalls": 100,
+      "inclusiveOwnerBoundaryMsPerWorkTick": 13.61,
+      "purePlannerMsPerWorkTick": null,
+      "snapshotBytes": null,
+      "serializationCostMs": null,
+      "requiresSameCycleValidationAndExecution": true
+    },
+    "construction": {
+      "beginCycleCalls": 100,
+      "beginCycleMsPerWorkTick": 7.32,
+      "savingDiscoveryMsPerWorkTick": 7.53,
+      "candidateSamples": 7550,
+      "conflictSamples": 727,
+      "competitionSamples": 464,
+      "verifiedClicks": 58,
+      "purePlanningMsPerWorkTick": null,
+      "snapshotBytes": null,
+      "serializationCostMs": null,
+      "requiresSequentialSameCycleExecution": true
+    },
+    "resourceDemand": {
+      "inputCaptures": 159,
+      "samples": 159,
+      "buildSamplingMsPerWorkTick": 6.86,
+      "purePlanningMsPerWorkTick": null,
+      "snapshotBytes": null,
+      "serializationCostMs": null
+    }
+  },
+  "workerEnvironment": {
+    "runnerUsesHeadlessChromium": true,
+    "pageWorkerIsControlledTimerMock": true,
+    "controlledWorkerExecutesBlobSource": false,
+    "normalProductionBundleContainsPlanningWorker": false,
+    "upstreamBlobWorkerSpikeExists": true,
+    "upstreamSpikeProvesExactRunnerCompatibility": false
+  },
+  "workerMeasurements": {
+    "initializationMs": null,
+    "queueMs": null,
+    "computeMs": null,
+    "responseMs": null,
+    "workerCpuMs": null,
+    "peakPendingRequests": null,
+    "maxRetainedSnapshotBytes": null,
+    "staleResponses": null,
+    "decisionsArrivedBeforeNextEligibleCycle": null,
+    "decisionsStaleBeforeUse": null,
+    "parityChecks": null
+  },
+  "implementedWorkerPrototype": false,
+  "productionSourcesChanged": false,
+  "reasonForStop": "P22 does not isolate pure computation from native capture; exact benchmark runner replaces Worker with a timer-only controlled implementation."
+}
