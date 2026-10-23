@@ -30,6 +30,8 @@ import { isCapturedRouteMultiplierNeutral } from "./captured-route-multiplier.ts
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
+const MARKET_ROUTE_BATCH_SIZE = 100;
+
 interface CapturedTradeRoutesTestSurface {
   readonly allowHistoricalSignalForComparisonTest?: () => boolean;
   readonly demandForTest?: (
@@ -154,6 +156,8 @@ interface RouteSession {
   readonly root: unknown;
   readonly board: MarketBoard;
   readonly market: Record<PropertyKey, unknown>;
+  readonly resourceContainer: Record<PropertyKey, unknown>;
+  readonly resources: ReadonlyMap<string, Record<PropertyKey, unknown>>;
   readonly ownerEnabled: boolean;
   readonly routeCounts: ReadonlyMap<string, number>;
   readonly controls: ReadonlyMap<string, GameControlHandle>;
@@ -416,6 +420,7 @@ function readRouteInput(
   };
   const routeCounts = new Map<string, number>();
   const routeControls = new Map<string, GameControlHandle>();
+  const routeResources = new Map<string, Record<PropertyKey, unknown>>();
   const priority: {
     readonly id: string;
     readonly index: number;
@@ -447,6 +452,7 @@ function readRouteInput(
     priority.push({ id: resourceId, index, value: marketPriority });
     routeCounts.set(resourceId, trade);
     routeControls.set(resourceId, control);
+    routeResources.set(resourceId, resource);
   }
   priority.sort(
     (left, right) => left.value - right.value || left.index - right.index,
@@ -592,6 +598,8 @@ function readRouteInput(
       root,
       board,
       market: cityMarket,
+      resourceContainer: resources,
+      resources: routeResources,
       ownerEnabled: currentSettings["autoMarket"] === true,
       routeCounts,
       controls: routeControls,
@@ -1276,8 +1284,12 @@ export function createCapturedTradeRoutes(
             : operation.kind === "add"
               ? "autoBuy"
               : "autoSell";
-        const count = operation.kind === "zero" ? 1 : operation.count;
-        for (let index = 0; index < count; index += 1) {
+        let remaining = operation.kind === "zero" ? 1 : operation.count;
+        while (remaining > 0) {
+          const count =
+            operation.kind === "zero"
+              ? 1
+              : Math.min(MARKET_ROUTE_BATCH_SIZE, remaining);
           const resource = readProperty(
             readProperty(captured.session.root, "resource"),
             operation.resourceId,
@@ -1290,6 +1302,9 @@ export function createCapturedTradeRoutes(
               readProperty(captured.session.root, "city"),
               "market",
             ) !== captured.session.market ||
+            readProperty(captured.session.root, "resource") !==
+              captured.session.resourceContainer ||
+            resource !== captured.session.resources.get(operation.resourceId) ||
             !isRecord(resource) ||
             before === undefined ||
             finite(resource["trade"]) !== before ||
@@ -1304,59 +1319,148 @@ export function createCapturedTradeRoutes(
             });
             return;
           }
-          const invoked = dependencies.controls.invoke(control, method, [
-            operation.resourceId,
-            1,
-          ]);
+          const invoked = dependencies.controls.invoke(
+            control,
+            method,
+            operation.kind === "zero"
+              ? [operation.resourceId]
+              : [operation.resourceId, count],
+          );
           if (!invoked.ok) {
             testSurface?.onTrace?.({
               kind: "refused",
               reason: invoked.reason,
               operation,
             });
+            const partial = finite(resource["trade"]);
+            const completed =
+              operation.kind === "add"
+                ? partial === undefined
+                  ? 0
+                  : partial - before
+                : operation.kind === "remove"
+                  ? partial === undefined
+                    ? 0
+                    : before - partial
+                  : 0;
+            const partialTotal =
+              partial === undefined
+                ? undefined
+                : expectedTotal + (Math.abs(partial) - Math.abs(before));
+            if (
+              completed > 0 &&
+              completed < count &&
+              dependencies.rootState.readRoot() === captured.session.root &&
+              dependencies.board.isCurrent(board) &&
+              readProperty(
+                readProperty(captured.session.root, "city"),
+                "market",
+              ) === captured.session.market &&
+              readProperty(captured.session.root, "resource") ===
+                captured.session.resourceContainer &&
+              readProperty(
+                captured.session.resourceContainer,
+                operation.resourceId,
+              ) === resource &&
+              finite(captured.session.market["trade"]) === partialTotal &&
+              dependencies.controls.resolve(control.elementId)?.generation ===
+                control.generation
+            )
+              testSurface?.onTrace?.({
+                kind: "partial-native-execution",
+                operation,
+                requestedCount: count,
+                completedCount: completed,
+              });
             return;
           }
           const after =
             operation.kind === "zero"
               ? 0
-              : before + (operation.kind === "add" ? 1 : -1);
+              : before + (operation.kind === "add" ? count : -count);
+          const observedAfter = finite(resource["trade"]);
           const totalAfter =
             operation.kind === "zero"
               ? expectedTotal - Math.abs(before)
               : expectedTotal + (Math.abs(after) - Math.abs(before));
-          if (
-            dependencies.rootState.readRoot() !== captured.session.root ||
-            !dependencies.board.isCurrent(board) ||
+          const authorityStillCurrent =
+            dependencies.rootState.readRoot() === captured.session.root &&
+            dependencies.board.isCurrent(board) &&
             readProperty(
               readProperty(captured.session.root, "city"),
               "market",
-            ) !== captured.session.market ||
+            ) === captured.session.market &&
+            readProperty(captured.session.root, "resource") ===
+              captured.session.resourceContainer &&
             readProperty(
               readProperty(captured.session.root, "resource"),
               operation.resourceId,
-            ) !== resource ||
-            finite(resource["trade"]) !== after ||
-            finite(captured.session.market["trade"]) !== totalAfter
+            ) === resource &&
+            dependencies.controls.resolve(control.elementId)?.generation ===
+              control.generation;
+          const observedMarketCount = finite(captured.session.market["trade"]);
+          const observedPartialCount =
+            operation.kind === "add"
+              ? (observedAfter ?? before) - before
+              : operation.kind === "remove"
+                ? before - (observedAfter ?? before)
+                : 0;
+          const observedPartialTotal =
+            expectedTotal +
+            (Math.abs(observedAfter ?? before) - Math.abs(before));
+          const partialNativeExecution =
+            authorityStillCurrent &&
+            operation.kind !== "zero" &&
+            observedPartialCount > 0 &&
+            observedPartialCount < count &&
+            observedMarketCount === observedPartialTotal;
+          if (
+            !authorityStillCurrent ||
+            observedAfter !== after ||
+            observedMarketCount !== totalAfter
           ) {
             testSurface?.onTrace?.({
               kind: "skipped",
-              reason: "native-result-mismatch",
+              reason: partialNativeExecution
+                ? "native-partial-execution"
+                : "native-result-mismatch",
               operation,
             });
+            if (partialNativeExecution)
+              testSurface?.onTrace?.({
+                kind: "partial-native-execution",
+                operation,
+                requestedCount: count,
+                completedCount: observedPartialCount,
+              });
             return;
           }
+          const transitionTotalBefore = expectedTotal;
           expected.set(operation.resourceId, after);
           expectedTotal = totalAfter;
-          testSurface?.onTrace?.({
-            kind: "applied",
-            operation,
-            control: Object.freeze({
-              elementId: control.elementId,
-              generation: control.generation,
-              method,
-            }),
-            routeCount: expectedTotal,
-          });
+          let transitionResource = before;
+          let transitionTotal =
+            operation.kind === "zero" ? totalAfter : transitionTotalBefore;
+          for (let index = 0; index < count; index += 1) {
+            if (operation.kind !== "zero") {
+              const nextResource =
+                transitionResource + (operation.kind === "add" ? 1 : -1);
+              transitionTotal +=
+                Math.abs(nextResource) - Math.abs(transitionResource);
+              transitionResource = nextResource;
+            }
+            testSurface?.onTrace?.({
+              kind: "applied",
+              operation,
+              control: Object.freeze({
+                elementId: control.elementId,
+                generation: control.generation,
+                method,
+              }),
+              routeCount: transitionTotal,
+            });
+          }
+          remaining -= count;
         }
       }
       testSurface?.onTrace?.({ kind: "complete", operations });

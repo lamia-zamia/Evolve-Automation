@@ -38804,6 +38804,7 @@
   }
 
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
+  var MARKET_ROUTE_BATCH_SIZE = 100;
   var REGIONAL_PRIORITY = Object.freeze([
     "Food",
     "Oil",
@@ -38858,7 +38859,7 @@
     let currentSettings = settingsRecord3(dependencies.readSettings()), settings = routeSettingsSnapshot(currentSettings, board), demand = dependencies.readDemand?.() ?? {
       isDemanded: () => !1,
       storageRequired: () => 1
-    }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
+    }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), routeResources = /* @__PURE__ */ new Map(), priority = [];
     for (let [index, row] of board.rows.entries()) {
       let resourceId = row.elementId.slice(7), resource = readProperty(resources, resourceId);
       if (!isRecord(resource))
@@ -38871,7 +38872,7 @@
       if (control === void 0 || control.generation !== row.generation || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero") || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
         return unavailable2(`invalid-control:${resourceId}`);
       let marketPriority = finite(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
-      priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control);
+      priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control), routeResources.set(resourceId, resource);
     }
     priority.sort(
       (left, right) => left.value - right.value || left.index - right.index
@@ -38948,6 +38949,8 @@
         root,
         board,
         market: cityMarket,
+        resourceContainer: resources,
+        resources: routeResources,
         ownerEnabled: currentSettings.autoMarket === !0,
         routeCounts,
         controls: routeControls,
@@ -39244,16 +39247,16 @@
             });
             return;
           }
-          let method = operation2.kind === "zero" ? "zero" : operation2.kind === "add" ? "autoBuy" : "autoSell", count2 = operation2.kind === "zero" ? 1 : operation2.count;
-          for (let index = 0; index < count2; index += 1) {
-            let resource = readProperty(
+          let method = operation2.kind === "zero" ? "zero" : operation2.kind === "add" ? "autoBuy" : "autoSell", remaining = operation2.kind === "zero" ? 1 : operation2.count;
+          for (; remaining > 0; ) {
+            let count2 = operation2.kind === "zero" ? 1 : Math.min(MARKET_ROUTE_BATCH_SIZE, remaining), resource = readProperty(
               readProperty(captured.session.root, "resource"),
               operation2.resourceId
             ), before = expected.get(operation2.resourceId);
             if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board) || readProperty(
               readProperty(captured.session.root, "city"),
               "market"
-            ) !== captured.session.market || !isRecord(resource) || before === void 0 || finite(resource.trade) !== before || finite(captured.session.market.trade) !== expectedTotal || dependencies.controls.resolve(control.elementId)?.generation !== control.generation) {
+            ) !== captured.session.market || readProperty(captured.session.root, "resource") !== captured.session.resourceContainer || resource !== captured.session.resources.get(operation2.resourceId) || !isRecord(resource) || before === void 0 || finite(resource.trade) !== before || finite(captured.session.market.trade) !== expectedTotal || dependencies.controls.resolve(control.elementId)?.generation !== control.generation) {
               testSurface?.onTrace?.({
                 kind: "skipped",
                 reason: "operation-fence-stale",
@@ -39261,43 +39264,72 @@
               });
               return;
             }
-            let invoked = dependencies.controls.invoke(control, method, [
-              operation2.resourceId,
-              1
-            ]);
+            let invoked = dependencies.controls.invoke(
+              control,
+              method,
+              operation2.kind === "zero" ? [operation2.resourceId] : [operation2.resourceId, count2]
+            );
             if (!invoked.ok) {
               testSurface?.onTrace?.({
                 kind: "refused",
                 reason: invoked.reason,
                 operation: operation2
               });
-              return;
-            }
-            let after = operation2.kind === "zero" ? 0 : before + (operation2.kind === "add" ? 1 : -1), totalAfter = operation2.kind === "zero" ? expectedTotal - Math.abs(before) : expectedTotal + (Math.abs(after) - Math.abs(before));
-            if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board) || readProperty(
-              readProperty(captured.session.root, "city"),
-              "market"
-            ) !== captured.session.market || readProperty(
-              readProperty(captured.session.root, "resource"),
-              operation2.resourceId
-            ) !== resource || finite(resource.trade) !== after || finite(captured.session.market.trade) !== totalAfter) {
-              testSurface?.onTrace?.({
-                kind: "skipped",
-                reason: "native-result-mismatch",
-                operation: operation2
+              let partial = finite(resource.trade), completed = operation2.kind === "add" ? partial === void 0 ? 0 : partial - before : operation2.kind === "remove" ? partial === void 0 ? 0 : before - partial : 0, partialTotal = partial === void 0 ? void 0 : expectedTotal + (Math.abs(partial) - Math.abs(before));
+              completed > 0 && completed < count2 && dependencies.rootState.readRoot() === captured.session.root && dependencies.board.isCurrent(board) && readProperty(
+                readProperty(captured.session.root, "city"),
+                "market"
+              ) === captured.session.market && readProperty(captured.session.root, "resource") === captured.session.resourceContainer && readProperty(
+                captured.session.resourceContainer,
+                operation2.resourceId
+              ) === resource && finite(captured.session.market.trade) === partialTotal && dependencies.controls.resolve(control.elementId)?.generation === control.generation && testSurface?.onTrace?.({
+                kind: "partial-native-execution",
+                operation: operation2,
+                requestedCount: count2,
+                completedCount: completed
               });
               return;
             }
-            expected.set(operation2.resourceId, after), expectedTotal = totalAfter, testSurface?.onTrace?.({
-              kind: "applied",
-              operation: operation2,
-              control: Object.freeze({
-                elementId: control.elementId,
-                generation: control.generation,
-                method
-              }),
-              routeCount: expectedTotal
-            });
+            let after = operation2.kind === "zero" ? 0 : before + (operation2.kind === "add" ? count2 : -count2), observedAfter = finite(resource.trade), totalAfter = operation2.kind === "zero" ? expectedTotal - Math.abs(before) : expectedTotal + (Math.abs(after) - Math.abs(before)), authorityStillCurrent = dependencies.rootState.readRoot() === captured.session.root && dependencies.board.isCurrent(board) && readProperty(
+              readProperty(captured.session.root, "city"),
+              "market"
+            ) === captured.session.market && readProperty(captured.session.root, "resource") === captured.session.resourceContainer && readProperty(
+              readProperty(captured.session.root, "resource"),
+              operation2.resourceId
+            ) === resource && dependencies.controls.resolve(control.elementId)?.generation === control.generation, observedMarketCount = finite(captured.session.market.trade), observedPartialCount = operation2.kind === "add" ? (observedAfter ?? before) - before : operation2.kind === "remove" ? before - (observedAfter ?? before) : 0, observedPartialTotal = expectedTotal + (Math.abs(observedAfter ?? before) - Math.abs(before)), partialNativeExecution = authorityStillCurrent && operation2.kind !== "zero" && observedPartialCount > 0 && observedPartialCount < count2 && observedMarketCount === observedPartialTotal;
+            if (!authorityStillCurrent || observedAfter !== after || observedMarketCount !== totalAfter) {
+              testSurface?.onTrace?.({
+                kind: "skipped",
+                reason: partialNativeExecution ? "native-partial-execution" : "native-result-mismatch",
+                operation: operation2
+              }), partialNativeExecution && testSurface?.onTrace?.({
+                kind: "partial-native-execution",
+                operation: operation2,
+                requestedCount: count2,
+                completedCount: observedPartialCount
+              });
+              return;
+            }
+            let transitionTotalBefore = expectedTotal;
+            expected.set(operation2.resourceId, after), expectedTotal = totalAfter;
+            let transitionResource = before, transitionTotal = operation2.kind === "zero" ? totalAfter : transitionTotalBefore;
+            for (let index = 0; index < count2; index += 1) {
+              if (operation2.kind !== "zero") {
+                let nextResource = transitionResource + (operation2.kind === "add" ? 1 : -1);
+                transitionTotal += Math.abs(nextResource) - Math.abs(transitionResource), transitionResource = nextResource;
+              }
+              testSurface?.onTrace?.({
+                kind: "applied",
+                operation: operation2,
+                control: Object.freeze({
+                  elementId: control.elementId,
+                  generation: control.generation,
+                  method
+                }),
+                routeCount: transitionTotal
+              });
+            }
+            remaining -= count2;
           }
         }
         testSurface?.onTrace?.({ kind: "complete", operations });
