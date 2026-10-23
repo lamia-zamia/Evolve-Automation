@@ -7900,11 +7900,12 @@ export function startCapturedRuntime({
                     intervention,
                     "resourceClaim",
                   );
-                  const claims = Array.isArray(claimList)
-                    ? claimList
-                    : singleClaim === undefined
-                      ? []
-                      : [singleClaim];
+                  const claims = Array.isArray(claimList) ? [...claimList] : [];
+                  if (
+                    singleClaim !== undefined &&
+                    !claims.includes(singleClaim)
+                  )
+                    claims.push(singleClaim);
                   const claimEvidence = Object.freeze(
                     claims.map((claim, index) => {
                       const claimId = readProperty(claim, "claimId");
@@ -7944,6 +7945,21 @@ export function startCapturedRuntime({
                     bootstrapState,
                     "handoffLimit",
                   );
+                  const handoffStatus =
+                    readProperty(bootstrap, "authorized") === true &&
+                    (handoffPhase === "active" || handoffPhase === "handoff") &&
+                    typeof handoffClicks === "number" &&
+                    Number.isSafeInteger(handoffClicks) &&
+                    typeof handoffLimit === "number" &&
+                    Number.isSafeInteger(handoffLimit) &&
+                    handoffClicks >= 0 &&
+                    handoffLimit >= handoffClicks
+                      ? handoffClicks < handoffLimit
+                        ? "active"
+                        : "inactive"
+                      : handoffPhase === "suspended"
+                        ? "inactive"
+                        : "unavailable";
                   const targetEvidence =
                     target === null
                       ? null
@@ -7970,14 +7986,39 @@ export function startCapturedRuntime({
                   const rootGeneration = progression.readRootGeneration();
                   const progressionGeneration =
                     progression.readProgressionEpoch();
+                  const currentRootGeneration =
+                    progression.readRootGeneration();
+                  const currentProgressionGeneration =
+                    progression.readProgressionEpoch();
+                  const emptyNativeQueues =
+                    Array.isArray(buildQueue) &&
+                    buildQueue.length === 0 &&
+                    Array.isArray(researchQueue) &&
+                    researchQueue.length === 0;
+                  const readRunnerPeriod = readProperty(
+                    hooks,
+                    "readRunnerPeriod",
+                  );
+                  const runnerPeriod =
+                    typeof readRunnerPeriod === "function"
+                      ? Reflect.apply(readRunnerPeriod, hooks, [])
+                      : undefined;
                   const observation = Object.freeze({
+                    ...(typeof runnerPeriod === "number"
+                      ? { period: runnerPeriod }
+                      : {}),
                     orderingGeneration: currentOrderingGeneration,
                     phase: "pre-Gather",
                     workCycleId: automationCycle,
                     rootGeneration,
                     progressionGeneration,
+                    currentRootGeneration,
+                    currentProgressionGeneration,
                     target: targetEvidence,
-                    currentTarget: targetEvidence,
+                    targetAuthority:
+                      "successful-current-pre-Gather-order-publication",
+                    priceAuthority: "current-pre-gather-construction-order",
+                    executionTimePriceProbe: false,
                     targetSelection: Object.freeze({
                       constructionSuppressedThisCycle,
                       orderingComplete:
@@ -8025,41 +8066,50 @@ export function startCapturedRuntime({
                           )
                         : undefined,
                     }),
-                    reservations: Object.freeze({
-                      status:
-                        Array.isArray(buildQueue) &&
-                        buildQueue.length === 0 &&
-                        Array.isArray(researchQueue) &&
-                        researchQueue.length === 0
-                          ? "clear"
-                          : "conflict",
-                    }),
+                    reservations: (() => {
+                      const sample = queueReservations.readReservations();
+                      return Object.freeze({
+                        status: sample.unavailable
+                          ? "unknown"
+                          : sample.targets.length === 0
+                            ? "clear"
+                            : "conflict",
+                        targets: Object.freeze(
+                          sample.targets.map((entry) => ({
+                            name: entry.name,
+                            cost: entry.cost,
+                          })),
+                        ),
+                        unavailableReason: sample.unavailableReason,
+                        authority: "captured-queue-reservation-source",
+                      });
+                    })(),
                     handoff: Object.freeze({
-                      observed: intervention !== undefined,
-                      active:
-                        readProperty(bootstrap, "authorized") === true &&
-                        (handoffPhase === "active" ||
-                          handoffPhase === "handoff") &&
-                        typeof handoffClicks === "number" &&
-                        typeof handoffLimit === "number" &&
-                        handoffClicks < handoffLimit,
+                      status: handoffStatus,
+                      phase: handoffPhase,
+                      clicks: handoffClicks,
+                      limit: handoffLimit,
+                      authority: "p19-civilization-bootstrap-state",
                     }),
-                    claims: claimEvidence,
+                    claims: isRecord(intervention) ? claimEvidence : undefined,
+                    claimsAuthority: isRecord(intervention)
+                      ? "gatherIntervention.resourceClaims-and-resourceClaim"
+                      : "unavailable",
                     budgets,
                   });
                   const shadow = evaluateConstructionAllocationShadow({
                     ...observation,
-                    currentRootGeneration: progression.readRootGeneration(),
-                    currentProgressionGeneration:
-                      progression.readProgressionEpoch(),
                   });
                   records.push(
                     Object.freeze({
                       ...observation,
                       shadow,
                       elapsedMs: Math.max(0, now() - startedAt),
-                      extraNativeControlCalls: 0,
-                      extraNativeCatalogOrPriceProbes: 0,
+                      ...(emptyNativeQueues
+                        ? { extraNativeCatalogOrPriceProbes: 0 }
+                        : {}),
+                      reservationCapturePasses: 1,
+                      shadowInvocations: 1,
                     }),
                   );
                 } else {
@@ -8075,13 +8125,10 @@ export function startCapturedRuntime({
                         ]),
                       }),
                       elapsedMs: Math.max(0, now() - startedAt),
-                      extraNativeControlCalls: 0,
                       extraNativeCatalogOrPriceProbes: 0,
                     }),
                   );
                 }
-                if (records.length > 128)
-                  records.splice(0, records.length - 128);
                 if (isRecord(hooks)) {
                   Reflect.set(hooks, "p32LiveAuthority", records);
                   const summaryValue = readProperty(
@@ -8094,8 +8141,11 @@ export function startCapturedRuntime({
                         evaluations: 0,
                         authorized: 0,
                         elapsedMs: 0,
-                        extraNativeControlCalls: 0,
                         extraNativeCatalogOrPriceProbes: 0,
+                        unmeasuredCatalogOrPriceProbeCycles: 0,
+                        reservationCapturePasses: 0,
+                        shadowInvocations: 0,
+                        policyRequests: 0,
                         rejectionReasons: {},
                       };
                   const last = records.at(-1);
@@ -8107,15 +8157,30 @@ export function startCapturedRuntime({
                   summary.elapsedMs =
                     Number(summary.elapsedMs) +
                     Number(readProperty(last, "elapsedMs") ?? 0);
-                  summary.extraNativeControlCalls =
-                    Number(summary.extraNativeControlCalls) +
-                    Number(readProperty(last, "extraNativeControlCalls") ?? 0);
-                  summary.extraNativeCatalogOrPriceProbes =
-                    Number(summary.extraNativeCatalogOrPriceProbes) +
-                    Number(
-                      readProperty(last, "extraNativeCatalogOrPriceProbes") ??
-                        0,
-                    );
+                  const probeCount = readProperty(
+                    last,
+                    "extraNativeCatalogOrPriceProbes",
+                  );
+                  if (typeof probeCount === "number")
+                    summary.extraNativeCatalogOrPriceProbes =
+                      Number(summary.extraNativeCatalogOrPriceProbes) +
+                      probeCount;
+                  else if (readProperty(last, "reservationCapturePasses") === 1)
+                    summary.unmeasuredCatalogOrPriceProbeCycles =
+                      Number(summary.unmeasuredCatalogOrPriceProbeCycles) + 1;
+                  summary.reservationCapturePasses =
+                    Number(summary.reservationCapturePasses) +
+                    Number(readProperty(last, "reservationCapturePasses") ?? 0);
+                  summary.shadowInvocations =
+                    Number(summary.shadowInvocations) +
+                    Number(readProperty(last, "shadowInvocations") ?? 0);
+                  const targetSelection = readProperty(last, "targetSelection");
+                  summary.policyRequests =
+                    Number(summary.policyRequests) +
+                    (readProperty(targetSelection, "policyRequestPresent") ===
+                    true
+                      ? 1
+                      : 0);
                   const rejectionReasons = readProperty(
                     summary,
                     "rejectionReasons",

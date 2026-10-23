@@ -7,7 +7,6 @@ export interface ConstructionAllocationShadowInput {
   readonly currentRootGeneration: unknown;
   readonly currentProgressionGeneration: unknown;
   readonly target: unknown;
-  readonly currentTarget: unknown;
   readonly resources: unknown;
   readonly permissions: unknown;
   readonly controls: unknown;
@@ -44,18 +43,6 @@ function readCost(value: unknown): Record<string, number> | undefined {
   return Object.fromEntries(entries) as Record<string, number>;
 }
 
-function sameCost(left: unknown, right: unknown): boolean {
-  const a = readCost(left);
-  const b = readCost(right);
-  if (a === undefined || b === undefined) return false;
-  const keysA = Object.keys(a).sort();
-  const keysB = Object.keys(b).sort();
-  return (
-    keysA.length === keysB.length &&
-    keysA.every((key, index) => key === keysB[index] && a[key] === b[key])
-  );
-}
-
 function validControl(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -77,9 +64,6 @@ export function evaluateConstructionAllocationShadow(
   const reasons: string[] = [];
   const add = (reason: string) => reasons.push(reason);
   const target = isRecord(input.target) ? input.target : undefined;
-  const currentTarget = isRecord(input.currentTarget)
-    ? input.currentTarget
-    : undefined;
   const cost = readCost(target?.cost);
 
   if (
@@ -114,18 +98,8 @@ export function evaluateConstructionAllocationShadow(
     target.pool !== "anywhere"
   )
     add("incompatible-target-pool");
-  if (
-    target !== undefined &&
-    target !== null &&
-    (currentTarget === undefined ||
-      currentTarget === null ||
-      target.id !== currentTarget.id ||
-      target.pool !== currentTarget.pool ||
-      !sameCost(target.cost, currentTarget.cost))
-  )
-    add("current-target-mismatch");
-
   let hasShortage = false;
+  const gatherableShortages = new Set<string>();
   if (cost !== undefined) {
     const resources = isRecord(input.resources) ? input.resources : undefined;
     if (resources === undefined) add("missing-resource-snapshot");
@@ -153,6 +127,7 @@ export function evaluateConstructionAllocationShadow(
           const shortage = Math.max(0, price - amount);
           if (shortage > 0) {
             hasShortage = true;
+            gatherableShortages.add(resourceId);
             if (maximum - amount < shortage)
               add(`insufficient-capacity:${resourceId}`);
           }
@@ -177,7 +152,7 @@ export function evaluateConstructionAllocationShadow(
     !validControl(controls?.target)
   )
     add("missing-target-action-control");
-  for (const resourceId of ["Lumber", "Stone"] as const) {
+  for (const resourceId of gatherableShortages) {
     if (!validControl(controls?.[resourceId]))
       add(`missing-gather-control:${resourceId}`);
   }
@@ -190,13 +165,10 @@ export function evaluateConstructionAllocationShadow(
 
   if (!isRecord(input.reservations) || input.reservations.status !== "clear")
     add("reservation-evidence-unavailable-or-conflicting");
-  if (
-    !isRecord(input.handoff) ||
-    input.handoff.observed !== true ||
-    typeof input.handoff.active !== "boolean"
-  )
+  if (!isRecord(input.handoff) || input.handoff.status === "unavailable")
     add("missing-handoff-evidence");
-  else if (input.handoff.active) add("active-handoff-conflict");
+  else if (input.handoff.status === "active") add("active-handoff-conflict");
+  else if (input.handoff.status !== "inactive") add("missing-handoff-evidence");
   if (!Array.isArray(input.claims)) add("missing-competing-claims-evidence");
   else if (input.claims.length > 0) add("competing-claim-conflict");
 
