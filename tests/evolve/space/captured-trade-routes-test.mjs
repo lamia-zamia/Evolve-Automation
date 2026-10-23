@@ -77,31 +77,36 @@ const registry = {
       return { ok: true, value: "localized" };
     }
     const id = args[0];
-    calls.push([method, id]);
+    const count = method === "zero" ? 1 : (args[1] ?? 1);
+    calls.push([method, id, count]);
     const resource = root.resource[id];
     if (method === "zero") {
       root.city.market.trade -= Math.abs(resource.trade);
       resource.trade = 0;
-    } else if (
-      method === "autoSell" &&
-      resource.trade <= 0 &&
-      root.city.market.trade < root.city.market.mtrade
-    ) {
-      resource.trade -= 1;
-      root.city.market.trade += 1;
-    } else if (
-      method === "autoBuy" &&
-      resource.trade >= 0 &&
-      root.city.market.trade < root.city.market.mtrade
-    ) {
-      resource.trade += 1;
-      root.city.market.trade += 1;
-    } else if (method === "autoSell") {
-      resource.trade -= 1;
-      root.city.market.trade -= 1;
-    } else if (method === "autoBuy") {
-      resource.trade += 1;
-      root.city.market.trade -= 1;
+    } else {
+      for (let index = 0; index < count; index += 1) {
+        if (
+          method === "autoSell" &&
+          resource.trade <= 0 &&
+          root.city.market.trade < root.city.market.mtrade
+        ) {
+          resource.trade -= 1;
+          root.city.market.trade += 1;
+        } else if (
+          method === "autoBuy" &&
+          resource.trade >= 0 &&
+          root.city.market.trade < root.city.market.mtrade
+        ) {
+          resource.trade += 1;
+          root.city.market.trade += 1;
+        } else if (method === "autoSell") {
+          resource.trade -= 1;
+          root.city.market.trade -= 1;
+        } else if (method === "autoBuy") {
+          resource.trade += 1;
+          root.city.market.trade -= 1;
+        }
+      }
     }
     return { ok: true, value: undefined };
   },
@@ -167,8 +172,8 @@ const routes = createCapturedTradeRoutes({
 routes.adjust();
 assert.equal(root.resource.Iron.trade, -4);
 assert.equal(root.city.market.trade, 4);
-assert.equal(calls.length, 4);
-assert.deepEqual(calls[0], ["autoSell", "Iron"]);
+assert.equal(calls.length, 1);
+assert.deepEqual(calls[0], ["autoSell", "Iron", 4]);
 
 root.tech.shadow = 5;
 root.race.supplySplit = false;
@@ -187,7 +192,7 @@ calls.length = 0;
 routes.adjust();
 assert.equal(root.resource.Iron.trade, 0);
 assert.equal(root.city.market.trade, 0);
-assert.deepEqual(calls, [["zero", "Iron"]]);
+assert.deepEqual(calls, [["zero", "Iron", 1]]);
 
 root.resource.Iron.trade = 0;
 root.resource.Iron.amount = 0;
@@ -564,8 +569,9 @@ registry.invoke = (_handle, method, args = []) => {
   const resource = root.resource[args[0]];
   calls.push([method, args[0]]);
   if (method === "autoSell") {
-    resource.trade -= 1;
-    root.city.market.trade += 1;
+    const count = args[1] ?? 1;
+    resource.trade -= count;
+    root.city.market.trade += count;
   }
   return { ok: true };
 };
@@ -585,8 +591,9 @@ registry.invoke = (_handle, method, args = []) => {
   }
   calls.push([method, args[0]]);
   if (method === "autoSell") {
-    root.resource.Iron.trade -= 1;
-    root.city.market.trade += 1;
+    const count = args[1] ?? 1;
+    root.resource.Iron.trade -= count;
+    root.city.market.trade += count;
   }
   return { ok: true };
 };
@@ -627,15 +634,23 @@ root.resource.Iron.trade = 0;
 root.city.market.trade = 0;
 settings = { ...settings, res_trade_sell_Iron: true };
 let routeMutations = 0;
-registry.invoke = (handle, method, args) => {
+registry.invoke = (handle, method, args = []) => {
   if (method === "autoSell") {
     routeMutations += 1;
-    if (routeMutations === 2) return { ok: true, value: undefined };
+    const resource = root.resource[args[0]];
+    const completed = Math.min(1, args[1] ?? 1);
+    resource.trade -= completed;
+    root.city.market.trade += completed;
+    return { ok: true, value: undefined };
   }
   return quoteInvoke(handle, method, args);
 };
 routes.adjust();
-assert.equal(routeMutations, 2, "a no-op middle route step stops the batch");
+assert.equal(
+  routeMutations,
+  1,
+  "one native call handles the counted route batch",
+);
 assert.equal(root.resource.Iron.trade, -1);
 assert.equal(root.city.market.trade, 1);
 
