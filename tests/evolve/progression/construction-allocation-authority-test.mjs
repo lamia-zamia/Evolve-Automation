@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readConstructionAllocationAuthority } from "../../../src/bootstrap/construction-allocation-authority.ts";
+import { evaluateConstructionAllocationShadow } from "../../../src/bootstrap/construction-allocation-shadow.ts";
 import {
   allocationClickBudget,
   allocationDenialReason,
@@ -251,6 +252,154 @@ assert.equal(
     midOperation.root.resource.Stone.amount,
   1,
 );
+
+const shadowInput = () => ({
+  orderingGeneration: 1,
+  phase: "pre-Gather",
+  workCycleId: 625,
+  rootGeneration: 4,
+  progressionGeneration: "human|standard|27",
+  currentRootGeneration: 4,
+  currentProgressionGeneration: "human|standard|27",
+  target: {
+    id: "city-farm",
+    pool: "anywhere",
+    cost: { Lumber: 20, Stone: 10, Money: 30 },
+  },
+  currentTarget: {
+    id: "city-farm",
+    pool: "anywhere",
+    cost: { Money: 30, Stone: 10, Lumber: 20 },
+  },
+  resources: {
+    Lumber: { amount: 21, max: 200 },
+    Stone: { amount: 0, max: 200 },
+    Money: { amount: 30, max: 10_000 },
+  },
+  permissions: { autoBuild: true, gatherEnabled: true },
+  controls: {
+    target: { methods: ["action"], generation: 5 },
+    Lumber: { methods: ["action"], generation: 6 },
+    Stone: { methods: ["action"], generation: 7 },
+  },
+  queues: { build: [], research: [] },
+  reservations: { status: "clear" },
+  handoff: { observed: true, active: false },
+  claims: [],
+  budgets: { perCycle: 5, perTargetEpisode: 80, totalEpisode: 140 },
+});
+
+assert.deepEqual(
+  evaluateConstructionAllocationShadow(shadowInput()),
+  { authorized: true, reasons: [] },
+  "a current pre-Gather order with a positive material shortage and complete evidence is live shadow authority",
+);
+
+const nextOrdering = shadowInput();
+nextOrdering.orderingGeneration += 1;
+nextOrdering.workCycleId += 1;
+assert.equal(
+  evaluateConstructionAllocationShadow(nextOrdering).authorized,
+  true,
+  "ordering-only refreshes receive their own monotonic generation independent of construction cycles",
+);
+
+for (const [name, change, expectedReason] of [
+  [
+    "p8304 stale progression",
+    (input) => (input.currentProgressionGeneration = "human|standard|28"),
+    "stale-progression-generation",
+  ],
+  [
+    "stale root",
+    (input) => (input.currentRootGeneration = 5),
+    "stale-root-generation",
+  ],
+  [
+    "wrong phase",
+    (input) => (input.phase = "post-Construction"),
+    "wrong-ordering-phase",
+  ],
+  [
+    "replacement target",
+    (input) => (input.currentTarget.id = "city-university"),
+    "current-target-mismatch",
+  ],
+  [
+    "incompatible target pool",
+    (input) => (input.target.pool = "region-1"),
+    "incompatible-target-pool",
+  ],
+  [
+    "reservation conflict",
+    (input) => (input.reservations.status = "conflict"),
+    "reservation-evidence-unavailable-or-conflicting",
+  ],
+  [
+    "build queue commitment",
+    (input) => input.queues.build.push({ id: "city-farm" }),
+    "build-queue-conflict",
+  ],
+  [
+    "active handoff",
+    (input) => (input.handoff.active = true),
+    "active-handoff-conflict",
+  ],
+  [
+    "competing claim",
+    (input) => input.claims.push({ resource: "Stone" }),
+    "competing-claim-conflict",
+  ],
+  [
+    "missing budget",
+    (input) => (input.budgets = undefined),
+    "missing-spending-budgets",
+  ],
+  [
+    "non-gatherable unaffordable",
+    (input) => (input.resources.Money.amount = 29),
+    "non-gatherable-unaffordable:Money",
+  ],
+  [
+    "no positive shortage",
+    (input) => (input.resources.Stone.amount = 10),
+    "no-positive-gatherable-shortage",
+  ],
+  [
+    "capacity cannot cover shortage",
+    (input) => (input.resources.Stone.max = 9),
+    "insufficient-capacity:Stone",
+  ],
+  [
+    "permission changed",
+    (input) => (input.permissions.autoBuild = false),
+    "auto-build-permission-disabled",
+  ],
+  [
+    "Gather control generation evidence missing",
+    (input) => delete input.controls.Stone,
+    "missing-gather-control:Stone",
+  ],
+  [
+    "required resource snapshot missing",
+    (input) => delete input.resources.Stone,
+    "missing-resource:Stone",
+  ],
+  [
+    "handoff state missing",
+    (input) => (input.handoff.observed = false),
+    "missing-handoff-evidence",
+  ],
+]) {
+  const input = shadowInput();
+  change(input);
+  const result = evaluateConstructionAllocationShadow(input);
+  assert.equal(result.authorized, false, `${name} fails closed`);
+  assert.ok(
+    result.reasons.includes(expectedReason),
+    `${name} has a specific rejection reason`,
+  );
+}
 
 assert.equal(
   allocationDenialReason({
