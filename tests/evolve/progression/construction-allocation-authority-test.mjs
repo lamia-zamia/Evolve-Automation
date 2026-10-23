@@ -266,11 +266,6 @@ const shadowInput = () => ({
     pool: "anywhere",
     cost: { Lumber: 20, Stone: 10, Money: 30 },
   },
-  currentTarget: {
-    id: "city-farm",
-    pool: "anywhere",
-    cost: { Money: 30, Stone: 10, Lumber: 20 },
-  },
   resources: {
     Lumber: { amount: 21, max: 200 },
     Stone: { amount: 0, max: 200 },
@@ -279,12 +274,11 @@ const shadowInput = () => ({
   permissions: { autoBuild: true, gatherEnabled: true },
   controls: {
     target: { methods: ["action"], generation: 5 },
-    Lumber: { methods: ["action"], generation: 6 },
     Stone: { methods: ["action"], generation: 7 },
   },
   queues: { build: [], research: [] },
   reservations: { status: "clear" },
-  handoff: { observed: true, active: false },
+  handoff: { status: "inactive", phase: "handoff", clicks: 10, limit: 10 },
   claims: [],
   budgets: { perCycle: 5, perTargetEpisode: 80, totalEpisode: 140 },
 });
@@ -321,11 +315,6 @@ for (const [name, change, expectedReason] of [
     "wrong-ordering-phase",
   ],
   [
-    "replacement target",
-    (input) => (input.currentTarget.id = "city-university"),
-    "current-target-mismatch",
-  ],
-  [
     "incompatible target pool",
     (input) => (input.target.pool = "region-1"),
     "incompatible-target-pool",
@@ -336,14 +325,24 @@ for (const [name, change, expectedReason] of [
     "reservation-evidence-unavailable-or-conflicting",
   ],
   [
+    "reservation source unavailable",
+    (input) => (input.reservations.status = "unknown"),
+    "reservation-evidence-unavailable-or-conflicting",
+  ],
+  [
     "build queue commitment",
     (input) => input.queues.build.push({ id: "city-farm" }),
     "build-queue-conflict",
   ],
   [
     "active handoff",
-    (input) => (input.handoff.active = true),
+    (input) => (input.handoff.status = "active"),
     "active-handoff-conflict",
+  ],
+  [
+    "handoff state unavailable",
+    (input) => (input.handoff.status = "unavailable"),
+    "missing-handoff-evidence",
   ],
   [
     "competing claim",
@@ -381,13 +380,23 @@ for (const [name, change, expectedReason] of [
     "missing-gather-control:Stone",
   ],
   [
+    "replaced Gather control",
+    (input) => (input.controls.Stone.methods = ["setData"]),
+    "missing-gather-control:Stone",
+  ],
+  [
+    "replaced target control",
+    (input) => (input.controls.target.generation = 0),
+    "missing-target-action-control",
+  ],
+  [
     "required resource snapshot missing",
     (input) => delete input.resources.Stone,
     "missing-resource:Stone",
   ],
   [
     "handoff state missing",
-    (input) => (input.handoff.observed = false),
+    (input) => (input.handoff.status = undefined),
     "missing-handoff-evidence",
   ],
 ]) {
