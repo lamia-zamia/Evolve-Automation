@@ -1,0 +1,635 @@
+{
+  "experiment": "P35 target-specific allocation value preflight",
+  "stage": 1,
+  "decision": "negative-preflight",
+  "treatmentRun": false,
+  "targetSelected": null,
+  "interventionWindow": null,
+  "stopReason": "No P33-authorized Construction target has a defensible path to meaningful progression within the one-target stop-at-purchase limit.",
+  "replayInputs": {
+    "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    "gameSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "fixture": "test-artifacts/benchmark/slice0/saves/p18-standard-human-fixture.txt",
+    "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+    "settingsSha256": "fa28e3da0ee97c4b7ed51c38f9ae98148e24631a6e497b0bd6ffb76aac334691",
+    "seed": 44,
+    "epoch": "2026-09-21T00:00:00.000Z",
+    "p19Periods": 10000,
+    "shadowPeriods": 5000,
+    "p33Replay": "experiments/p33-p19-live-authority-exact.mjs",
+    "p34Replay": "experiments/p34-allocation-execution-cost.mjs",
+    "p19Replay": "experiments/p19-civilization-bootstrap-exact.mjs",
+    "p20Replay": "experiments/p20-standard-human-sustained-allocation-exact.mjs",
+    "sourceEvidence": [
+      {
+        "file": "experiments/p33-p19-live-authority-evidence.json",
+        "sha256": "cda61afd5561e39cbe67b851578e46f94e1051ff66300d13e1202ced815140b9"
+      },
+      {
+        "file": "experiments/p34-allocation-execution-cost-evidence.json",
+        "sha256": "8270ce3a2353372ab4ad6961d53ff966c72fd5359b481732cb2a97d2d33f1dbd"
+      },
+      {
+        "file": "experiments/p19-civilization-bootstrap-evidence.json",
+        "sha256": "3b077adcaa569fa597df0fd0c5e32f6969ca6f96f4d9e68d7732f4ee40b4fd31"
+      },
+      {
+        "file": "experiments/p20-2-construction-handoff-parity-evidence.json",
+        "sha256": "e92c5a4ad1313b31d07e7a919b5b09e965041c5a11428c534904728e5f70848f"
+      }
+    ],
+    "p33P34LiveEligibilityParity": true
+  },
+  "liveTargetTransitions": [
+    {
+      "period": 8,
+      "targetId": null,
+      "cost": null
+    },
+    {
+      "period": 56,
+      "targetId": "city-farm",
+      "cost": {
+        "Lumber": 20,
+        "Stone": 10
+      }
+    },
+    {
+      "period": 72,
+      "targetId": "city-farm",
+      "cost": {
+        "Lumber": 27,
+        "Stone": 14
+      }
+    },
+    {
+      "period": 272,
+      "targetId": "city-shed",
+      "cost": {
+        "Money": 75,
+        "Lumber": 55,
+        "Stone": 45
+      }
+    }
+  ],
+  "liveTargetGroups": [
+    {
+      "targetId": null,
+      "cost": null,
+      "periodRange": [8, 56],
+      "observations": 7,
+      "eligibleObservations": 0,
+      "firstEligiblePeriod": null,
+      "rejectionReasons": {
+        "active-handoff-conflict": 6,
+        "missing-handoff-evidence": 1,
+        "no-current-pre-gather-target": 7
+      },
+      "firstObservation": {
+        "period": 8,
+        "gatherableShortage": {},
+        "freeCapacity": {},
+        "nonGatherableCosts": {},
+        "eligible": false,
+        "rejectionReasons": [
+          "no-current-pre-gather-target",
+          "missing-handoff-evidence"
+        ]
+      },
+      "firstEligibleObservation": null,
+      "lastObservation": {
+        "period": 56,
+        "gatherableShortage": {},
+        "freeCapacity": {},
+        "nonGatherableCosts": {},
+        "eligible": false,
+        "rejectionReasons": [
+          "no-current-pre-gather-target",
+          "active-handoff-conflict"
+        ]
+      },
+      "ownedBuildingsAtFirstEligible": null
+    },
+    {
+      "targetId": "city-farm",
+      "cost": {
+        "Lumber": 20,
+        "Stone": 10
+      },
+      "periodRange": [64, 72],
+      "observations": 2,
+      "eligibleObservations": 0,
+      "firstEligiblePeriod": null,
+      "rejectionReasons": {
+        "active-handoff-conflict": 2
+      },
+      "firstObservation": {
+        "period": 64,
+        "gatherableShortage": {
+          "Lumber": 0,
+          "Stone": 10
+        },
+        "freeCapacity": {
+          "Lumber": 113,
+          "Stone": 200
+        },
+        "nonGatherableCosts": {},
+        "eligible": false,
+        "rejectionReasons": ["active-handoff-conflict"]
+      },
+      "firstEligibleObservation": null,
+      "lastObservation": {
+        "period": 72,
+        "gatherableShortage": {
+          "Lumber": 0,
+          "Stone": 5
+        },
+        "freeCapacity": {
+          "Lumber": 113,
+          "Stone": 195
+        },
+        "nonGatherableCosts": {},
+        "eligible": false,
+        "rejectionReasons": ["active-handoff-conflict"]
+      },
+      "ownedBuildingsAtFirstEligible": null
+    },
+    {
+      "targetId": "city-farm",
+      "cost": {
+        "Lumber": 27,
+        "Stone": 14
+      },
+      "periodRange": [80, 272],
+      "observations": 25,
+      "eligibleObservations": 25,
+      "firstEligiblePeriod": 80,
+      "rejectionReasons": {},
+      "firstObservation": {
+        "period": 80,
+        "gatherableShortage": {
+          "Lumber": 0,
+          "Stone": 14
+        },
+        "freeCapacity": {
+          "Lumber": 133,
+          "Stone": 200
+        },
+        "nonGatherableCosts": {},
+        "eligible": true,
+        "rejectionReasons": []
+      },
+      "firstEligibleObservation": {
+        "period": 80,
+        "gatherableShortage": {
+          "Lumber": 0,
+          "Stone": 14
+        },
+        "freeCapacity": {
+          "Lumber": 133,
+          "Stone": 200
+        },
+        "nonGatherableCosts": {},
+        "eligible": true,
+        "rejectionReasons": []
+      },
+      "lastObservation": {
+        "period": 272,
+        "gatherableShortage": {
+          "Lumber": 7,
+          "Stone": 14
+        },
+        "freeCapacity": {
+          "Lumber": 180,
+          "Stone": 200
+        },
+        "nonGatherableCosts": {},
+        "eligible": true,
+        "rejectionReasons": []
+      },
+      "ownedBuildingsAtFirstEligible": {
+        "farm": 1,
+        "basic_housing": 0,
+        "shed": 0,
+        "rock_quarry": 0
+      }
+    },
+    {
+      "targetId": "city-shed",
+      "cost": {
+        "Money": 75,
+        "Lumber": 55,
+        "Stone": 45
+      },
+      "periodRange": [280, 5000],
+      "observations": 591,
+      "eligibleObservations": 570,
+      "firstEligiblePeriod": 448,
+      "rejectionReasons": {
+        "non-gatherable-unaffordable:Money": 21
+      },
+      "firstObservation": {
+        "period": 280,
+        "gatherableShortage": {
+          "Lumber": 35,
+          "Stone": 45
+        },
+        "freeCapacity": {
+          "Lumber": 180,
+          "Stone": 200
+        },
+        "nonGatherableCosts": {
+          "Money": {
+            "price": 75,
+            "stock": 26.40000000000004,
+            "affordable": false
+          }
+        },
+        "eligible": false,
+        "rejectionReasons": ["non-gatherable-unaffordable:Money"]
+      },
+      "firstEligibleObservation": {
+        "period": 448,
+        "gatherableShortage": {
+          "Lumber": 35,
+          "Stone": 45
+        },
+        "freeCapacity": {
+          "Lumber": 180,
+          "Stone": 200
+        },
+        "nonGatherableCosts": {
+          "Money": {
+            "price": 75,
+            "stock": 76.79999999999963,
+            "affordable": true
+          }
+        },
+        "eligible": true,
+        "rejectionReasons": []
+      },
+      "lastObservation": {
+        "period": 5000,
+        "gatherableShortage": {
+          "Lumber": 35,
+          "Stone": 45
+        },
+        "freeCapacity": {
+          "Lumber": 180,
+          "Stone": 200
+        },
+        "nonGatherableCosts": {
+          "Money": {
+            "price": 75,
+            "stock": 1000,
+            "affordable": true
+          }
+        },
+        "eligible": true,
+        "rejectionReasons": []
+      },
+      "ownedBuildingsAtFirstEligible": {
+        "farm": 1,
+        "basic_housing": 3,
+        "shed": 0,
+        "rock_quarry": 0
+      }
+    }
+  ],
+  "baseline": {
+    "checkpoints": [
+      {
+        "period": 500,
+        "population": 3,
+        "jobs": {
+          "farmer": 3
+        },
+        "buildings": {
+          "farm": 1,
+          "basic_housing": 3
+        },
+        "foodProduction": "3.7319999999999998v",
+        "foodConsumption": -3,
+        "starved": 0,
+        "deaths": 0,
+        "resources": {
+          "Food": {
+            "amount": 110.89762000000111,
+            "max": 1000,
+            "diff": 0.49
+          },
+          "Lumber": {
+            "amount": 20,
+            "max": 200,
+            "diff": 0
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200,
+            "diff": 0
+          },
+          "Money": {
+            "amount": 92.39999999999948,
+            "max": 1000,
+            "diff": 1.2
+          },
+          "Knowledge": {
+            "amount": 12.959999999999793,
+            "max": 100,
+            "diff": 1
+          }
+        }
+      },
+      {
+        "period": 1000,
+        "population": 3,
+        "jobs": {
+          "farmer": 3
+        },
+        "buildings": {
+          "farm": 1,
+          "basic_housing": 3
+        },
+        "foodProduction": "4.331999999999999v",
+        "foodConsumption": -3,
+        "starved": 0,
+        "deaths": 0,
+        "resources": {
+          "Food": {
+            "amount": 257.81404000000134,
+            "max": 1000,
+            "diff": 1.28
+          },
+          "Lumber": {
+            "amount": 20,
+            "max": 200,
+            "diff": 0
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200,
+            "diff": 0
+          },
+          "Money": {
+            "amount": 242.40000000000347,
+            "max": 1000,
+            "diff": 1.2
+          },
+          "Knowledge": {
+            "amount": 17.89499999999979,
+            "max": 100,
+            "diff": 0.99
+          }
+        }
+      },
+      {
+        "period": 5000,
+        "population": 3,
+        "jobs": {
+          "farmer": 3
+        },
+        "buildings": {
+          "farm": 1,
+          "basic_housing": 3
+        },
+        "foodProduction": "4.331999999999999v",
+        "foodConsumption": -3,
+        "starved": 0,
+        "deaths": 0,
+        "resources": {
+          "Food": {
+            "amount": 1000,
+            "max": 1000,
+            "diff": 1.77
+          },
+          "Lumber": {
+            "amount": 20,
+            "max": 200,
+            "diff": 0
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200,
+            "diff": 0
+          },
+          "Money": {
+            "amount": 1000,
+            "max": 1000,
+            "diff": 1.2
+          },
+          "Knowledge": {
+            "amount": 100,
+            "max": 100,
+            "diff": 1
+          }
+        }
+      },
+      {
+        "period": 10000,
+        "population": 3,
+        "jobs": {
+          "farmer": 3
+        },
+        "buildings": {
+          "farm": 1,
+          "basic_housing": 3
+        },
+        "foodProduction": "4.331999999999999v",
+        "foodConsumption": -3,
+        "starved": 0,
+        "deaths": 0,
+        "resources": {
+          "Food": {
+            "amount": 1000,
+            "max": 1000,
+            "diff": 1.77
+          },
+          "Lumber": {
+            "amount": 20,
+            "max": 200,
+            "diff": 0
+          },
+          "Stone": {
+            "amount": 0,
+            "max": 200,
+            "diff": 0
+          },
+          "Money": {
+            "amount": 1000,
+            "max": 1000,
+            "diff": 1.2
+          },
+          "Knowledge": {
+            "amount": 100,
+            "max": 100,
+            "diff": 2
+          }
+        }
+      }
+    ],
+    "researchGrants": [
+      {
+        "period": 16,
+        "elementId": "tech-sundial"
+      },
+      {
+        "period": 56,
+        "elementId": "tech-agriculture"
+      },
+      {
+        "period": 96,
+        "elementId": "tech-housing"
+      },
+      {
+        "period": 192,
+        "elementId": "tech-currency"
+      },
+      {
+        "period": 272,
+        "elementId": "tech-storage"
+      },
+      {
+        "period": 456,
+        "elementId": "tech-mining"
+      },
+      {
+        "period": 672,
+        "elementId": "tech-irrigation"
+      },
+      {
+        "period": 936,
+        "elementId": "tech-science"
+      },
+      {
+        "period": 1216,
+        "elementId": "tech-garrison"
+      },
+      {
+        "period": 1536,
+        "elementId": "tech-silo"
+      },
+      {
+        "period": 1896,
+        "elementId": "tech-banking"
+      }
+    ],
+    "constructionPurchases": [
+      {
+        "period": 72,
+        "elementId": "city-farm"
+      },
+      {
+        "period": 96,
+        "elementId": "city-basic_housing"
+      },
+      {
+        "period": 104,
+        "elementId": "city-basic_housing"
+      },
+      {
+        "period": 112,
+        "elementId": "city-basic_housing"
+      }
+    ],
+    "firstFarmPurchasePeriod": 72,
+    "sustainableAtP5000AndP10000": true
+  },
+  "targetAssessment": {
+    "secondFarm": {
+      "targetId": "city-farm",
+      "firstEligiblePeriod": 80,
+      "alreadyOwnedAtFirstEligible": 1,
+      "materialShortageAtFirstEligible": {
+        "Lumber": 0,
+        "Stone": 14
+      },
+      "decision": "Eligible, but P19 already owns one Farm and sustains three Farmers; P20.2 generic allocation bought another Farm and reduced p5000 population and productive Farmers."
+    },
+    "shed": {
+      "targetId": "city-shed",
+      "firstObservedPeriod": 272,
+      "firstPreGatherPeriod": 280,
+      "firstMoneyAffordablePeriod": 448,
+      "cost": {
+        "Money": 75,
+        "Lumber": 55,
+        "Stone": 45
+      },
+      "materialShortageAtFirstEligible": {
+        "Lumber": 35,
+        "Stone": 45
+      },
+      "obtainableCapacityAtFirstEligible": {
+        "Lumber": 180,
+        "Stone": 200
+      },
+      "estimatedMaterialClicksAtP19Stock": 80,
+      "perTargetCeiling": 80,
+      "actualP20TargetClicks": {
+        "clicks": 79,
+        "byResource": {
+          "Lumber": 35,
+          "Stone": 44
+        },
+        "firstPeriod": 936,
+        "lastPeriod": 1056
+      },
+      "p20ShedPurchasePeriod": 1056,
+      "nativeEffect": "storage only; +300 Lumber and +300 Stone capacity",
+      "directProductiveOutput": false,
+      "downstream": {
+        "targetId": "city-rock_quarry",
+        "appearedAfterP20ShedPurchase": true,
+        "firstP20QuarryGatherPeriod": 1072,
+        "p20QuarryClicks": {
+          "clicks": 48,
+          "byResource": {
+            "Lumber": 48
+          },
+          "firstPeriod": 1072,
+          "lastPeriod": 1144
+        },
+        "quarryPurchased": false,
+        "p20TotalAllocationClicks": 140,
+        "requiresASecondTargetEpisode": true,
+        "p19LumberAndStoneProduction": {
+          "p5000": {
+            "Lumber": 0,
+            "Stone": 0
+          },
+          "p10000": {
+            "Lumber": 0,
+            "Stone": 0
+          }
+        }
+      },
+      "decision": "Materials fit within 80 clicks, but Shed adds no job, housing, or Research. The next productive Quarry is not the current saving target and still requires another target-specific material episode; P20.2 spent 48 Quarry clicks without purchasing it."
+    },
+    "rockQuarry": {
+      "targetId": "city-rock_quarry",
+      "productiveInfrastructure": true,
+      "enablesJob": "quarry_worker",
+      "currentP33P34SavingTarget": false,
+      "decision": "A later native offer is not current P33/P34 target authority and cannot be selected under the requested contract."
+    }
+  },
+  "p34ReferenceCost": {
+    "shadowInvocations": 625,
+    "shadowDirectElapsedMs": 107.29999999515712,
+    "hypotheticalFreshPriceProbeCount": 280,
+    "actualTreatmentExecutorMeasurement": null,
+    "cpuTwoPercentGate": "unresolved"
+  },
+  "preRegisteredSuccessCriteriaForAnyFutureTest": {
+    "preserveP19": {
+      "population": "at least 3",
+      "activeFarmers": "at least 3",
+      "farmerFoodProduction": "at least 4.332",
+      "foodConsumption": "3",
+      "starvation": 0,
+      "deaths": 0
+    },
+    "meaningfulGain": "At least one new productive job, useful productive infrastructure beyond storage, additional housing/population, or additional native Research advancement caused after the first authorized material action.",
+    "buildingTheSelectedTargetAloneIsInsufficient": true
+  }
+}
