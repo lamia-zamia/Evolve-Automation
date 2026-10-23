@@ -7858,9 +7858,13 @@ export function startCapturedRuntime({
                 const records = Array.isArray(recordsValue) ? recordsValue : [];
                 if (ready) {
                   const root = pageCapture.rootState.readRoot();
-                  const target =
-                    cycleConstructionObservations.readSavingTarget();
-                  savingTargetThisCycle = target;
+                  const gatherEnabled =
+                    isEnabled(settings, "autoBuild") ||
+                    isEnabled(settings, "buildingAlwaysClick");
+                  const target = gatherEnabled
+                    ? cycleConstructionObservations.readSavingTarget()
+                    : null;
+                  if (gatherEnabled) savingTargetThisCycle = target;
                   const targetId = target?.name;
                   const readControl = (id: string) => {
                     const control = pageCapture.controls.resolve(id);
