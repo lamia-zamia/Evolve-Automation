@@ -166,6 +166,7 @@ import { createCapturedPowerExecutor } from "../adapters/evolve/economy/producti
 import { createCapturedPowerReader } from "../adapters/evolve/economy/production/captured-power-reader.ts";
 import { readCapturedSemanticBuildingStates } from "../adapters/evolve/progression/build/captured-building-availability.ts";
 import { createDiscoveryAttempts } from "./discovery-attempts.ts";
+import { evaluateConstructionAllocationShadow } from "./construction-allocation-shadow.ts";
 import { createCapturedPowerWarnings } from "../adapters/evolve/economy/production/captured-power-warnings.ts";
 import {
   EMPTY_POWER_AUTOMATION_STATE,
@@ -7692,6 +7693,14 @@ export function startCapturedRuntime({
       );
     };
     automationCycle += 1;
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    ) {
+      const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+      const workload = readProperty(hooks, "p32GameAdvanceWorkload");
+      if (typeof workload === "function") Reflect.apply(workload, hooks, []);
+    }
     constructionMutationObserved = false;
     storageMutationObserved = false;
     factoryMutationObserved = false;
@@ -7807,6 +7816,315 @@ export function startCapturedRuntime({
           ? true
           : runPhase("construction saving discovery", () => {
               const ready = progression.establishConstructionOrdering();
+              if (
+                typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+                __EA_TEST_SURFACE_ENABLED__ === true
+              ) {
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                const now = () => {
+                  const performanceObject = readProperty(
+                    settingsHostWindow,
+                    "performance",
+                  );
+                  const nowMethod = readProperty(performanceObject, "now");
+                  return typeof nowMethod === "function"
+                    ? Number(Reflect.apply(nowMethod, performanceObject, []))
+                    : Date.now();
+                };
+                const startedAt = now();
+                const priorGeneration = readProperty(
+                  hooks,
+                  "p32OrderingGeneration",
+                );
+                const previousOrderingGeneration =
+                  typeof priorGeneration === "number" &&
+                  Number.isSafeInteger(priorGeneration) &&
+                  priorGeneration > 0
+                    ? priorGeneration
+                    : 0;
+                const currentOrderingGeneration = ready
+                  ? previousOrderingGeneration + 1
+                  : previousOrderingGeneration;
+                if (ready && isRecord(hooks))
+                  Reflect.set(
+                    hooks,
+                    "p32OrderingGeneration",
+                    currentOrderingGeneration,
+                  );
+                const recordsValue = readProperty(hooks, "p32LiveAuthority");
+                const records = Array.isArray(recordsValue) ? recordsValue : [];
+                if (ready) {
+                  const root = pageCapture.rootState.readRoot();
+                  const target =
+                    cycleConstructionObservations.readSavingTarget();
+                  savingTargetThisCycle = target;
+                  const targetId = target?.name;
+                  const readControl = (id: string) => {
+                    const control = pageCapture.controls.resolve(id);
+                    return control === undefined
+                      ? undefined
+                      : Object.freeze({
+                          methods: Object.freeze([...control.methods]),
+                          generation: control.generation,
+                        });
+                  };
+                  const lumberControl =
+                    readControl("city-lumber") ??
+                    readControl("undefined-lumber");
+                  const stoneControl =
+                    readControl("undefined-stone") ?? readControl("city-stone");
+                  const buildQueue = readProperty(
+                    readProperty(root, "queue"),
+                    "queue",
+                  );
+                  const researchQueue = readProperty(
+                    readProperty(root, "r_queue"),
+                    "queue",
+                  );
+                  const intervention = readProperty(
+                    hooks,
+                    "gatherIntervention",
+                  );
+                  const claimList = readProperty(
+                    intervention,
+                    "resourceClaims",
+                  );
+                  const singleClaim = readProperty(
+                    intervention,
+                    "resourceClaim",
+                  );
+                  const claims = Array.isArray(claimList)
+                    ? claimList
+                    : singleClaim === undefined
+                      ? []
+                      : [singleClaim];
+                  const claimEvidence = Object.freeze(
+                    claims.map((claim, index) => {
+                      const claimId = readProperty(claim, "claimId");
+                      return typeof claimId === "string"
+                        ? claimId
+                        : `unidentified-claim-${index + 1}`;
+                    }),
+                  );
+                  const budgetsValue = readProperty(
+                    hooks,
+                    "constructionAllocationShadowBudgets",
+                  );
+                  const budgets = isRecord(budgetsValue)
+                    ? Object.freeze({
+                        perCycle: readProperty(budgetsValue, "perCycle"),
+                        perTargetEpisode: readProperty(
+                          budgetsValue,
+                          "perTargetEpisode",
+                        ),
+                        totalEpisode: readProperty(
+                          budgetsValue,
+                          "totalEpisode",
+                        ),
+                      })
+                    : undefined;
+                  const bootstrap = readProperty(
+                    intervention,
+                    "civilizationBootstrap",
+                  );
+                  const bootstrapState = readProperty(bootstrap, "state");
+                  const handoffPhase = readProperty(bootstrapState, "phase");
+                  const handoffClicks = readProperty(
+                    bootstrapState,
+                    "handoffClicks",
+                  );
+                  const handoffLimit = readProperty(
+                    bootstrapState,
+                    "handoffLimit",
+                  );
+                  const targetEvidence =
+                    target === null
+                      ? null
+                      : Object.freeze({
+                          id: target.name,
+                          pool: target.pool,
+                          cost: Object.freeze({ ...target.cost }),
+                        });
+                  const resourceRoot = readProperty(root, "resource");
+                  const resources = Object.freeze(
+                    Object.fromEntries(
+                      Object.keys(target?.cost ?? {}).map((resourceId) => {
+                        const resource = readProperty(resourceRoot, resourceId);
+                        return [
+                          resourceId,
+                          Object.freeze({
+                            amount: readProperty(resource, "amount"),
+                            max: readProperty(resource, "max"),
+                          }),
+                        ];
+                      }),
+                    ),
+                  );
+                  const rootGeneration = progression.readRootGeneration();
+                  const progressionGeneration =
+                    progression.readProgressionEpoch();
+                  const observation = Object.freeze({
+                    orderingGeneration: currentOrderingGeneration,
+                    phase: "pre-Gather",
+                    workCycleId: automationCycle,
+                    rootGeneration,
+                    progressionGeneration,
+                    target: targetEvidence,
+                    currentTarget: targetEvidence,
+                    targetSelection: Object.freeze({
+                      constructionSuppressedThisCycle,
+                      orderingComplete:
+                        progression.observations.hasCompletedOrdering(),
+                      autoBuildSetting:
+                        settingsStore.readRaw()["autoBuild"] === true,
+                      policyRequestPresent:
+                        readProperty(hooks, "constructionAllocationRequest") ===
+                        true,
+                    }),
+                    resources,
+                    permissions: Object.freeze({
+                      autoBuild: isEnabled(settings, "autoBuild"),
+                      gatherEnabled:
+                        isEnabled(settings, "autoBuild") ||
+                        isEnabled(settings, "buildingAlwaysClick"),
+                    }),
+                    controls: Object.freeze({
+                      target:
+                        typeof targetId === "string"
+                          ? readControl(targetId)
+                          : undefined,
+                      Lumber: lumberControl,
+                      Stone: stoneControl,
+                    }),
+                    queues: Object.freeze({
+                      build: Array.isArray(buildQueue)
+                        ? Object.freeze(
+                            buildQueue.map((entry, index) => {
+                              const id = readProperty(entry, "id");
+                              return typeof id === "string"
+                                ? id
+                                : `unidentified-build-entry-${index + 1}`;
+                            }),
+                          )
+                        : undefined,
+                      research: Array.isArray(researchQueue)
+                        ? Object.freeze(
+                            researchQueue.map((entry, index) => {
+                              const id = readProperty(entry, "id");
+                              return typeof id === "string"
+                                ? id
+                                : `unidentified-research-entry-${index + 1}`;
+                            }),
+                          )
+                        : undefined,
+                    }),
+                    reservations: Object.freeze({
+                      status:
+                        Array.isArray(buildQueue) &&
+                        buildQueue.length === 0 &&
+                        Array.isArray(researchQueue) &&
+                        researchQueue.length === 0
+                          ? "clear"
+                          : "conflict",
+                    }),
+                    handoff: Object.freeze({
+                      observed: intervention !== undefined,
+                      active:
+                        readProperty(bootstrap, "authorized") === true &&
+                        (handoffPhase === "active" ||
+                          handoffPhase === "handoff") &&
+                        typeof handoffClicks === "number" &&
+                        typeof handoffLimit === "number" &&
+                        handoffClicks < handoffLimit,
+                    }),
+                    claims: claimEvidence,
+                    budgets,
+                  });
+                  const shadow = evaluateConstructionAllocationShadow({
+                    ...observation,
+                    currentRootGeneration: progression.readRootGeneration(),
+                    currentProgressionGeneration:
+                      progression.readProgressionEpoch(),
+                  });
+                  records.push(
+                    Object.freeze({
+                      ...observation,
+                      shadow,
+                      elapsedMs: Math.max(0, now() - startedAt),
+                      extraNativeControlCalls: 0,
+                      extraNativeCatalogOrPriceProbes: 0,
+                    }),
+                  );
+                } else {
+                  records.push(
+                    Object.freeze({
+                      orderingGeneration: currentOrderingGeneration,
+                      phase: "pre-Gather",
+                      workCycleId: automationCycle,
+                      shadow: Object.freeze({
+                        authorized: false,
+                        reasons: Object.freeze([
+                          "incomplete-ordering-publication",
+                        ]),
+                      }),
+                      elapsedMs: Math.max(0, now() - startedAt),
+                      extraNativeControlCalls: 0,
+                      extraNativeCatalogOrPriceProbes: 0,
+                    }),
+                  );
+                }
+                if (records.length > 128)
+                  records.splice(0, records.length - 128);
+                if (isRecord(hooks)) {
+                  Reflect.set(hooks, "p32LiveAuthority", records);
+                  const summaryValue = readProperty(
+                    hooks,
+                    "p32LiveAuthoritySummary",
+                  );
+                  const summary = isRecord(summaryValue)
+                    ? summaryValue
+                    : {
+                        evaluations: 0,
+                        authorized: 0,
+                        elapsedMs: 0,
+                        extraNativeControlCalls: 0,
+                        extraNativeCatalogOrPriceProbes: 0,
+                        rejectionReasons: {},
+                      };
+                  const last = records.at(-1);
+                  const shadow = readProperty(last, "shadow");
+                  summary.evaluations = Number(summary.evaluations) + 1;
+                  summary.authorized =
+                    Number(summary.authorized) +
+                    (readProperty(shadow, "authorized") === true ? 1 : 0);
+                  summary.elapsedMs =
+                    Number(summary.elapsedMs) +
+                    Number(readProperty(last, "elapsedMs") ?? 0);
+                  summary.extraNativeControlCalls =
+                    Number(summary.extraNativeControlCalls) +
+                    Number(readProperty(last, "extraNativeControlCalls") ?? 0);
+                  summary.extraNativeCatalogOrPriceProbes =
+                    Number(summary.extraNativeCatalogOrPriceProbes) +
+                    Number(
+                      readProperty(last, "extraNativeCatalogOrPriceProbes") ??
+                        0,
+                    );
+                  const rejectionReasons = readProperty(
+                    summary,
+                    "rejectionReasons",
+                  );
+                  const reasons = readProperty(shadow, "reasons");
+                  if (isRecord(rejectionReasons) && Array.isArray(reasons))
+                    for (const reason of reasons)
+                      if (typeof reason === "string")
+                        rejectionReasons[reason] =
+                          Number(rejectionReasons[reason] ?? 0) + 1;
+                  Reflect.set(hooks, "p32LiveAuthoritySummary", summary);
+                }
+              }
               if (!ready)
                 reportOnce(
                   "construction saving authority unavailable: candidate catalog or current price incomplete",
