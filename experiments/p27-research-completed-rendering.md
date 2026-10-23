@@ -10,11 +10,11 @@ The investigation used `pmotschmann/Evolve` commit `db38e2af831907d49aeb5348d678
 
 A separate ignored snapshot of the pinned game was instrumented for attribution only. The temporary instrumentation was not shipped. Measurements use Chromium CDP console-event timestamps because the game's `performance.now()` clock was frozen at zero in this runner. The row callback counts are exact; phase elapsed values are summed over completed draws and include phase setup around each callback loop. Instrumentation output and fixture export hashes are in the ignored `test-artifacts/benchmark/tmp/p27-profile.json`.
 
-| Fixture | Draws | Registry visits | Offered rows | Completed rows | Registry phase | Offered phase | Completed phase | Whole draw |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Early | 110 | 91,740 | 1,366 | 3,466 | 694.38 ms | 193.16 ms | 262.50 ms | 1,273.79 ms |
-| Progression | 116 | 96,744 | 1,854 | 11,236 | 720.62 ms | 271.24 ms | 814.00 ms | 1,944.34 ms |
-| Late | 103 | 85,902 | 424 | 27,077 | 662.13 ms | 119.49 ms | 2,501.30 ms | 3,408.58 ms |
+| Fixture     | Draws | Registry visits | Offered rows | Completed rows | Registry phase | Offered phase | Completed phase |  Whole draw |
+| ----------- | ----: | --------------: | -----------: | -------------: | -------------: | ------------: | --------------: | ----------: |
+| Early       |   110 |          91,740 |        1,366 |          3,466 |      694.38 ms |     193.16 ms |       262.50 ms | 1,273.79 ms |
+| Progression |   116 |          96,744 |        1,854 |         11,236 |      720.62 ms |     271.24 ms |       814.00 ms | 1,944.34 ms |
+| Late        |   103 |          85,902 |          424 |         27,077 |      662.13 ms |     119.49 ms |     2,501.30 ms | 3,408.58 ms |
 
 The registry phase retained path checks, `removeAction`, `checkOldTech`, new-tech qualification and requirements, and offer classification. The completed phase includes category setup and `trickOrTreat` as well as completed-row callbacks. At late progression, completed rows averaged 262.9 per draw, versus 4.1 offered rows; the phase accounts for about 73% of whole draw elapsed time in this instrumented run. This establishes that the callbacks are a material optimization target, but it does not establish a safe way to suppress them.
 
