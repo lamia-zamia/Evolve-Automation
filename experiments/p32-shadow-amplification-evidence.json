@@ -1,0 +1,262 @@
+{
+  "sourceEvidenceSha256": "d31839859b2d25f9869a9c9de274c385747529efbc7fb87adf53312ea90a0e1c",
+  "method": "Five diagnostic batches at 10k, 30k, and 90k repetitions; no game advancement or native action. The positive input is synthetic and is not production-overhead evidence.",
+  "measurements": {
+    "live-missing-target": [
+      {
+        "repetitions": 10000,
+        "medianElapsedMs": 2.873,
+        "runs": [
+          {
+            "repetitions": 10000,
+            "elapsedMs": 6.0194,
+            "accepted": 0,
+            "rejected": 10000,
+            "reasonCount": 10000
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 2.9303,
+            "accepted": 0,
+            "rejected": 10000,
+            "reasonCount": 10000
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 2.873,
+            "accepted": 0,
+            "rejected": 10000,
+            "reasonCount": 10000
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 2.3783,
+            "accepted": 0,
+            "rejected": 10000,
+            "reasonCount": 10000
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 1.6828,
+            "accepted": 0,
+            "rejected": 10000,
+            "reasonCount": 10000
+          }
+        ],
+        "elapsedPerEvaluationMs": 0.00028730000000000004
+      },
+      {
+        "repetitions": 30000,
+        "medianElapsedMs": 4.6995,
+        "runs": [
+          {
+            "repetitions": 30000,
+            "elapsedMs": 4.6768,
+            "accepted": 0,
+            "rejected": 30000,
+            "reasonCount": 30000
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 4.7899,
+            "accepted": 0,
+            "rejected": 30000,
+            "reasonCount": 30000
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 4.6915,
+            "accepted": 0,
+            "rejected": 30000,
+            "reasonCount": 30000
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 4.6995,
+            "accepted": 0,
+            "rejected": 30000,
+            "reasonCount": 30000
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 4.9916,
+            "accepted": 0,
+            "rejected": 30000,
+            "reasonCount": 30000
+          }
+        ],
+        "elapsedPerEvaluationMs": 0.00015664999999999999
+      },
+      {
+        "repetitions": 90000,
+        "medianElapsedMs": 14.6082,
+        "runs": [
+          {
+            "repetitions": 90000,
+            "elapsedMs": 14.6082,
+            "accepted": 0,
+            "rejected": 90000,
+            "reasonCount": 90000
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 14.0852,
+            "accepted": 0,
+            "rejected": 90000,
+            "reasonCount": 90000
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 15.3017,
+            "accepted": 0,
+            "rejected": 90000,
+            "reasonCount": 90000
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 14.3208,
+            "accepted": 0,
+            "rejected": 90000,
+            "reasonCount": 90000
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 14.7777,
+            "accepted": 0,
+            "rejected": 90000,
+            "reasonCount": 90000
+          }
+        ],
+        "elapsedPerEvaluationMs": 0.00016231333333333332
+      }
+    ],
+    "synthetic-complete-positive": [
+      {
+        "repetitions": 10000,
+        "medianElapsedMs": 18.8907,
+        "runs": [
+          {
+            "repetitions": 10000,
+            "elapsedMs": 27.0326,
+            "accepted": 10000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 22.6618,
+            "accepted": 10000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 18.7955,
+            "accepted": 10000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 18.6837,
+            "accepted": 10000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 10000,
+            "elapsedMs": 18.8907,
+            "accepted": 10000,
+            "rejected": 0,
+            "reasonCount": 0
+          }
+        ],
+        "elapsedPerEvaluationMs": 0.0018890699999999999
+      },
+      {
+        "repetitions": 30000,
+        "medianElapsedMs": 56.7363,
+        "runs": [
+          {
+            "repetitions": 30000,
+            "elapsedMs": 56.7363,
+            "accepted": 30000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 58.4869,
+            "accepted": 30000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 58.7253,
+            "accepted": 30000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 56.3977,
+            "accepted": 30000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 30000,
+            "elapsedMs": 56.7236,
+            "accepted": 30000,
+            "rejected": 0,
+            "reasonCount": 0
+          }
+        ],
+        "elapsedPerEvaluationMs": 0.00189121
+      },
+      {
+        "repetitions": 90000,
+        "medianElapsedMs": 168.8178,
+        "runs": [
+          {
+            "repetitions": 90000,
+            "elapsedMs": 170.8195,
+            "accepted": 90000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 170.1953,
+            "accepted": 90000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 168.2009,
+            "accepted": 90000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 168.7234,
+            "accepted": 90000,
+            "rejected": 0,
+            "reasonCount": 0
+          },
+          {
+            "repetitions": 90000,
+            "elapsedMs": 168.8178,
+            "accepted": 90000,
+            "rejected": 0,
+            "reasonCount": 0
+          }
+        ],
+        "elapsedPerEvaluationMs": 0.0018757533333333333
+      }
+    ]
+  }
+}

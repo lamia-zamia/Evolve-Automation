@@ -1,0 +1,101 @@
+{
+  "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+  "settingsSha256": "fa28e3da0ee97c4b7ed51c38f9ae98148e24631a6e497b0bd6ffb76aac334691",
+  "gameSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+  "bundleSha256": "cb4e21b4a8e19dbb44707d39a9c13169133aaca44ad73b1832e233494de3976e",
+  "method": "Identical test-surface bundle and fixture. Each matched pair measures renderer CPU and CDP task time only while the game advances; treatment burns 2% of its control's renderer CPU distributed over that run's observed work cycles.",
+  "warmupPeriods": 100,
+  "measuredPeriods": 1000,
+  "pairs": [
+    {
+      "repeat": 1,
+      "targetWorkPercent": 2,
+      "control": {
+        "injected": false,
+        "targetMsPerWorkCycle": 0,
+        "periods": 1100,
+        "workCycles": 125,
+        "rendererCpuSec": 10.509332999999998,
+        "taskDurationSec": 9.553552,
+        "scriptDurationSec": 0.039964,
+        "workload": null
+      },
+      "treatment": {
+        "injected": true,
+        "targetMsPerWorkCycle": 1.68149328,
+        "periods": 1100,
+        "workCycles": 125,
+        "rendererCpuSec": 10.810934999999999,
+        "taskDurationSec": 9.912581000000001,
+        "scriptDurationSec": 0.03425699999999998,
+        "workload": {
+          "calls": 125,
+          "elapsedMs": 212.50000001117587,
+          "checksum": 1286743585
+        }
+      },
+      "rendererCpuIncreasePercent": 2.869849114116004,
+      "taskDurationIncreasePercent": 3.7580682033237625
+    },
+    {
+      "repeat": 2,
+      "targetWorkPercent": 2,
+      "control": {
+        "injected": false,
+        "targetMsPerWorkCycle": 0,
+        "periods": 1100,
+        "workCycles": 125,
+        "rendererCpuSec": 10.148768,
+        "taskDurationSec": 9.211724,
+        "scriptDurationSec": 0.03707300000000002,
+        "workload": null
+      },
+      "treatment": {
+        "injected": true,
+        "targetMsPerWorkCycle": 1.62380288,
+        "periods": 1100,
+        "workCycles": 125,
+        "rendererCpuSec": 10.582436,
+        "taskDurationSec": 9.651121,
+        "scriptDurationSec": 0.039574,
+        "workload": {
+          "calls": 125,
+          "elapsedMs": 212.59999999031425,
+          "checksum": 1286743585
+        }
+      },
+      "rendererCpuIncreasePercent": 4.273109800125484,
+      "taskDurationIncreasePercent": 4.76997573961182
+    },
+    {
+      "repeat": 3,
+      "targetWorkPercent": 2,
+      "control": {
+        "injected": false,
+        "targetMsPerWorkCycle": 0,
+        "periods": 1100,
+        "workCycles": 125,
+        "rendererCpuSec": 9.237955999999999,
+        "taskDurationSec": 8.319767,
+        "scriptDurationSec": 0.03159400000000001,
+        "workload": null
+      },
+      "treatment": {
+        "injected": true,
+        "targetMsPerWorkCycle": 1.4780729599999998,
+        "periods": 1100,
+        "workCycles": 125,
+        "rendererCpuSec": 8.734542,
+        "taskDurationSec": 7.820053000000001,
+        "scriptDurationSec": 0.030178999999999956,
+        "workload": {
+          "calls": 125,
+          "elapsedMs": 187.59999999776483,
+          "checksum": 1286743585
+        }
+      },
+      "rendererCpuIncreasePercent": -5.449408938514098,
+      "taskDurationIncreasePercent": -6.006346091182601
+    }
+  ]
+}
