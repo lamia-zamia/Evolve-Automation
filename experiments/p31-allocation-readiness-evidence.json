@@ -1,0 +1,1232 @@
+{
+  "schemaVersion": 1,
+  "experiment": "P31 performance headroom and allocation authority readiness",
+  "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "revisions": {
+    "comparisonBase": "a092cb90",
+    "p30Implementation": "e04590d4",
+    "sourceChanges": [
+      "src/adapters/evolve/economy/market/captured-trade-routes.ts"
+    ]
+  },
+  "gameSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+  "runnerInputs": {
+    "gameSnapshot": {
+      "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+      "sha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+      "commit": "db38e2af",
+      "builtAt": "2026-10-16T20:57:30.273Z"
+    },
+    "upstream": "D:\\work\\Evolve-DeadSpace",
+    "libraries": {
+      "vue": "3.5.22",
+      "buefy": "3.0.10",
+      "@popperjs/core": "2.9.2",
+      "sortablejs": "1.10.2",
+      "chart.js": "3.8.2"
+    },
+    "runner": "06d1ede0bed3179ff8a6538024208f7f20a28fddf8f2c365b9c841becfd97ea9"
+  },
+  "chromiumVersion": "HeadlessChrome/151.0.7922.71",
+  "measurement": {
+    "epoch": 1789948800000,
+    "seed": 42,
+    "warmupPeriods": 100,
+    "measuredPeriods": 800,
+    "repeatsPerVariant": 3,
+    "bundleHashes": {
+      "preP30": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+      "P30": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a"
+    },
+    "fixtures": {
+      "early": {
+        "savePath": "test-artifacts\\benchmark\\slice0\\saves\\deadspace-early-day14.json",
+        "saveSha256": "701d69f9fb3e8a92d5dd84f1a4f6fe7070609a1f2ee236333666274400861744",
+        "saveBytes": 51572,
+        "settingsPath": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "fbf75da786f5aa841212eea5c5848a7a532a9a8afe8d7ccd14f5781895601131",
+        "seed": 42
+      },
+      "progression": {
+        "savePath": "test-artifacts\\benchmark\\slice0\\saves\\stage2f-fixed-progression-export.json",
+        "saveSha256": "b1f22205b78d043a98f914924d965a1ab04af791f1f3d7ce6e0179849892662e",
+        "saveBytes": 15233,
+        "settingsPath": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+        "settingsSha256": "fbf75da786f5aa841212eea5c5848a7a532a9a8afe8d7ccd14f5781895601131",
+        "seed": 42
+      },
+      "late-MAD": {
+        "savePath": "test-artifacts\\benchmark\\slice0\\saves\\mad-tech-offered-blocked.json",
+        "saveSha256": "7eb43bc6cd1e7267561ceb21aaaa7b8c5eee9a4aa7c700ef9d579063a26cf090",
+        "saveBytes": 61756,
+        "settingsPath": "test-artifacts\\benchmark\\slice0\\settings\\current-full.json",
+        "settingsSha256": "ecaf13f665c1029cacdb544f21f070ebdd5cc709f07bec852489b26aa7333b7c",
+        "seed": 42
+      },
+      "Standard-Human": {
+        "savePath": "test-artifacts\\benchmark\\slice0\\saves\\p18-standard-human-fixture.txt",
+        "saveSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+        "saveBytes": 8773,
+        "settingsPath": "experiments\\p18-standard-human-settings.json",
+        "settingsSha256": "fa28e3da0ee97c4b7ed51c38f9ae98148e24631a6e497b0bd6ffb76aac334691",
+        "seed": 44
+      }
+    },
+    "phaseProfiles": {
+      "early": {
+        "periods": 800,
+        "workTicks": 100,
+        "nativeControlCalls": 8520,
+        "phases": {
+          "construction demand preparation": {
+            "totalMs": 158.2,
+            "count": 100,
+            "perWorkTickMs": 1.582
+          },
+          "construction saving discovery": {
+            "totalMs": 187.20000000000002,
+            "count": 100,
+            "perWorkTickMs": 1.872
+          },
+          "research.draw.native-switch-drawTech-and-dom-generation": {
+            "totalMs": 1363.3,
+            "count": 109,
+            "perWorkTickMs": 13.633
+          },
+          "demand.sample.storage": {
+            "totalMs": 19.3,
+            "count": 160,
+            "perWorkTickMs": 0.193
+          },
+          "demand.sample.total": {
+            "totalMs": 146.7,
+            "count": 160,
+            "perWorkTickMs": 1.467
+          },
+          "autoStorage.read": {
+            "totalMs": 0.9999999999999999,
+            "count": 100,
+            "perWorkTickMs": 0.01
+          },
+          "autoStorage.plan": {
+            "totalMs": 0.4,
+            "count": 100,
+            "perWorkTickMs": 0.004
+          },
+          "autoStorage": {
+            "totalMs": 288.3,
+            "count": 100,
+            "perWorkTickMs": 2.883
+          },
+          "autoBuild.beginCycle": {
+            "totalMs": 196.1,
+            "count": 100,
+            "perWorkTickMs": 1.961
+          },
+          "jobs.full.catalog": {
+            "totalMs": 39,
+            "count": 100,
+            "perWorkTickMs": 0.39
+          },
+          "post-research construction demand preparation": {
+            "totalMs": 67.10000000000001,
+            "count": 9,
+            "perWorkTickMs": 0.671
+          },
+          "jobs.full.buildWeighting": {
+            "totalMs": 191,
+            "count": 1398,
+            "perWorkTickMs": 1.91
+          }
+        },
+        "counts": {
+          "jobs.full.buildCostReads": 350
+        }
+      },
+      "progression": {
+        "periods": 800,
+        "workTicks": 100,
+        "nativeControlCalls": 17904,
+        "phases": {
+          "construction demand preparation": {
+            "totalMs": 194.3,
+            "count": 100,
+            "perWorkTickMs": 1.943
+          },
+          "construction saving discovery": {
+            "totalMs": 272.2,
+            "count": 100,
+            "perWorkTickMs": 2.722
+          },
+          "research.draw.native-switch-drawTech-and-dom-generation": {
+            "totalMs": 1934.3000000000002,
+            "count": 112,
+            "perWorkTickMs": 19.343
+          },
+          "demand.sample.storage": {
+            "totalMs": 21.2,
+            "count": 125,
+            "perWorkTickMs": 0.212
+          },
+          "demand.sample.total": {
+            "totalMs": 134.39999999999998,
+            "count": 125,
+            "perWorkTickMs": 1.344
+          },
+          "autoStorage.read.resource-order": {
+            "totalMs": 6.800000000000001,
+            "count": 100,
+            "perWorkTickMs": 0.068
+          },
+          "autoStorage.read.resource-inputs": {
+            "totalMs": 52.5,
+            "count": 100,
+            "perWorkTickMs": 0.525
+          },
+          "autoStorage.read.queue-targets": {
+            "totalMs": 2.1,
+            "count": 100,
+            "perWorkTickMs": 0.021
+          },
+          "action-cost.native-batch": {
+            "totalMs": 120.5,
+            "count": 100,
+            "perWorkTickMs": 1.205
+          },
+          "autoStorage.read.building-targets": {
+            "totalMs": 178.7,
+            "count": 100,
+            "perWorkTickMs": 1.787
+          },
+          "autoStorage.read.technology-targets": {
+            "totalMs": 19.8,
+            "count": 100,
+            "perWorkTickMs": 0.198
+          },
+          "autoStorage.read.project-targets": {
+            "totalMs": 0.30000000000000004,
+            "count": 100,
+            "perWorkTickMs": 0.003
+          },
+          "autoStorage.read": {
+            "totalMs": 23.5,
+            "count": 100,
+            "perWorkTickMs": 0.235
+          },
+          "autoStorage.plan": {
+            "totalMs": 52.800000000000004,
+            "count": 100,
+            "perWorkTickMs": 0.528
+          },
+          "autoStorage": {
+            "totalMs": 365.00000000000006,
+            "count": 100,
+            "perWorkTickMs": 3.65
+          },
+          "autoBuild.beginCycle": {
+            "totalMs": 266.5,
+            "count": 100,
+            "perWorkTickMs": 2.665
+          },
+          "jobs.full.catalog": {
+            "totalMs": 41.7,
+            "count": 100,
+            "perWorkTickMs": 0.417
+          },
+          "jobs.full.buildWeighting": {
+            "totalMs": 288.4,
+            "count": 2831,
+            "perWorkTickMs": 2.884
+          },
+          "post-research construction demand preparation": {
+            "totalMs": 78,
+            "count": 12,
+            "perWorkTickMs": 0.78
+          }
+        },
+        "counts": {
+          "action-cost.native-batch.probes": 700,
+          "autoStorage.building-target-price-probes": 700,
+          "jobs.full.buildCostReads": 700
+        }
+      },
+      "late-MAD": {
+        "periods": 800,
+        "workTicks": 100,
+        "nativeControlCalls": 117166,
+        "phases": {
+          "construction demand preparation": {
+            "totalMs": 375.4,
+            "count": 100,
+            "perWorkTickMs": 3.754
+          },
+          "construction saving discovery": {
+            "totalMs": 959.6,
+            "count": 100,
+            "perWorkTickMs": 9.596
+          },
+          "research.draw.native-switch-drawTech-and-dom-generation": {
+            "totalMs": 4187.9,
+            "count": 103,
+            "perWorkTickMs": 41.879
+          },
+          "demand.sample.storage": {
+            "totalMs": 39.2,
+            "count": 159,
+            "perWorkTickMs": 0.392
+          },
+          "demand.sample.total": {
+            "totalMs": 156.8,
+            "count": 159,
+            "perWorkTickMs": 1.568
+          },
+          "autoMarket.adjustTradeRoutes": {
+            "totalMs": 1068.4,
+            "count": 100,
+            "perWorkTickMs": 10.684
+          },
+          "autoStorage.read.resource-order": {
+            "totalMs": 6.8999999999999995,
+            "count": 100,
+            "perWorkTickMs": 0.069
+          },
+          "autoStorage.read.resource-inputs": {
+            "totalMs": 57.2,
+            "count": 100,
+            "perWorkTickMs": 0.572
+          },
+          "autoStorage.read.queue-targets": {
+            "totalMs": 3.2,
+            "count": 100,
+            "perWorkTickMs": 0.032
+          },
+          "action-cost.native-batch": {
+            "totalMs": 553.7,
+            "count": 100,
+            "perWorkTickMs": 5.537
+          },
+          "autoStorage.read.building-targets": {
+            "totalMs": 362.9,
+            "count": 100,
+            "perWorkTickMs": 3.629
+          },
+          "autoStorage.read.technology-targets": {
+            "totalMs": 23.200000000000003,
+            "count": 100,
+            "perWorkTickMs": 0.232
+          },
+          "autoStorage.read.project-targets": {
+            "totalMs": 19.299999999999997,
+            "count": 100,
+            "perWorkTickMs": 0.193
+          },
+          "autoStorage.read": {
+            "totalMs": 27.8,
+            "count": 100,
+            "perWorkTickMs": 0.278
+          },
+          "autoStorage.plan": {
+            "totalMs": 61.900000000000006,
+            "count": 100,
+            "perWorkTickMs": 0.619
+          },
+          "autoStorage": {
+            "totalMs": 80.3,
+            "count": 100,
+            "perWorkTickMs": 0.803
+          },
+          "autoBuild.beginCycle": {
+            "totalMs": 932.8000000000001,
+            "count": 100,
+            "perWorkTickMs": 9.328
+          },
+          "jobs.full.catalog": {
+            "totalMs": 48.599999999999994,
+            "count": 100,
+            "perWorkTickMs": 0.486
+          },
+          "jobs.full.buildWeighting": {
+            "totalMs": 977,
+            "count": 7300,
+            "perWorkTickMs": 9.77
+          },
+          "post-research construction demand preparation": {
+            "totalMs": 3.9,
+            "count": 1,
+            "perWorkTickMs": 0.039
+          }
+        },
+        "counts": {
+          "action-cost.native-batch.probes": 1800,
+          "autoStorage.building-target-price-probes": 1800,
+          "jobs.full.buildCostReads": 1800
+        }
+      },
+      "Standard-Human": {
+        "periods": 800,
+        "workTicks": 100,
+        "nativeControlCalls": 201,
+        "phases": {
+          "construction demand preparation": {
+            "totalMs": 103.4,
+            "count": 100,
+            "perWorkTickMs": 1.034
+          },
+          "construction saving discovery": {
+            "totalMs": 84.9,
+            "count": 100,
+            "perWorkTickMs": 0.849
+          },
+          "research.draw.native-switch-drawTech-and-dom-generation": {
+            "totalMs": 763.5000000000001,
+            "count": 100,
+            "perWorkTickMs": 7.635
+          },
+          "demand.sample.storage": {
+            "totalMs": 11,
+            "count": 101,
+            "perWorkTickMs": 0.11
+          },
+          "demand.sample.total": {
+            "totalMs": 97.69999999999999,
+            "count": 101,
+            "perWorkTickMs": 0.977
+          },
+          "autoStorage.read": {
+            "totalMs": 0.9,
+            "count": 100,
+            "perWorkTickMs": 0.009
+          },
+          "autoStorage.plan": {
+            "totalMs": 0.2,
+            "count": 100,
+            "perWorkTickMs": 0.002
+          },
+          "autoStorage": {
+            "totalMs": 2.3,
+            "count": 100,
+            "perWorkTickMs": 0.023
+          },
+          "autoBuild.beginCycle": {
+            "totalMs": 93.00000000000001,
+            "count": 100,
+            "perWorkTickMs": 0.93
+          },
+          "jobs.full.catalog": {
+            "totalMs": 32.4,
+            "count": 100,
+            "perWorkTickMs": 0.324
+          }
+        },
+        "counts": {}
+      }
+    },
+    "cpuRuns": [
+      {
+        "scenario": "early",
+        "round": 1,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.5575,
+        "taskDurationSec": 10.5013,
+        "scriptDurationSec": 0.0379
+      },
+      {
+        "scenario": "early",
+        "round": 1,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.8317,
+        "taskDurationSec": 10.6747,
+        "scriptDurationSec": 0.0457
+      },
+      {
+        "scenario": "early",
+        "round": 1,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.5284,
+        "taskDurationSec": 10.455,
+        "scriptDurationSec": 0.0384
+      },
+      {
+        "scenario": "early",
+        "round": 2,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.6508,
+        "taskDurationSec": 10.5397,
+        "scriptDurationSec": 0.0441
+      },
+      {
+        "scenario": "early",
+        "round": 2,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.7964,
+        "taskDurationSec": 10.7125,
+        "scriptDurationSec": 0.0429
+      },
+      {
+        "scenario": "early",
+        "round": 2,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.6162,
+        "taskDurationSec": 10.4972,
+        "scriptDurationSec": 0.0413
+      },
+      {
+        "scenario": "early",
+        "round": 3,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.7752,
+        "taskDurationSec": 10.5857,
+        "scriptDurationSec": 0.0457
+      },
+      {
+        "scenario": "early",
+        "round": 3,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.564,
+        "taskDurationSec": 10.4135,
+        "scriptDurationSec": 0.0401
+      },
+      {
+        "scenario": "early",
+        "round": 3,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 11.5877,
+        "taskDurationSec": 10.5169,
+        "scriptDurationSec": 0.0388
+      },
+      {
+        "scenario": "progression",
+        "round": 1,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 14.701,
+        "taskDurationSec": 13.2841,
+        "scriptDurationSec": 0.0401
+      },
+      {
+        "scenario": "progression",
+        "round": 1,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 15.305,
+        "taskDurationSec": 13.8046,
+        "scriptDurationSec": 0.0487
+      },
+      {
+        "scenario": "progression",
+        "round": 1,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 14.9585,
+        "taskDurationSec": 13.525,
+        "scriptDurationSec": 0.0407
+      },
+      {
+        "scenario": "progression",
+        "round": 2,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 14.6599,
+        "taskDurationSec": 13.2596,
+        "scriptDurationSec": 0.0389
+      },
+      {
+        "scenario": "progression",
+        "round": 2,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 15.0444,
+        "taskDurationSec": 13.6615,
+        "scriptDurationSec": 0.0441
+      },
+      {
+        "scenario": "progression",
+        "round": 2,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 13.7762,
+        "taskDurationSec": 12.1665,
+        "scriptDurationSec": 0.0393
+      },
+      {
+        "scenario": "progression",
+        "round": 3,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 12.5357,
+        "taskDurationSec": 10.8535,
+        "scriptDurationSec": 0.036
+      },
+      {
+        "scenario": "progression",
+        "round": 3,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 12.7545,
+        "taskDurationSec": 11.0677,
+        "scriptDurationSec": 0.0375
+      },
+      {
+        "scenario": "progression",
+        "round": 3,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 12.5525,
+        "taskDurationSec": 10.8336,
+        "scriptDurationSec": 0.0339
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 1,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 29.687,
+        "taskDurationSec": 26.5674,
+        "scriptDurationSec": 0.0459
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 1,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 32.593,
+        "taskDurationSec": 30.0338,
+        "scriptDurationSec": 0.0541
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 1,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 32.1778,
+        "taskDurationSec": 29.6168,
+        "scriptDurationSec": 0.0529
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 2,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 32.4019,
+        "taskDurationSec": 29.6836,
+        "scriptDurationSec": 0.0546
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 2,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 34.4889,
+        "taskDurationSec": 31.7525,
+        "scriptDurationSec": 0.0581
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 2,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 33.1427,
+        "taskDurationSec": 30.4981,
+        "scriptDurationSec": 0.0529
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 3,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 29.605,
+        "taskDurationSec": 26.6948,
+        "scriptDurationSec": 0.0443
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 3,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 27.3626,
+        "taskDurationSec": 24.1997,
+        "scriptDurationSec": 0.0423
+      },
+      {
+        "scenario": "late-MAD",
+        "round": 3,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 27.33,
+        "taskDurationSec": 24.1401,
+        "scriptDurationSec": 0.0423
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 1,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.453,
+        "taskDurationSec": 4.8814,
+        "scriptDurationSec": 0.0228
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 1,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.9506,
+        "taskDurationSec": 5.4353,
+        "scriptDurationSec": 0.03
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 1,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.6445,
+        "taskDurationSec": 4.9831,
+        "scriptDurationSec": 0.028
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 2,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.3473,
+        "taskDurationSec": 4.7811,
+        "scriptDurationSec": 0.0237
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 2,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.1381,
+        "taskDurationSec": 4.5337,
+        "scriptDurationSec": 0.0217
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 2,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.3863,
+        "taskDurationSec": 4.795,
+        "scriptDurationSec": 0.0219
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 3,
+        "label": "preP30",
+        "variant": "preP30",
+        "sameBundleControl": false,
+        "bundleSha256": "1aa8c87371072eea1d82320e00f97f9d4bc66a33d9a1ef7adb920487c5a611d1",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.6219,
+        "taskDurationSec": 5.0764,
+        "scriptDurationSec": 0.0249
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 3,
+        "label": "P30",
+        "variant": "P30",
+        "sameBundleControl": false,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.5266,
+        "taskDurationSec": 4.948,
+        "scriptDurationSec": 0.0235
+      },
+      {
+        "scenario": "Standard-Human",
+        "round": 3,
+        "label": "P30-control",
+        "variant": "P30",
+        "sameBundleControl": true,
+        "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+        "startPeriod": 100,
+        "periods": 800,
+        "rendererCpuSec": 5.3947,
+        "taskDurationSec": 4.8733,
+        "scriptDurationSec": 0.0233
+      }
+    ],
+    "calibrations": {
+      "early": [
+        {
+          "repeat": 1,
+          "calibrated": false,
+          "targetMs": 231.75,
+          "workload": null,
+          "rendererCpuSec": 0.0462,
+          "taskDurationSec": 0.012
+        },
+        {
+          "repeat": 1,
+          "calibrated": true,
+          "targetMs": 231.75,
+          "workload": {
+            "elapsedMs": 231.79999999981374,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.2849,
+          "taskDurationSec": 0.2399
+        },
+        {
+          "repeat": 2,
+          "calibrated": true,
+          "targetMs": 231.75,
+          "workload": {
+            "elapsedMs": 231.79999999981374,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.2476,
+          "taskDurationSec": 0.238
+        },
+        {
+          "repeat": 2,
+          "calibrated": false,
+          "targetMs": 231.75,
+          "workload": null,
+          "rendererCpuSec": 0.0461,
+          "taskDurationSec": 0.0135
+        },
+        {
+          "repeat": 3,
+          "calibrated": false,
+          "targetMs": 231.75,
+          "workload": null,
+          "rendererCpuSec": 0.0493,
+          "taskDurationSec": 0.0138
+        },
+        {
+          "repeat": 3,
+          "calibrated": true,
+          "targetMs": 231.75,
+          "workload": {
+            "elapsedMs": 231.79999999981374,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.2538,
+          "taskDurationSec": 0.2416
+        }
+      ],
+      "progression": [
+        {
+          "repeat": 1,
+          "calibrated": false,
+          "targetMs": 275.52,
+          "workload": null,
+          "rendererCpuSec": 0.0006,
+          "taskDurationSec": 0.0002
+        },
+        {
+          "repeat": 1,
+          "calibrated": true,
+          "targetMs": 275.52,
+          "workload": {
+            "elapsedMs": 275.6000000005588,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.2806,
+          "taskDurationSec": 0.277
+        },
+        {
+          "repeat": 2,
+          "calibrated": true,
+          "targetMs": 275.52,
+          "workload": {
+            "elapsedMs": 275.70000000018626,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.2407,
+          "taskDurationSec": 0.2761
+        },
+        {
+          "repeat": 2,
+          "calibrated": false,
+          "targetMs": 275.52,
+          "workload": null,
+          "rendererCpuSec": 0.0007,
+          "taskDurationSec": 0.0002
+        },
+        {
+          "repeat": 3,
+          "calibrated": false,
+          "targetMs": 275.52,
+          "workload": null,
+          "rendererCpuSec": 0.0008,
+          "taskDurationSec": 0.0002
+        },
+        {
+          "repeat": 3,
+          "calibrated": true,
+          "targetMs": 275.52,
+          "workload": {
+            "elapsedMs": 275.59999999962747,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.2777,
+          "taskDurationSec": 0.276
+        }
+      ],
+      "late-MAD": [
+        {
+          "repeat": 1,
+          "calibrated": false,
+          "targetMs": 643.56,
+          "workload": null,
+          "rendererCpuSec": 0.0783,
+          "taskDurationSec": 0.0222
+        },
+        {
+          "repeat": 1,
+          "calibrated": true,
+          "targetMs": 643.56,
+          "workload": {
+            "elapsedMs": 643.6999999992549,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.7085,
+          "taskDurationSec": 0.6501
+        },
+        {
+          "repeat": 2,
+          "calibrated": true,
+          "targetMs": 643.56,
+          "workload": {
+            "elapsedMs": 643.5999999996275,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.7063,
+          "taskDurationSec": 0.6502
+        },
+        {
+          "repeat": 2,
+          "calibrated": false,
+          "targetMs": 643.56,
+          "workload": null,
+          "rendererCpuSec": 0.0911,
+          "taskDurationSec": 0.0269
+        },
+        {
+          "repeat": 3,
+          "calibrated": false,
+          "targetMs": 643.56,
+          "workload": null,
+          "rendererCpuSec": 0.0861,
+          "taskDurationSec": 0.0252
+        },
+        {
+          "repeat": 3,
+          "calibrated": true,
+          "targetMs": 643.56,
+          "workload": {
+            "elapsedMs": 643.6000000005588,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.6997,
+          "taskDurationSec": 0.6499
+        }
+      ],
+      "Standard-Human": [
+        {
+          "repeat": 1,
+          "calibrated": false,
+          "targetMs": 107.89,
+          "workload": null,
+          "rendererCpuSec": 0.002,
+          "taskDurationSec": 0.0001
+        },
+        {
+          "repeat": 1,
+          "calibrated": true,
+          "targetMs": 107.89,
+          "workload": {
+            "elapsedMs": 107.90000000037253,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.1108,
+          "taskDurationSec": 0.1083
+        },
+        {
+          "repeat": 2,
+          "calibrated": true,
+          "targetMs": 107.89,
+          "workload": {
+            "elapsedMs": 107.90000000037253,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.1119,
+          "taskDurationSec": 0.1086
+        },
+        {
+          "repeat": 2,
+          "calibrated": false,
+          "targetMs": 107.89,
+          "workload": null,
+          "rendererCpuSec": 0.0017,
+          "taskDurationSec": 0.0001
+        },
+        {
+          "repeat": 3,
+          "calibrated": false,
+          "targetMs": 107.89,
+          "workload": null,
+          "rendererCpuSec": 0.0023,
+          "taskDurationSec": 0.0004
+        },
+        {
+          "repeat": 3,
+          "calibrated": true,
+          "targetMs": 107.89,
+          "workload": {
+            "elapsedMs": 107.8999999994412,
+            "value": -1617826303
+          },
+          "rendererCpuSec": 0.1106,
+          "taskDurationSec": 0.1085
+        }
+      ]
+    }
+  },
+  "shadowAuthority": {
+    "experiment": "P31 test-only shadow authority microprofile",
+    "sourceObservation": {
+      "evidencePath": "experiments\\p20-1-construction-allocation-authority-evidence.json",
+      "period": 5000,
+      "phase": "pre-Gather",
+      "workCycleId": 625,
+      "publicationWorkCycleId": 624,
+      "targetId": "city-farm",
+      "requestPrice": {
+        "Lumber": 20,
+        "Stone": 10
+      },
+      "shortage": {
+        "Lumber": 0,
+        "Stone": 10
+      },
+      "capacity": {
+        "Lumber": 179,
+        "Stone": 200
+      }
+    },
+    "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+    "settingsSha256": "fa28e3da0ee97c4b7ed51c38f9ae98148e24631a6e497b0bd6ffb76aac334691",
+    "bundleSha256": "66d613054d6d547b0dd3b557fd92a680c9f8763405438847ac3484e63c1f951a",
+    "iterationCount": 20000,
+    "results": [
+      {
+        "repeat": 1,
+        "elapsedMs": 0,
+        "authorized": 20000,
+        "iterations": 20000,
+        "rendererCpuSec": 0.015367,
+        "taskDurationSec": 0.008813,
+        "incrementalNativeProbes": 0,
+        "incrementalCapturePasses": 0
+      },
+      {
+        "repeat": 2,
+        "elapsedMs": 0,
+        "authorized": 20000,
+        "iterations": 20000,
+        "rendererCpuSec": 0.018107,
+        "taskDurationSec": 0.009202,
+        "incrementalNativeProbes": 0,
+        "incrementalCapturePasses": 0
+      },
+      {
+        "repeat": 3,
+        "elapsedMs": 0,
+        "authorized": 20000,
+        "iterations": 20000,
+        "rendererCpuSec": 0.018277,
+        "taskDurationSec": 0.009161,
+        "incrementalNativeProbes": 0,
+        "incrementalCapturePasses": 0
+      },
+      {
+        "repeat": 4,
+        "elapsedMs": 0,
+        "authorized": 20000,
+        "iterations": 20000,
+        "rendererCpuSec": 0.016237,
+        "taskDurationSec": 0.00899,
+        "incrementalNativeProbes": 0,
+        "incrementalCapturePasses": 0
+      },
+      {
+        "repeat": 5,
+        "elapsedMs": 0,
+        "authorized": 20000,
+        "iterations": 20000,
+        "rendererCpuSec": 0.016304,
+        "taskDurationSec": 0.008815,
+        "incrementalNativeProbes": 0,
+        "incrementalCapturePasses": 0
+      },
+      {
+        "repeat": 6,
+        "elapsedMs": 0,
+        "authorized": 20000,
+        "iterations": 20000,
+        "rendererCpuSec": 0.016901,
+        "taskDurationSec": 0.009371,
+        "incrementalNativeProbes": 0,
+        "incrementalCapturePasses": 0
+      },
+      {
+        "repeat": 7,
+        "elapsedMs": 0,
+        "authorized": 20000,
+        "iterations": 20000,
+        "rendererCpuSec": 0.016796,
+        "taskDurationSec": 0.008989,
+        "incrementalNativeProbes": 0,
+        "incrementalCapturePasses": 0
+      }
+    ]
+  }
+}
