@@ -118,6 +118,18 @@ const metricPlugin = {
                       : undefined;`,
         "fresh native price probe inside validation fence",
       );
+      replaceOnce(
+        `          if (demandReady === true) {
+            runPhase("buildingAlwaysClick", () => gatherResources());
+          }`,
+        `          if (demandReady === true) {
+            const p36Hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const p36Capture = readProperty(p36Hooks, "captureP36NativePreGatherBoundary");
+            if (typeof p36Capture === "function") Reflect.apply(p36Capture, p36Hooks, []);
+            runPhase("buildingAlwaysClick", () => gatherResources());
+          }`,
+        "read-only pre-Gather parity capture",
+      );
       return { contents: source, loader: "ts" };
     });
   },
@@ -133,12 +145,16 @@ const mainBundle = await esbuild.build({
 window.__EA_TEST_HOOKS__ = {
   ...(window.__EA_TEST_HOOKS__ ?? {}),
   constructionSavingTargetObservations: [],
+  p36PreGatherBoundaryCaptures: [],
   civilizationBootstrapEvents: [],
   civilizationHandoffEvents: [],
   p36Metrics: { freshPriceProbes: 0, validationFences: 0 },
   captureConstructionSavingTargetForTest(target, authority) {
     const period = window.__EA_RUNNER__?.periods?.() ?? null;
-    let parityCapture;
+    this.constructionSavingTargetObservations.push({ period, target, authority });
+  },
+  captureP36NativePreGatherBoundary() {
+    const period = window.__EA_RUNNER__?.periods?.() ?? null;
     if (this.p36ParityCapturePeriods?.includes(period)) {
       const pageCapture =
         window[Symbol.for("evolve-automation.page-capture")];
@@ -189,20 +205,15 @@ window.__EA_TEST_HOOKS__ = {
           elementId,
           method,
         }));
-      parityCapture = {
+      this.p36PreGatherBoundaryCaptures.push({
+        period,
         state,
         controlUsage: diagnostics.controlUsage ?? {},
         randomCalls: diagnostics.randomCalls ?? null,
         rngState: diagnostics.rngState ?? null,
         nativeCalls,
-      };
+      });
     }
-    this.constructionSavingTargetObservations.push({
-      period,
-      target,
-      authority,
-      ...(parityCapture ? { parityCapture } : {}),
-    });
   },
 };`,
   },
@@ -418,6 +429,7 @@ async function replay(arm, extraCheckpoints = []) {
         hooks.p36PolicyEvents = [];
         hooks.p36DownstreamChanges = [];
         hooks.p36FirstAuthorization = null;
+        hooks.p36PreGatherBoundaryCaptures = [];
         hooks.p36ParityCapturePeriods =
           configuration.parityCapturePeriods ?? [];
         const gatherIntervention = {
@@ -701,14 +713,7 @@ async function replay(arm, extraCheckpoints = []) {
         const value = window.__EA_TEST_HOOKS__;
         return {
           targets: value.constructionSavingTargetObservations ?? [],
-          constructionPhaseCaptures: (
-            value.constructionSavingTargetObservations ?? []
-          )
-            .filter((entry) => entry.parityCapture !== undefined)
-            .map((entry) => ({
-              period: entry.period,
-              ...entry.parityCapture,
-            })),
+          preGatherBoundaryCaptures: value.p36PreGatherBoundaryCaptures ?? [],
           bootstrap: value.civilizationBootstrapEvents ?? [],
           handoff: value.civilizationHandoffEvents ?? [],
           policyEvents: value.p36PolicyEvents ?? [],
@@ -751,7 +756,7 @@ async function replay(arm, extraCheckpoints = []) {
       bootstrapEvents: hooks.bootstrap,
       handoffEvents: hooks.handoff,
       targetTransitions,
-      constructionPhaseCaptures: hooks.constructionPhaseCaptures,
+      preGatherBoundaryCaptures: hooks.preGatherBoundaryCaptures,
       p36: {
         policyEvents: hooks.policyEvents,
         eligibility: hooks.eligibility,
@@ -1051,12 +1056,12 @@ try {
       )
     : undefined;
   const firstAuthorizationPhaseBaseline = firstAuthorization
-    ? baseline.constructionPhaseCaptures.find(
+    ? baseline.preGatherBoundaryCaptures.find(
         (capture) => capture.period === firstAuthorization.period,
       )
     : undefined;
   const treatmentFirstAuthorizationCapture = firstAuthorization
-    ? treatment.constructionPhaseCaptures.find(
+    ? treatment.preGatherBoundaryCaptures.find(
         (capture) => capture.period === firstAuthorization.period,
       )
     : undefined;
@@ -1218,8 +1223,8 @@ try {
         entry.controlUsageEqual &&
         entry.rngEqual,
     ) &&
-    canonical(baseline.constructionPhaseCaptures) ===
-      canonical(shadow.constructionPhaseCaptures);
+    canonical(baseline.preGatherBoundaryCaptures) ===
+      canonical(shadow.preGatherBoundaryCaptures);
   const treatmentReplayExact =
     treatmentRepeatParity.every(
       (entry) =>
@@ -1237,8 +1242,8 @@ try {
       canonical(repeat.p36.firstAuthorization) &&
     canonical(treatment.p36.downstreamChanges) ===
       canonical(repeat.p36.downstreamChanges) &&
-    canonical(treatment.constructionPhaseCaptures) ===
-      canonical(repeat.constructionPhaseCaptures) &&
+    canonical(treatment.preGatherBoundaryCaptures) ===
+      canonical(repeat.preGatherBoundaryCaptures) &&
     canonical(treatment.p36.metrics) === canonical(repeat.p36.metrics) &&
     treatment.finalExportSha256 === repeat.finalExportSha256;
   const causalPreActionMatch = firstAuthorization
@@ -1419,7 +1424,7 @@ try {
         firstAuthorizationPeriod: firstAuthorization?.period ?? null,
         comparison: preActionParity,
         matchedCheckpointState: firstAuthorizationBaseline?.state ?? null,
-        matchedConstructionPhaseCapture:
+        matchedPreGatherBoundaryCapture:
           firstAuthorizationPhaseBaseline ?? null,
       },
       CtoAAfterFirstAction: baselineVsTreatment,
