@@ -1182,7 +1182,35 @@ try {
   const quarryClicks = successfulGatherClicks.filter(
     (event) => event.targetId === P36_BOOTSTRAP_TARGETS.quarry,
   );
-  const populationAndJobs = treatment.p36.downstreamChanges;
+  const boundedStopEvent = treatment.p36.policyEvents.find(
+    (event) => event.type === "stopped" && event.state !== undefined,
+  );
+  const populationAndJobs = boundedStopEvent
+    ? [
+        {
+          period: boundedStopEvent.period,
+          baselineAtFirstAuthorization: {
+            population: firstAuthorization?.state.population ?? null,
+            populationCapacity:
+              firstAuthorization?.state.populationCapacity ?? null,
+            jobs: firstAuthorization?.state.jobs ?? {},
+            buildings: firstAuthorization?.state.buildings ?? {},
+          },
+          treatmentAtBoundedStop: {
+            population: boundedStopEvent.state.population,
+            populationCapacity: boundedStopEvent.state.populationCapacity,
+            jobs: boundedStopEvent.state.jobs,
+            buildings: boundedStopEvent.state.buildings,
+          },
+          nativeHousingPurchaseObserved: treatment.nativeCalls.some(
+            (entry) =>
+              entry.period === 672 &&
+              entry.elementId === "city-basic_housing" &&
+              entry.method === "action",
+          ),
+        },
+      ]
+    : treatment.p36.downstreamChanges;
   const treatmentFinal = treatment.checkpoints.at(-1);
   const baselineFinal = baseline.checkpoints.at(-1);
   const treatmentStableFood = treatment.checkpoints
