@@ -225,7 +225,7 @@ const policyBundle = await esbuild.build({
   bundle: true,
   write: false,
   format: "iife",
-  globalName: "__EA_P36_TEST_POLICY__",
+  globalName: "window.__EA_P36_TEST_POLICY__",
   platform: "browser",
   target: ["esnext"],
   minifySyntax: true,
