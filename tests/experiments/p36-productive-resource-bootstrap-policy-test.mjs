@@ -104,6 +104,110 @@ assert.equal(policy.snapshot().totalClicks, 140);
 assert.equal(policy.snapshot().armed, false);
 assert.equal(policy.snapshot().stoppedReason, null);
 
+const housingBootstrapEvents = [];
+const housingBootstrapPolicy = createP36BootstrapPolicy({
+  onEvent: (event) => housingBootstrapEvents.push(event),
+});
+const housingBootstrapRoot = {
+  city: { shed: { count: 0 }, rock_quarry: { count: 0 } },
+};
+const housingBootstrapShed = baseContract(
+  "city-shed",
+  { Money: 75, Lumber: 55, Stone: 45 },
+  { Money: 100, Lumber: 21, Stone: 0 },
+);
+for (let cycle = 0; cycle < 15; cycle += 1) {
+  const decision = housingBootstrapPolicy.authorize(
+    housingBootstrapShed,
+    housingBootstrapRoot,
+    448 + cycle * 8,
+  );
+  assert.equal(decision.clickBudget, 5);
+  for (let index = 0; index < 5; index += 1) {
+    const resourceId =
+      housingBootstrapShed.stock.Lumber < 55 ? "Lumber" : "Stone";
+    housingBootstrapShed.stock[resourceId] += 1;
+    decision.onClick({
+      actionId: resourceId === "Lumber" ? "city-lumber" : "undefined-stone",
+      resourceId,
+    });
+  }
+}
+const lastShedDecision = housingBootstrapPolicy.authorize(
+  housingBootstrapShed,
+  housingBootstrapRoot,
+  568,
+);
+assert.equal(lastShedDecision.clickBudget, 5);
+for (let index = 0; index < 4; index += 1) {
+  const resourceId =
+    housingBootstrapShed.stock.Lumber < 55 ? "Lumber" : "Stone";
+  housingBootstrapShed.stock[resourceId] += 1;
+  lastShedDecision.onClick({
+    actionId: resourceId === "Lumber" ? "city-lumber" : "undefined-stone",
+    resourceId,
+  });
+}
+assert.equal(housingBootstrapPolicy.snapshot().totalClicks, 79);
+housingBootstrapRoot.city.shed.count = 1;
+const housingBootstrapQuarry = baseContract(
+  "city-rock_quarry",
+  { Lumber: 50, Stone: 10 },
+  { Lumber: 0, Stone: 0 },
+);
+assert.equal(
+  housingBootstrapPolicy.inspect(
+    housingBootstrapQuarry,
+    housingBootstrapRoot,
+    584,
+  ),
+  true,
+);
+for (let cycle = 0; cycle < 12; cycle += 1) {
+  const decision = housingBootstrapPolicy.authorize(
+    housingBootstrapQuarry,
+    housingBootstrapRoot,
+    584 + cycle * 8,
+  );
+  assert.equal(decision.clickBudget, 5);
+  for (let index = 0; index < 5; index += 1) {
+    const resourceId =
+      housingBootstrapQuarry.stock.Lumber < 50 ? "Lumber" : "Stone";
+    housingBootstrapQuarry.stock[resourceId] += 1;
+    decision.onClick({
+      actionId: resourceId === "Lumber" ? "city-lumber" : "undefined-stone",
+      resourceId,
+    });
+  }
+}
+// Native population growth buys a fourth Basic Housing and spends 18 Lumber.
+housingBootstrapQuarry.stock.Lumber -= 18;
+assert.deepEqual(housingBootstrapQuarry.stock, { Lumber: 32, Stone: 10 });
+assert.equal(
+  housingBootstrapPolicy.authorize(
+    housingBootstrapQuarry,
+    housingBootstrapRoot,
+    688,
+  ),
+  undefined,
+  "native housing consumption cannot expand the registered Quarry/total ceilings",
+);
+assert.deepEqual(housingBootstrapEvents.at(-1), {
+  type: "stopped",
+  reason: "shortage-exceeds-remaining-budget",
+  targetId: "city-rock_quarry",
+  shortage: { Lumber: 18, Stone: 0 },
+  shortageClicks: 18,
+  remainingStage: 0,
+  remainingTotal: 1,
+  period: 688,
+  stage: "quarry",
+  stageClicks: 60,
+  totalClicks: 139,
+  armed: false,
+  stoppedReason: "shortage-exceeds-remaining-budget",
+});
+
 const changedTargetEvents = [];
 const changedTargetPolicy = createP36BootstrapPolicy({
   onEvent: (event) => changedTargetEvents.push(event),
