@@ -89,6 +89,9 @@ export interface EconomicLaborCounterfactual extends EconomicEvidenceReference {
   readonly stableSampleCount?: number;
   readonly foodProjectionPositiveAtEverySample?: boolean;
   readonly foodProjectionStableAcrossSamples?: boolean;
+  /** Food interval measured from native production and consumption after a real assignment. */
+  readonly foodObservedPositiveAtEverySample?: boolean;
+  readonly foodObservedStableAcrossSamples?: boolean;
   readonly nativeAssignmentObserved?: boolean;
 }
 
@@ -432,19 +435,31 @@ export function analyzeEconomicGoalDependencies(
           farmersAfter === minimumFarmers
         ? "satisfied"
         : "blocked";
+  const foodProjectionIntervalComplete =
+    labor?.foodProjectionPositiveAtEverySample !== undefined &&
+    labor?.foodProjectionStableAcrossSamples !== undefined;
+  const foodObservedIntervalComplete =
+    labor?.nativeAssignmentObserved === true &&
+    labor?.foodObservedPositiveAtEverySample !== undefined &&
+    labor?.foodObservedStableAcrossSamples !== undefined;
   const foodIntervalEvidenceComplete =
     labor?.stableThroughPeriod !== undefined &&
     labor.stableThroughPeriod > labor.period &&
     labor.stableSampleCount !== undefined &&
     labor.stableSampleCount >= 2 &&
-    labor.foodProjectionPositiveAtEverySample !== undefined &&
-    labor.foodProjectionStableAcrossSamples !== undefined;
+    (foodObservedIntervalComplete || foodProjectionIntervalComplete);
+  const foodPositiveAtEverySample = foodObservedIntervalComplete
+    ? labor?.foodObservedPositiveAtEverySample
+    : labor?.foodProjectionPositiveAtEverySample;
+  const foodStableAcrossSamples = foodObservedIntervalComplete
+    ? labor?.foodObservedStableAcrossSamples
+    : labor?.foodProjectionStableAcrossSamples;
   const foodStatus: GoalStatus =
     foodMargin === undefined || !foodIntervalEvidenceComplete
       ? "unavailable"
       : foodMargin <= 0 ||
-          labor?.foodProjectionPositiveAtEverySample !== true ||
-          labor?.foodProjectionStableAcrossSamples !== true
+          foodPositiveAtEverySample !== true ||
+          foodStableAcrossSamples !== true
         ? "blocked"
         : "satisfied";
   const populationStatus =
@@ -592,7 +607,11 @@ export function analyzeEconomicGoalDependencies(
         ])
       : undefined;
   const foodConfidence: EconomicEvidenceConfidence =
-    foodStatus === "unavailable" ? "unavailable" : "provisional";
+    foodStatus === "unavailable"
+      ? "unavailable"
+      : foodObservedIntervalComplete
+        ? "established"
+        : "provisional";
   const stoneFormulaConfidence: EconomicEvidenceConfidence =
     !mechanicsMatched ||
     labor === undefined ||
@@ -792,11 +811,15 @@ export function analyzeEconomicGoalDependencies(
       predicate: "one-quarry-worker-is-natively-eligible-and-assigned",
       provenance: "native-prerequisite",
       reason:
-        workerUnlockStatus === "unavailable"
-          ? "The pinned native Quarry Worker unlock fact is unavailable because its game-source identity is missing or mismatched."
-          : input.nativeMechanics.quarryUnlocksQuarryWorker === true
-            ? "Quarry purchase exposes the Quarry Worker, but P36 stopped before purchase and no assignment control or production was observed."
-            : "The native job unlock is unavailable or the Quarry has not been purchased.",
+        state?.quarryWorkers !== undefined
+          ? state.quarryWorkers > 0
+            ? "The captured native state shows an assigned Quarry Worker after the Quarry unlock."
+            : "The captured native state shows no Quarry Worker assignment."
+          : workerUnlockStatus === "unavailable"
+            ? "The pinned native Quarry Worker unlock fact is unavailable because its game-source identity is missing or mismatched."
+            : input.nativeMechanics.quarryUnlocksQuarryWorker === true
+              ? "Quarry purchase exposes the Quarry Worker, but P36 stopped before purchase and no assignment control or production was observed."
+              : "The native job unlock is unavailable or the Quarry has not been purchased.",
       status: workerAssignmentStatus,
       prerequisites: {
         operator: "all",
@@ -809,7 +832,7 @@ export function analyzeEconomicGoalDependencies(
       },
       action: { family: "job", nativeId: "civ-quarry_worker" },
     },
-    workerAssignmentStatus === "unavailable" ? "unavailable" : "provisional",
+    state?.quarryWorkers === undefined ? "unavailable" : "established",
     [...evidence.state, ...evidence.labor, ...evidence.mechanics],
   );
   add(
@@ -892,8 +915,10 @@ export function analyzeEconomicGoalDependencies(
       provenance: "derived-requirement",
       reason:
         foodStatus === "satisfied"
-          ? "Pinned Farmer formula plus matched P19/P36 captures predicts a positive Food margin with three Farmers; this assignment was not replayed."
-          : "Food output after reassignment or resident consumption is unavailable, or the projected margin is nonpositive.",
+          ? foodObservedIntervalComplete
+            ? "Native Food output, consumption, stock, and population remained sustainable across the observed interval after the captured worker assignment."
+            : "Pinned Farmer formula plus matched captures projects a positive Food margin; the reassignment itself was not observed."
+          : "Food output after reassignment or resident consumption is unavailable, or the observed or projected margin is nonpositive.",
       status: foodStatus,
       ...(foodMargin === undefined
         ? {}
