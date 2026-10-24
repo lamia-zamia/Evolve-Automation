@@ -20,6 +20,14 @@ const exact = (entry) =>
 assert.equal(evidence.decision, "C");
 assert.equal(evidence.treatmentRun, true);
 assert.equal(evidence.arms.length, 4);
+assert.equal(
+  evidence.decisionEvidence.incidentalNativeHousingPopulationGain,
+  true,
+);
+assert.match(
+  evidence.decisionEvidence.classificationRationale,
+  /^C is selected/,
+);
 assert.ok(evidence.parity.AtoB.every(exact));
 assert.ok(evidence.parity.CtoCRepeat.every(exact));
 assert.deepEqual(evidence.parity.AtoCThroughFirstAuthorization.comparison, {

@@ -180,7 +180,7 @@ for (let cycle = 0; cycle < 12; cycle += 1) {
     });
   }
 }
-// Native population growth buys a fourth Basic Housing and spends 18 Lumber.
+// A competing native purchase leaves an 18-Lumber live shortage at the ceiling.
 housingBootstrapQuarry.stock.Lumber -= 18;
 assert.deepEqual(housingBootstrapQuarry.stock, { Lumber: 32, Stone: 10 });
 assert.equal(
