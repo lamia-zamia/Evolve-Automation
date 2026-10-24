@@ -30,6 +30,16 @@ const authoritySignature = (contract) =>
   JSON.stringify([contract.progressionGeneration, contract.controlGeneration]);
 
 const ownedCount = (root, id) => Number(root?.city?.[id]?.count ?? 0);
+const nonGatherableAffordable = (contract, root) =>
+  Object.entries(contract.price ?? {})
+    .filter(([resourceId]) => !materialIds.includes(resourceId))
+    .every(([resourceId, amount]) => {
+      const currentAmount = root?.resource?.[resourceId]?.amount;
+      return (
+        Number(currentAmount ?? contract.stock?.[resourceId] ?? 0) >=
+        Number(amount)
+      );
+    });
 const readPeriod = () =>
   Number(globalThis.window?.__EA_RUNNER__?.periods?.() ?? 0);
 
@@ -141,6 +151,7 @@ export function createP36BootstrapPolicy({ onEvent = () => {} } = {}) {
       contract.permissions?.autoBuild === true &&
       contract.permissions?.controlAction === true &&
       contract.competingClaims === false &&
+      nonGatherableAffordable(contract, root) &&
       (stage !== "shed" || ownedCount(root, "shed") === 0) &&
       (stage !== "quarry" ||
         (ownedCount(root, "shed") >= 1 &&
@@ -179,6 +190,7 @@ export function createP36BootstrapPolicy({ onEvent = () => {} } = {}) {
         (sum, amount) => sum + amount,
         0,
       );
+      if (!nonGatherableAffordable(contract, root)) return undefined;
       if (shortageClicks <= 0) return undefined;
 
       const nextSignature = requestSignature(contract);

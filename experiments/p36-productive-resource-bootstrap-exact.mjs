@@ -132,7 +132,82 @@ const mainBundle = await esbuild.build({
   bundle: true,
   write: false,
   banner: {
-    js: `${metadata.trimEnd()}\nwindow.__EA_TEST_HOOKS__ = { ...(window.__EA_TEST_HOOKS__ ?? {}), constructionSavingTargetObservations: [], civilizationBootstrapEvents: [], civilizationHandoffEvents: [], p36Metrics: { freshPriceProbes: 0, validationFences: 0 }, captureConstructionSavingTargetForTest(target, authority) { this.constructionSavingTargetObservations.push({ period: window.__EA_RUNNER__?.periods?.() ?? null, target, authority }); } };`,
+    js: `${metadata.trimEnd()}
+window.__EA_TEST_HOOKS__ = {
+  ...(window.__EA_TEST_HOOKS__ ?? {}),
+  constructionSavingTargetObservations: [],
+  civilizationBootstrapEvents: [],
+  civilizationHandoffEvents: [],
+  p36Metrics: { freshPriceProbes: 0, validationFences: 0 },
+  captureConstructionSavingTargetForTest(target, authority) {
+    const period = window.__EA_RUNNER__?.periods?.() ?? null;
+    let parityCapture;
+    if (this.p36ParityCapturePeriods?.includes(period)) {
+      const pageCapture =
+        window[Symbol.for("evolve-automation.page-capture")];
+      const game = pageCapture?.rootState.readRoot();
+      const species = game?.race?.species;
+      const state = {
+        population: game?.resource?.[species]?.amount ?? null,
+        populationCapacity: game?.resource?.[species]?.max ?? null,
+        resources: Object.fromEntries(
+          ["Food", "Lumber", "Stone", "Money", "Knowledge"].map((id) => [
+            id,
+            game?.resource?.[id]
+              ? {
+                  amount: game.resource[id].amount ?? null,
+                  max: game.resource[id].max ?? null,
+                  diff: game.resource[id].diff ?? null,
+                }
+              : null,
+          ]),
+        ),
+        buildings: Object.fromEntries(
+          Object.entries(game?.city ?? {})
+            .filter(([, value]) => Number(value?.count ?? 0) > 0)
+            .map(([id, value]) => [id, value.count]),
+        ),
+        jobs: Object.fromEntries(
+          Object.entries(game?.civic ?? {})
+            .filter(([, value]) => Number(value?.workers ?? 0) > 0)
+            .map(([id, value]) => [id, value.workers]),
+        ),
+        tech: game?.tech ?? {},
+        days: game?.stats?.days ?? null,
+        starved: game?.stats?.starved ?? null,
+        deaths: game?.stats?.died ?? null,
+      };
+      const diagnostics = window.__EA_RUNNER__?.diagnostics?.() ?? {};
+      const nativeCalls = (diagnostics.nativeInvocations ?? [])
+        .filter(
+          (entry) =>
+            /^civ-/.test(entry.elementId ?? "") ||
+            (entry.method === "action" &&
+              (/^(undefined-food|city-lumber|undefined-stone)$/.test(
+                entry.elementId ?? "",
+              ) || /^(tech-|city-)/.test(entry.elementId ?? "")),
+        )
+        .map(({ period: callPeriod, elementId, method }) => ({
+          period: callPeriod,
+          elementId,
+          method,
+        }));
+      parityCapture = {
+        state,
+        controlUsage: diagnostics.controlUsage ?? {},
+        randomCalls: diagnostics.randomCalls ?? null,
+        rngState: diagnostics.rngState ?? null,
+        nativeCalls,
+      };
+    }
+    this.constructionSavingTargetObservations.push({
+      period,
+      target,
+      authority,
+      ...(parityCapture ? { parityCapture } : {}),
+    });
+  },
+};`,
   },
   plugins: [metricPlugin],
   platform: "browser",
@@ -347,6 +422,8 @@ async function replay(arm, extraCheckpoints = []) {
         hooks.p36PolicyEvents = [];
         hooks.p36DownstreamChanges = [];
         hooks.p36FirstAuthorization = null;
+        hooks.p36ParityCapturePeriods =
+          configuration.parityCapturePeriods ?? [];
         hooks.gatherIntervention = {
           civilizationBootstrap: {
             authorized: true,
@@ -450,10 +527,25 @@ async function replay(arm, extraCheckpoints = []) {
             hooks.p36FirstAuthorization === null
           ) {
             const diagnostics = window.__EA_RUNNER__?.diagnostics?.() ?? {};
+            const pageCapture =
+              window[Symbol.for("evolve-automation.page-capture")];
+            const game = pageCapture?.rootState.readRoot();
+            const nativeState = snapshotNative();
             hooks.p36FirstAuthorization = {
               period,
               event,
-              state: snapshotNative(),
+              state: nativeState,
+              canonicalState: {
+                population: nativeState.population,
+                populationCapacity: nativeState.populationCapacity,
+                resources: nativeState.resources,
+                buildings: nativeState.buildings,
+                jobs: nativeState.jobs,
+                tech: game?.tech ?? {},
+                days: game?.stats?.days ?? null,
+                starved: nativeState.starved,
+                deaths: nativeState.deaths,
+              },
               controlUsage: diagnostics.controlUsage ?? {},
               randomCalls: diagnostics.randomCalls ?? null,
               rngState: diagnostics.rngState ?? null,
@@ -583,7 +675,11 @@ async function replay(arm, extraCheckpoints = []) {
           },
         };
       },
-      { shadow: arm === "B", policy: arm === "C" || arm === "C-repeat" },
+      {
+        shadow: arm === "B",
+        policy: arm === "C" || arm === "C-repeat",
+        parityCapturePeriods: [...new Set([448, ...extraCheckpoints])],
+      },
     );
 
     const requested = [...new Set([...checkpoints, ...extraCheckpoints])].sort(
@@ -603,6 +699,14 @@ async function replay(arm, extraCheckpoints = []) {
         const value = window.__EA_TEST_HOOKS__;
         return {
           targets: value.constructionSavingTargetObservations ?? [],
+          constructionPhaseCaptures: (
+            value.constructionSavingTargetObservations ?? []
+          )
+            .filter((entry) => entry.parityCapture !== undefined)
+            .map((entry) => ({
+              period: entry.period,
+              ...entry.parityCapture,
+            })),
           bootstrap: value.civilizationBootstrapEvents ?? [],
           handoff: value.civilizationHandoffEvents ?? [],
           policyEvents: value.p36PolicyEvents ?? [],
@@ -645,6 +749,7 @@ async function replay(arm, extraCheckpoints = []) {
       bootstrapEvents: hooks.bootstrap,
       handoffEvents: hooks.handoff,
       targetTransitions,
+      constructionPhaseCaptures: hooks.constructionPhaseCaptures,
       p36: {
         policyEvents: hooks.policyEvents,
         eligibility: hooks.eligibility,
@@ -905,7 +1010,8 @@ try {
     const compatibleReuse =
       arm === "A" || arm === "B"
         ? interim.runtimeBundleSha256 === runtimeBundleSha256
-        : interim.policyBundleSha256 === policyBundleSha256;
+        : interim.runtimeBundleSha256 === runtimeBundleSha256 &&
+          interim.policyBundleSha256 === policyBundleSha256;
     if (
       process.argv.includes("--reuse") &&
       compatibleReuse &&
@@ -939,22 +1045,43 @@ try {
         (checkpoint) => checkpoint.period === firstAuthorization.period,
       )
     : undefined;
+  const firstAuthorizationPhaseBaseline = firstAuthorization
+    ? baseline.constructionPhaseCaptures.find(
+        (capture) => capture.period === firstAuthorization.period,
+      )
+    : undefined;
+  const treatmentFirstAuthorizationCapture = firstAuthorization
+    ? treatment.constructionPhaseCaptures.find(
+        (capture) => capture.period === firstAuthorization.period,
+      )
+    : undefined;
   const preActionParity = firstAuthorization
     ? {
         period: firstAuthorization.period,
         stateEqual:
-          canonical(firstAuthorization.state) ===
-          canonical(firstAuthorizationBaseline?.state),
+          canonical(firstAuthorization.canonicalState) ===
+            canonical(firstAuthorizationPhaseBaseline?.state) &&
+          canonical(firstAuthorization.canonicalState) ===
+            canonical(treatmentFirstAuthorizationCapture?.state),
         nativeCallsEqual:
           canonical(firstAuthorization.nativeCalls) ===
-          canonical(firstAuthorizationBaseline?.nativeCalls),
+            canonical(firstAuthorizationPhaseBaseline?.nativeCalls) &&
+          canonical(firstAuthorization.nativeCalls) ===
+            canonical(treatmentFirstAuthorizationCapture?.nativeCalls),
         controlUsageEqual:
           canonical(firstAuthorization.controlUsage) ===
-          canonical(firstAuthorizationBaseline?.controlUsage),
+            canonical(firstAuthorizationPhaseBaseline?.controlUsage) &&
+          canonical(firstAuthorization.controlUsage) ===
+            canonical(treatmentFirstAuthorizationCapture?.controlUsage),
         rngEqual:
           firstAuthorization.randomCalls ===
-            firstAuthorizationBaseline?.randomCalls &&
-          firstAuthorization.rngState === firstAuthorizationBaseline?.rngState,
+            firstAuthorizationPhaseBaseline?.randomCalls &&
+          firstAuthorization.randomCalls ===
+            treatmentFirstAuthorizationCapture?.randomCalls &&
+          firstAuthorization.rngState ===
+            firstAuthorizationPhaseBaseline?.rngState &&
+          firstAuthorization.rngState ===
+            treatmentFirstAuthorizationCapture?.rngState,
       }
     : {
         period: null,
@@ -1077,14 +1204,17 @@ try {
     treatment.bootstrapEvents.length === 10 &&
     treatment.bootstrapEvents.every((event) => event.period === 8) &&
     treatment.handoffEvents.length === 10;
-  const baselineShadowExact = p19ShadowParity.every(
-    (entry) =>
-      entry.saveHashEqual &&
-      entry.stateEqual &&
-      entry.nativeCallsEqual &&
-      entry.controlUsageEqual &&
-      entry.rngEqual,
-  );
+  const baselineShadowExact =
+    p19ShadowParity.every(
+      (entry) =>
+        entry.saveHashEqual &&
+        entry.stateEqual &&
+        entry.nativeCallsEqual &&
+        entry.controlUsageEqual &&
+        entry.rngEqual,
+    ) &&
+    canonical(baseline.constructionPhaseCaptures) ===
+      canonical(shadow.constructionPhaseCaptures);
   const treatmentReplayExact =
     treatmentRepeatParity.every(
       (entry) =>
@@ -1102,6 +1232,8 @@ try {
       canonical(repeat.p36.firstAuthorization) &&
     canonical(treatment.p36.downstreamChanges) ===
       canonical(repeat.p36.downstreamChanges) &&
+    canonical(treatment.constructionPhaseCaptures) ===
+      canonical(repeat.constructionPhaseCaptures) &&
     canonical(treatment.p36.metrics) === canonical(repeat.p36.metrics) &&
     treatment.finalExportSha256 === repeat.finalExportSha256;
   const causalPreActionMatch = firstAuthorization
@@ -1281,6 +1413,8 @@ try {
         firstAuthorizationPeriod: firstAuthorization?.period ?? null,
         comparison: preActionParity,
         matchedCheckpointState: firstAuthorizationBaseline?.state ?? null,
+        matchedConstructionPhaseCapture:
+          firstAuthorizationPhaseBaseline ?? null,
       },
       CtoAAfterFirstAction: baselineVsTreatment,
     },
