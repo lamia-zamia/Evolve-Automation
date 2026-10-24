@@ -19,10 +19,16 @@ import {
   createP38QuarryDiagnosticAuthorization,
   P38_DIAGNOSTIC_AUTHORIZATION,
 } from "./p38-quarry-production-validation-policy.mjs";
+import {
+  createP40ConstructionTracePlugin,
+  P40_TRACE_HOOK_PROPERTIES,
+} from "./p40-construction-reservation-gate-trace.mjs";
+import { createP40ConstructionEvidence } from "./p40-construction-reservation-gate-evidence.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const p40TraceEnabled = process.argv.includes("--p40-construction-trace");
 const fixturePath = path.join(
   root,
   "test-artifacts/benchmark/slice0/saves/p18-standard-human-fixture.txt",
@@ -40,6 +46,18 @@ const bundlePath = path.join(
 const evidencePath = path.join(
   root,
   "experiments/p38-quarry-production-validation-evidence.json",
+);
+const p40TracePath = path.join(
+  root,
+  "experiments/p40-construction-reservation-gate-trace.json",
+);
+const p40PluginPath = path.join(
+  root,
+  "experiments/p40-construction-reservation-gate-trace.mjs",
+);
+const p40HarnessPath = path.join(
+  root,
+  "experiments/p40-construction-reservation-gate-exact.mjs",
 );
 const jobsEvidencePath = path.join(
   root,
@@ -66,6 +84,13 @@ const canonical = (value) => JSON.stringify(value);
 const replayHarnessSha256 = hash(
   await readFile(fileURLToPath(import.meta.url)),
 );
+const retainedP38EvidenceText = p40TraceEnabled
+  ? await readFile(evidencePath, "utf8")
+  : undefined;
+const retainedP38Evidence =
+  retainedP38EvidenceText === undefined
+    ? undefined
+    : JSON.parse(retainedP38EvidenceText);
 
 const [fixtureText, settingsText, gameBytes, metadata] = await Promise.all([
   readFile(fixturePath, "utf8"),
@@ -252,6 +277,7 @@ window.__EA_TEST_HOOKS__ = {
   p36Metrics: { freshPriceProbes: 0, validationFences: 0 },
   p38Metrics: { nativeJobOperations: 0, nativeJobControlElapsedMs: 0 },
   p38JobTrace: [],
+  ${p40TraceEnabled ? P40_TRACE_HOOK_PROPERTIES : ""}
   observeJobsTrace(event) { this.p38JobTrace.push(event); },
   captureConstructionSavingTargetForTest(target, authority) {
     const period = window.__EA_RUNNER__?.periods?.() ?? null;
@@ -321,7 +347,9 @@ window.__EA_TEST_HOOKS__ = {
   },
 };`,
   },
-  plugins: [metricPlugin],
+  plugins: p40TraceEnabled
+    ? [metricPlugin, createP40ConstructionTracePlugin()]
+    : [metricPlugin],
   platform: "browser",
   target: ["esnext"],
   define: {
@@ -583,6 +611,23 @@ async function replay(
         hooks.p36PreGatherBoundaryCaptures = [];
         hooks.p38PolicyEvents = [];
         hooks.p38JobTrace = [];
+        if (configuration.p40Trace) {
+          hooks.p40TraceEnabled = true;
+          hooks.p40TraceEvents = [];
+          hooks.p40TraceSynchronousMs = 0;
+          hooks.p40ContextSynchronousMs = 0;
+          hooks.p40GuardSynchronousMs = 0;
+          hooks.p40ResourceReadMs = 0;
+          hooks.p40ResourceReadCount = 0;
+          hooks.p40GuardCalls = 0;
+          hooks.p40DiagnosticClockReads = 0;
+          hooks.p40OwnerDecisionCount = 0;
+          hooks.p40TraceOverflow = 0;
+          hooks.p40TraceClockUnavailable = false;
+          hooks.p40CurrentPeriod = null;
+          hooks.p40OwnerContext = null;
+          hooks.p40CurrentBuildCandidate = null;
+        }
         hooks.observeJobsTrace = (event) => hooks.p38JobTrace.push(event);
         hooks.observeJobsAutomation = (phase, outcome, details) => {
           hooks.p38JobTrace.push({
@@ -734,6 +779,7 @@ async function replay(
         let lastEligibilityKey;
         const recordPolicyEvent = (event) => {
           const period = window.__EA_RUNNER__?.periods?.() ?? null;
+          if (hooks.p40TraceEnabled === true) hooks.p40CurrentPeriod = period;
           const record = { period, ...event };
           if (
             event.type === "authorized" &&
@@ -821,8 +867,11 @@ async function replay(
                 ]?.rootState.readRoot();
               },
               onEvent(event) {
+                const period = window.__EA_RUNNER__?.periods?.() ?? null;
+                if (hooks.p40TraceEnabled === true)
+                  hooks.p40CurrentPeriod = period;
                 const record = {
-                  period: window.__EA_RUNNER__?.periods?.() ?? null,
+                  period,
                   ...event,
                 };
                 if (
@@ -969,6 +1018,7 @@ async function replay(
         shadow: false,
         policy: true,
         arm,
+        p40Trace: p40TraceEnabled,
         p38Enabled: arm !== "A",
         p38PolicySource: p38PolicyBundleSource,
         parityCapturePeriods: [...new Set([448, 688, ...extraCheckpoints])],
@@ -1036,6 +1086,23 @@ async function replay(
           p38Metrics: value.p38Metrics ?? null,
           p38JobTrace: value.p38JobTrace ?? [],
           jobsSnapshot: value.p38JobsApi?.snapshot?.() ?? null,
+          p40:
+            value.p40TraceEnabled === true
+              ? {
+                  events: value.p40TraceEvents ?? [],
+                  synchronousMs: value.p40TraceSynchronousMs ?? 0,
+                  contextSynchronousMs: value.p40ContextSynchronousMs ?? 0,
+                  guardSynchronousMs: value.p40GuardSynchronousMs ?? 0,
+                  resourceReadMs: value.p40ResourceReadMs ?? 0,
+                  resourceReadCount: value.p40ResourceReadCount ?? 0,
+                  guardCalls: value.p40GuardCalls ?? 0,
+                  diagnosticClockReads: value.p40DiagnosticClockReads ?? 0,
+                  ownerDecisionCount: value.p40OwnerDecisionCount ?? 0,
+                  overflow: value.p40TraceOverflow ?? 0,
+                  clockUnavailable: value.p40TraceClockUnavailable === true,
+                  policyBackend: value.p40BuildPolicyBackend ?? null,
+                }
+              : null,
         };
       }),
     ]);
@@ -1090,6 +1157,7 @@ async function replay(
         liveJobsSnapshot: hooks.jobsSnapshot,
         manualTransfer: workerTransfer,
       },
+      p40: hooks.p40,
       controlUsage: diagnostics.controlUsage ?? {},
       nativeCalls: (diagnostics.nativeInvocations ?? [])
         .filter(
@@ -2309,6 +2377,42 @@ try {
       newCatalogDraw: false,
     },
   };
+  if (p40TraceEnabled) {
+    const p40Evidence = createP40ConstructionEvidence({
+      retainedP38Evidence,
+      retainedP38EvidenceText,
+      tracedB: B,
+      tracedBRepeat: BRepeat,
+      metadata: {
+        pinnedGame,
+        fixtureSha256,
+        seed,
+        epoch,
+        retainedP38EvidenceSha256: hash(Buffer.from(retainedP38EvidenceText)),
+        p40HarnessSha256: hash(await readFile(p40HarnessPath)),
+        p40RunnerSha256: hash(await readFile(fileURLToPath(import.meta.url))),
+        p40PluginSha256: hash(await readFile(p40PluginPath)),
+        pluginBytes: (await readFile(p40PluginPath)).byteLength,
+        runtimeBundleSha256,
+        traceRepeatSha256: hash(
+          Buffer.from(canonical(BRepeat.p40?.events ?? [])),
+        ),
+      },
+    });
+    let p40Formatted = await prettier.format(JSON.stringify(p40Evidence), {
+      parser: "json",
+    });
+    for (let attempt = 0; attempt < 4; attempt++) {
+      p40Evidence.traceSizes.formattedEvidenceBytes =
+        Buffer.byteLength(p40Formatted);
+      const next = await prettier.format(JSON.stringify(p40Evidence), {
+        parser: "json",
+      });
+      if (next === p40Formatted) break;
+      p40Formatted = next;
+    }
+    await writeFile(p40TracePath, p40Formatted);
+  }
   await writeFile(
     evidencePath,
     await prettier.format(JSON.stringify(replayEvidence), { parser: "json" }),
