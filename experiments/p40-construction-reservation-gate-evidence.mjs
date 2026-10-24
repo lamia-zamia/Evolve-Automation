@@ -514,7 +514,13 @@ export function createP40ConstructionEvidence({
         Number(tracedB?.p40?.guardSynchronousMs ?? 0).toFixed(4),
       ),
       activeWindowCandidateGuardCalls: tracedB?.p40?.guardCalls ?? 0,
-      nativeMonotonicClockReads: tracedB?.p40?.diagnosticClockReads ?? 0,
+      nativeMonotonicClockReads:
+        (tracedB?.p40?.diagnosticClockReads ?? 0) +
+        (tracedB?.p40?.readerTimingClockReads ?? 0),
+      costConflictReaderCalls: tracedB?.p40?.costConflictReaderCalls ?? 0,
+      costConflictReaderElapsedMs: Number(
+        Number(tracedB?.p40?.costConflictReaderElapsedMs ?? 0).toFixed(4),
+      ),
       purchaseResourceSnapshotReadMs: Number(
         Number(tracedB?.p40?.resourceReadMs ?? 0).toFixed(4),
       ),

@@ -622,6 +622,9 @@ async function replay(
           hooks.p40GuardCalls = 0;
           hooks.p40DiagnosticClockReads = 0;
           hooks.p40OwnerDecisionCount = 0;
+          hooks.p41ConflictReaderCalls = 0;
+          hooks.p41ConflictReaderElapsedMs = 0;
+          hooks.p41DiagnosticClockReads = 0;
           hooks.p40TraceOverflow = 0;
           hooks.p40TraceClockUnavailable = false;
           hooks.p40CurrentPeriod = null;
@@ -1098,6 +1101,10 @@ async function replay(
                   guardCalls: value.p40GuardCalls ?? 0,
                   diagnosticClockReads: value.p40DiagnosticClockReads ?? 0,
                   ownerDecisionCount: value.p40OwnerDecisionCount ?? 0,
+                  costConflictReaderCalls: value.p41ConflictReaderCalls ?? 0,
+                  costConflictReaderElapsedMs:
+                    value.p41ConflictReaderElapsedMs ?? 0,
+                  readerTimingClockReads: value.p41DiagnosticClockReads ?? 0,
                   overflow: value.p40TraceOverflow ?? 0,
                   clockUnavailable: value.p40TraceClockUnavailable === true,
                   policyBackend: value.p40BuildPolicyBackend ?? null,

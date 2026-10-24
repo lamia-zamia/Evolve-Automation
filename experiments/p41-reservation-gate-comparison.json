@@ -1,0 +1,475 @@
+{
+  "experiment": "P41 reservation correctness and p720 counterfactual",
+  "schemaVersion": 1,
+  "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "productionSourceChange": {
+    "path": "src/adapters/evolve/captured-cost-conflict.ts",
+    "baselineCommit": "990946a5",
+    "baselineSha256": "9c53ba1163e773fa967fa39f03474e8e65a52ebe35ee172938db780e406bd034",
+    "fixedCommit": "6960536fcf048bcb3eae6d4c8d98a2a2fbab235e",
+    "fixedSha256": "7cc8fa1ccb9425128f8b85c4d470b1163c94486cbef1d3d6f68dcf1868514268",
+    "behavior": "Missing holdings now return status unavailable. Construction already maps that status into an unavailable BuildConflictView; no valid reservation arithmetic or owner policy changed."
+  },
+  "exactReplayTraceSha256": "fa5cba5db3f6ce8f0492c156984ba662f1834833ca2390947cf53f9041f64723",
+  "capturedInputs": {
+    "holdings": { "Lumber": 50, "Stone": 10 },
+    "candidates": {
+      "city-rock_quarry": {
+        "candidateKey": "city-rock_quarry",
+        "targetId": "city-rock_quarry",
+        "actionId": "city-rock_quarry",
+        "weighting": 300,
+        "important": false,
+        "knowledge": false,
+        "cost": { "Lumber": 50, "Stone": 10 },
+        "pool": null,
+        "respectReservations": true,
+        "orderingIndex": 0,
+        "sourcesComplete": true,
+        "affordability": true
+      },
+      "city-basic_housing": {
+        "candidateKey": "city-basic_housing",
+        "targetId": "city-basic_housing",
+        "actionId": "city-basic_housing",
+        "weighting": 100,
+        "important": false,
+        "knowledge": false,
+        "cost": { "Lumber": 23 },
+        "pool": null,
+        "respectReservations": true,
+        "orderingIndex": 2,
+        "sourcesComplete": true,
+        "affordability": true
+      }
+    },
+    "affordability": { "city-rock_quarry": true, "city-basic_housing": true },
+    "knowledgeGate": {
+      "cheapestTechKnowledge": 65,
+      "knowledgeRequiredByBuildTargets": 0,
+      "knowledgeCapacity": 100
+    },
+    "historicalNativeQueue": { "targets": [], "unavailable": false },
+    "historicalScriptReservations": {
+      "unavailable": false,
+      "targets": [
+        {
+          "name": "city-farm",
+          "cause": "Saving",
+          "cost": { "Lumber": 27, "Stone": 14 }
+        }
+      ]
+    },
+    "completedFarmReservation": {
+      "name": "city-farm",
+      "cause": "Saving",
+      "cost": { "Lumber": 27, "Stone": 14 }
+    },
+    "replayHistoricalHousingCompetition": {
+      "kind": "build",
+      "decision": { "index": 2, "key": "city-basic_housing" },
+      "annotation": null
+    }
+  },
+  "replayParity": {
+    "decision": {
+      "code": "A",
+      "meaning": "Gate cause established",
+      "replayNeutral": true,
+      "traceComplete": true
+    },
+    "stops": {
+      "p36At688": {
+        "control": {
+          "period": 688,
+          "reason": "shortage-exceeds-remaining-budget",
+          "targetId": "city-rock_quarry",
+          "shortage": { "Lumber": 18, "Stone": 0 }
+        },
+        "traced": {
+          "period": 688,
+          "reason": "shortage-exceeds-remaining-budget",
+          "targetId": "city-rock_quarry",
+          "shortage": { "Lumber": 18, "Stone": 0 }
+        },
+        "equal": true
+      },
+      "p38At728": {
+        "control": {
+          "period": 728,
+          "reason": "competing-purchase-consumed-resources",
+          "clicks": 17,
+          "remainingClicks": 1
+        },
+        "traced": {
+          "period": 728,
+          "reason": "competing-purchase-consumed-resources",
+          "clicks": 17,
+          "remainingClicks": 1
+        },
+        "equal": true
+      }
+    },
+    "actions": {
+      "native": {
+        "counts": { "control": 394, "traced": 394 },
+        "sequenceEqual": true
+      },
+      "housingAt720": {
+        "counts": { "control": 2, "traced": 2 },
+        "equal": true
+      },
+      "p38Gather": {
+        "controlCount": 17,
+        "tracedCount": 17,
+        "exact": true,
+        "sequenceSha256": "9a0c43f916fd8173a63703fb33e88943675f8a2edccd9c1869e84ea5d7200186"
+      }
+    },
+    "checkpoints": {
+      "buildingCountsAndResources": true,
+      "researchGrants": true,
+      "jobsAllocations": true,
+      "controlUsage": true,
+      "rng": true,
+      "exportedSaveHashes": true
+    },
+    "p10000": { "finalExportSha256Equal": true, "finalRngEqual": true },
+    "performance": {
+      "diagnosticClock": "window.eaDiagnosticsNow, the original monotonic Chromium Performance clock retained by the exact runner bridge",
+      "measuredSynchronousDiagnosticCostMs": 0.4,
+      "eventCaptureAndAppendMs": 0.3,
+      "ownerContextCaptureMs": 0.1,
+      "activeWindowCandidateGuardMs": 0,
+      "activeWindowCandidateGuardCalls": 12,
+      "nativeMonotonicClockReads": 62,
+      "costConflictReaderCalls": 2,
+      "costConflictReaderElapsedMs": 0.4,
+      "purchaseResourceSnapshotReadMs": 0,
+      "purchaseResourceAmountReadsAdded": 2,
+      "instrumentedOwnerDecisionCount": 1,
+      "traceEventCount": 15,
+      "traceEventCountByType": {
+        "owner-decision": 1,
+        "candidate-order": 2,
+        "candidate-affordability": 2,
+        "saving-reservation": 2,
+        "cost-conflict": 2,
+        "conflict-adapter": 2,
+        "build-conflict-plan": 2,
+        "build-competition-plan": 1,
+        "purchase-postcondition": 1
+      },
+      "traceOverflow": 0,
+      "traceStorageBounded": true,
+      "nativeCallsAdded": 0,
+      "priceCatalogResourceReservationReadsAdded": 0,
+      "note": "Diagnostic time covers event assembly/append, Construction ordering context, candidate relevance guards and the pre-action resource snapshot inside p696-p728. Two root resource amount reads surround the verified Housing action; no resource source API read was added.",
+      "cpuClaim": "The independent 2% production CPU gate remains unresolved."
+    },
+    "sourceReadsAdded": {
+      "nativeCalls": 0,
+      "priceReads": 0,
+      "catalogReads": 0,
+      "resourceSourceReads": 0,
+      "resourceAmountPropertyReads": 2,
+      "reservationSourceReads": 0,
+      "rootGenerationGetters": 0,
+      "progressionGenerationGetters": 0
+    }
+  },
+  "scenarios": [
+    {
+      "id": "A",
+      "name": "Historical",
+      "status": "observed P40 input",
+      "reservations": {
+        "nativeQueue": { "targets": [], "unavailable": false },
+        "scriptReservations": {
+          "unavailable": false,
+          "targets": [
+            {
+              "name": "city-farm",
+              "cause": "Saving",
+              "cost": { "Lumber": 27, "Stone": 14 }
+            }
+          ]
+        }
+      },
+      "reservationInputs": {
+        "nativeQueue": { "targets": [], "unavailable": false },
+        "scriptReservations": {
+          "unavailable": false,
+          "targets": [
+            {
+              "name": "city-farm",
+              "cause": "Saving",
+              "cost": { "Lumber": 27, "Stone": 14 }
+            }
+          ]
+        }
+      },
+      "candidates": {
+        "quarry": {
+          "candidate": {
+            "key": "city-rock_quarry",
+            "orderingIndex": 0,
+            "weighting": 300,
+            "cost": { "Lumber": 50, "Stone": 10 },
+            "affordable": true,
+            "important": false,
+            "knowledge": false,
+            "pool": null
+          },
+          "reservationTargetsAfterSameTargetExclusion": [
+            {
+              "name": "city-farm",
+              "cause": "Saving",
+              "cost": { "Lumber": 27, "Stone": 14 }
+            }
+          ],
+          "holdings": { "Lumber": 50, "Stone": 10 },
+          "rawConflict": {
+            "status": "conflict",
+            "conflict": {
+              "status": "conflict",
+              "resourceId": "Stone",
+              "targetName": "city-farm",
+              "targetCause": "Saving",
+              "resourceNames": ["Lumber", "Stone"],
+              "targetNames": ["city-farm"]
+            }
+          },
+          "importantOverrideUsed": false,
+          "knowledgeExceptionApplicable": false,
+          "knowledgeExceptionUsed": false,
+          "pureBuildGate": {
+            "affordability": "conflict-check",
+            "conflict": "skip",
+            "executableBuildDecision": null,
+            "competition": "not-reached"
+          }
+        },
+        "housing": {
+          "candidate": {
+            "key": "city-basic_housing",
+            "orderingIndex": 2,
+            "weighting": 100,
+            "cost": { "Lumber": 23 },
+            "affordable": true,
+            "important": false,
+            "knowledge": false,
+            "pool": null
+          },
+          "reservationTargetsAfterSameTargetExclusion": [
+            {
+              "name": "city-farm",
+              "cause": "Saving",
+              "cost": { "Lumber": 27, "Stone": 14 }
+            }
+          ],
+          "holdings": { "Lumber": 50, "Stone": 10 },
+          "rawConflict": { "status": "none" },
+          "importantOverrideUsed": false,
+          "knowledgeExceptionApplicable": false,
+          "knowledgeExceptionUsed": false,
+          "pureBuildGate": {
+            "affordability": "conflict-check",
+            "conflict": "proceed",
+            "executableBuildDecision": {
+              "index": 2,
+              "key": "city-basic_housing"
+            },
+            "competition": "build",
+            "competitionEvidence": "captured P40 pure planner output"
+          }
+        }
+      },
+      "nativeActionExecuted": "city-basic_housing"
+    },
+    {
+      "id": "B",
+      "name": "No previous-cycle saving reserve",
+      "status": "counterfactual; Farm commitment retained in reality",
+      "reservations": {
+        "nativeQueue": { "targets": [], "unavailable": false },
+        "scriptReservations": { "unavailable": false, "targets": [] }
+      },
+      "reservationInputs": {
+        "nativeQueue": { "targets": [], "unavailable": false },
+        "scriptReservations": { "unavailable": false, "targets": [] }
+      },
+      "candidates": {
+        "quarry": {
+          "candidate": {
+            "key": "city-rock_quarry",
+            "orderingIndex": 0,
+            "weighting": 300,
+            "cost": { "Lumber": 50, "Stone": 10 },
+            "affordable": true,
+            "important": false,
+            "knowledge": false,
+            "pool": null
+          },
+          "reservationTargetsAfterSameTargetExclusion": [],
+          "holdings": { "Lumber": 50, "Stone": 10 },
+          "rawConflict": { "status": "none" },
+          "importantOverrideUsed": false,
+          "knowledgeExceptionApplicable": false,
+          "knowledgeExceptionUsed": false,
+          "pureBuildGate": {
+            "affordability": "conflict-check",
+            "conflict": "proceed",
+            "executableBuildDecision": {
+              "index": 0,
+              "key": "city-rock_quarry"
+            },
+            "competition": "build"
+          }
+        },
+        "housing": {
+          "candidate": {
+            "key": "city-basic_housing",
+            "orderingIndex": 2,
+            "weighting": 100,
+            "cost": { "Lumber": 23 },
+            "affordable": true,
+            "important": false,
+            "knowledge": false,
+            "pool": null
+          },
+          "reservationTargetsAfterSameTargetExclusion": [],
+          "holdings": { "Lumber": 50, "Stone": 10 },
+          "rawConflict": { "status": "none" },
+          "importantOverrideUsed": false,
+          "knowledgeExceptionApplicable": false,
+          "knowledgeExceptionUsed": false,
+          "pureBuildGate": {
+            "affordability": "conflict-check",
+            "conflict": "proceed",
+            "executableBuildDecision": null,
+            "competition": "not-evaluated-insufficient-order-context",
+            "possibleLaterCandidate": true,
+            "competitionEvidence": "not evaluated after a hypothetical Quarry decision; the captured historical competition used unchanged pre-action inputs"
+          }
+        }
+      },
+      "nativeActionExecuted": null
+    },
+    {
+      "id": "C",
+      "name": "Explicit current-Quarry reservation",
+      "status": "unapproved diagnostic proposal; not a Construction-owner commitment",
+      "reservations": {
+        "nativeQueue": { "targets": [], "unavailable": false },
+        "scriptReservations": {
+          "unavailable": false,
+          "targets": [
+            {
+              "name": "city-rock_quarry",
+              "cause": "Saving",
+              "cost": { "Lumber": 50, "Stone": 10 }
+            }
+          ]
+        }
+      },
+      "reservationInputs": {
+        "nativeQueue": { "targets": [], "unavailable": false },
+        "scriptReservations": {
+          "unavailable": false,
+          "targets": [
+            {
+              "name": "city-rock_quarry",
+              "cause": "Saving",
+              "cost": { "Lumber": 50, "Stone": 10 }
+            }
+          ]
+        }
+      },
+      "candidates": {
+        "quarry": {
+          "candidate": {
+            "key": "city-rock_quarry",
+            "orderingIndex": 0,
+            "weighting": 300,
+            "cost": { "Lumber": 50, "Stone": 10 },
+            "affordable": true,
+            "important": false,
+            "knowledge": false,
+            "pool": null
+          },
+          "reservationTargetsAfterSameTargetExclusion": [],
+          "holdings": { "Lumber": 50, "Stone": 10 },
+          "rawConflict": { "status": "none" },
+          "importantOverrideUsed": false,
+          "knowledgeExceptionApplicable": false,
+          "knowledgeExceptionUsed": false,
+          "pureBuildGate": {
+            "affordability": "conflict-check",
+            "conflict": "proceed",
+            "executableBuildDecision": {
+              "index": 0,
+              "key": "city-rock_quarry"
+            },
+            "competition": "build"
+          }
+        },
+        "housing": {
+          "candidate": {
+            "key": "city-basic_housing",
+            "orderingIndex": 2,
+            "weighting": 100,
+            "cost": { "Lumber": 23 },
+            "affordable": true,
+            "important": false,
+            "knowledge": false,
+            "pool": null
+          },
+          "reservationTargetsAfterSameTargetExclusion": [
+            {
+              "name": "city-rock_quarry",
+              "cause": "Saving",
+              "cost": { "Lumber": 50, "Stone": 10 }
+            }
+          ],
+          "holdings": { "Lumber": 50, "Stone": 10 },
+          "rawConflict": {
+            "status": "conflict",
+            "conflict": {
+              "status": "conflict",
+              "resourceId": "Lumber",
+              "targetName": "city-rock_quarry",
+              "targetCause": "Saving",
+              "resourceNames": ["Lumber"],
+              "targetNames": ["city-rock_quarry"]
+            }
+          },
+          "importantOverrideUsed": false,
+          "knowledgeExceptionApplicable": false,
+          "knowledgeExceptionUsed": false,
+          "pureBuildGate": {
+            "affordability": "conflict-check",
+            "conflict": "skip",
+            "executableBuildDecision": null,
+            "competition": "not-reached"
+          }
+        }
+      },
+      "nativeActionExecuted": null
+    }
+  ],
+  "interpretation": {
+    "historicalNativePurchase": "Housing purchased at p720 in the exact replay",
+    "scenarioB": {
+      "quarry": "Pure Build permits Quarry under the captured pre-action inputs",
+      "housing": "Housing passes its reservation gate and remains a possible later candidate on the captured snapshot; no sequential action is simulated",
+      "nativePurchase": "Not predicted. If Quarry succeeds first at captured cost, 50 Lumber and 10 Stone are consumed, leaving Housing unaffordable at the captured 23 Lumber price"
+    },
+    "scenarioC": {
+      "quarry": "Same-target exclusion removes Quarry's own hypothetical reserve",
+      "housing": "Housing is blocked by the hypothetical Quarry Saving reserve",
+      "authority": "This reservation is unapproved and is not an actual Construction-owner commitment"
+    },
+    "importantOverride": "The observed Quarry and Housing candidates are both non-important. Build's existing important override remains capable of bypassing known and unavailable conflicts."
+  }
+}
