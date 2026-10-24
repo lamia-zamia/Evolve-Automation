@@ -225,7 +225,7 @@ const policyBundle = await esbuild.build({
   bundle: true,
   write: false,
   format: "iife",
-  globalName: "window.__EA_P36_TEST_POLICY__",
+  globalName: "__EA_P36_TEST_POLICY__",
   platform: "browser",
   target: ["esnext"],
   minifySyntax: true,
@@ -234,6 +234,9 @@ const bundleBytes = Buffer.concat([
   Buffer.from(mainBundle.outputFiles[0].contents),
   Buffer.from("\n;\n"),
   Buffer.from(policyBundle.outputFiles[0].contents),
+  Buffer.from(
+    "\n;globalThis.window.__EA_TEST_HOOKS__.createP36BootstrapPolicy = __EA_P36_TEST_POLICY__.createP36BootstrapPolicy;",
+  ),
 ]);
 const runtimeBundleSha256 = hash(mainBundle.outputFiles[0].contents);
 const policyBundleSha256 = hash(policyBundle.outputFiles[0].contents);
@@ -576,10 +579,9 @@ async function replay(arm, extraCheckpoints = []) {
             record.state = snapshotNative();
           hooks.p36PolicyEvents.push(record);
         };
-        hooks.p36Policy =
-          window.__EA_P36_TEST_POLICY__.createP36BootstrapPolicy({
-            onEvent: recordPolicyEvent,
-          });
+        hooks.p36Policy = hooks.createP36BootstrapPolicy({
+          onEvent: recordPolicyEvent,
+        });
         hooks.gatherIntervention.constructionAllocation = {
           enabled: true,
           onRejected(event) {
