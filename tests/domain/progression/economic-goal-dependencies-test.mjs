@@ -315,6 +315,105 @@ const node = (graph, id) => graph.goals.find((goal) => goal.id === id);
 }
 
 {
+  const observed = analyzeEconomicGoalDependencies(
+    makeInput({
+      analysisSnapshotId: "p38:C:p10000:root-44:progression-epoch-9",
+      validityEpoch: "p38:C:p10000:root-44:progression-epoch-9",
+      construction: construction({
+        id: "p38-C-native-quarry-price",
+        snapshotId: "p38:C:p10000:root-44:progression-epoch-9",
+        period: 10000,
+        validityEpoch: "p38:C:p10000:root-44:progression-epoch-9",
+        stock: { Lumber: 0, Stone: 0 },
+      }),
+      state: state({
+        id: "p38-C-native-state",
+        snapshotId: "p38:C:p10000:root-44:progression-epoch-9",
+        period: 10000,
+        validityEpoch: "p38:C:p10000:root-44:progression-epoch-9",
+        quarryCount: 1,
+        farmers: 3,
+        quarryWorkers: 1,
+        stoneProduction: 0.62,
+        foodOutput: 4.332,
+        foodConsumption: 4,
+      }),
+      labor: labor({
+        id: "p38-C-native-food-interval",
+        snapshotId: "p38:C:worker-transfer:p1000-p10000",
+        period: 1000,
+        validityEpoch: "p38:C:p10000:root-44:progression-epoch-9",
+        farmersAfterReassignment: 3,
+        foodOutputAfterReassignment: 4.332,
+        foodConsumptionAtPopulation: 4,
+        stableThroughPeriod: 10000,
+        stableSampleCount: 10,
+        foodProjectionPositiveAtEverySample: undefined,
+        foodProjectionStableAcrossSamples: undefined,
+        foodObservedPositiveAtEverySample: true,
+        foodObservedStableAcrossSamples: true,
+        nativeAssignmentObserved: true,
+      }),
+    }),
+  );
+  assert.equal(node(observed, "building:rock-quarry").status, "satisfied");
+  assert.equal(
+    node(observed, "building:rock-quarry").confidence,
+    "established",
+  );
+  assert.equal(
+    node(observed, "job:quarry-worker-assigned").status,
+    "satisfied",
+  );
+  assert.equal(
+    node(observed, "job:quarry-worker-assigned").confidence,
+    "established",
+  );
+  assert.equal(
+    node(observed, "economic:positive-stone-production").status,
+    "satisfied",
+  );
+  assert.equal(
+    node(observed, "economic:positive-stone-production").confidence,
+    "established",
+  );
+  assert.equal(
+    node(observed, "food:positive-after-reassignment").status,
+    "satisfied",
+  );
+  assert.equal(
+    node(observed, "food:positive-after-reassignment").confidence,
+    "established",
+  );
+
+  const unsafeFood = analyzeEconomicGoalDependencies(
+    makeInput({
+      labor: labor({
+        foodProjectionPositiveAtEverySample: undefined,
+        foodProjectionStableAcrossSamples: undefined,
+        foodObservedPositiveAtEverySample: false,
+        foodObservedStableAcrossSamples: false,
+        nativeAssignmentObserved: true,
+      }),
+      state: state({
+        quarryCount: 1,
+        quarryWorkers: 1,
+        farmers: 3,
+        stoneProduction: 0.62,
+      }),
+    }),
+  );
+  assert.equal(
+    node(unsafeFood, "food:positive-after-reassignment").status,
+    "blocked",
+  );
+  assert.equal(
+    node(unsafeFood, "food:positive-after-reassignment").confidence,
+    "established",
+  );
+}
+
+{
   const unavailable = analyzeEconomicGoalDependencies(
     makeInput({
       construction: construction({

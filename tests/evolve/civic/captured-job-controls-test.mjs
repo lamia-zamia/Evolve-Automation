@@ -23,6 +23,14 @@ const handles = new Map([
     },
   ],
   [
+    "civ-quarry_worker",
+    {
+      elementId: "civ-quarry_worker",
+      generation: 3,
+      methods: ["add", "sub", "setDefault"],
+    },
+  ],
+  [
     "servant-farmer",
     { elementId: "servant-farmer", generation: 1, methods: ["add", "sub"] },
   ],
@@ -121,5 +129,62 @@ assert.deepEqual(calls, [
   { elementId: "servant-hunter", method: "add", args: [] },
   { elementId: "civ-hunter", method: "setDefault", args: ["hunter"] },
 ]);
+
+const transferCounts = { farmer: 4, quarry_worker: 0 };
+const transferCalls = [];
+const transferControls = createCapturedJobControls({
+  controls: {
+    resolve: (elementId) => handles.get(elementId),
+    invoke: (handle, method) => {
+      transferCalls.push({ elementId: handle.elementId, method });
+      const jobId = handle.elementId.slice("civ-".length);
+      if (method === "sub") transferCounts[jobId] -= 1;
+      if (method === "add") transferCounts[jobId] += 1;
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds: () => [...handles.keys()],
+  },
+});
+const transferOutcome = executeCapturedJobDecision(
+  transferControls,
+  {
+    manageServants: false,
+    jobs: [
+      { token: 1, id: "farmer", workers: 4, servants: 0, serves: false },
+      {
+        token: 2,
+        id: "quarry_worker",
+        workers: 0,
+        servants: 0,
+        serves: false,
+      },
+    ],
+  },
+  {
+    kind: "assign-jobs",
+    assignments: [
+      { jobToken: 1, workers: 3, servants: 0 },
+      { jobToken: 2, workers: 1, servants: 0 },
+    ],
+    selectedDefaultToken: null,
+    moraleIncomeAdjusted: false,
+    ironIncomeAdjusted: false,
+    maximumSpaceMiners: 0,
+    lastPopulationCount: 4,
+    lastFarmerCount: 3,
+    authorityEntertainerCap: null,
+    clearAuthorityEntertainerCap: false,
+    craftWinner: null,
+    craftDebugMessage: null,
+    authorityDebugMessage: null,
+  },
+);
+assert.deepEqual(transferOutcome, { status: "succeeded" });
+assert.deepEqual(transferCounts, { farmer: 3, quarry_worker: 1 });
+assert.deepEqual(transferCalls, [
+  { elementId: "civ-farmer", method: "sub" },
+  { elementId: "civ-quarry_worker", method: "add" },
+]);
+assert.ok(transferCalls.every((call) => call.method !== "setDefault"));
 
 console.log("captured-job-controls ok");
