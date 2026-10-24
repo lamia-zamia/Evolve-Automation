@@ -24,11 +24,24 @@ import {
   P40_TRACE_HOOK_PROPERTIES,
 } from "./p40-construction-reservation-gate-trace.mjs";
 import { createP40ConstructionEvidence } from "./p40-construction-reservation-gate-evidence.mjs";
+import {
+  createP42ConstructionPriorityTracePlugin,
+  P42_TRACE_HOOK_PROPERTIES,
+} from "./p42-construction-priority-counterfactual-trace.mjs";
+import {
+  P42_EXPECTED,
+  P42_INTERVENTION_IDENTITY,
+} from "./p42-construction-priority-counterfactual-policy.mjs";
+import { createP42ConstructionPriorityEvidence } from "./p42-construction-priority-counterfactual-evidence.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const p40TraceEnabled = process.argv.includes("--p40-construction-trace");
+const p42Mode = process.argv.includes(
+  "--p42-construction-priority-counterfactual",
+);
+const p40TraceEnabled =
+  p42Mode || process.argv.includes("--p40-construction-trace");
 const fixturePath = path.join(
   root,
   "test-artifacts/benchmark/slice0/saves/p18-standard-human-fixture.txt",
@@ -41,7 +54,9 @@ const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
 const metadataPath = path.join(root, "src/userscript.meta.js");
 const bundlePath = path.join(
   root,
-  "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
+  p42Mode
+    ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
+    : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
 );
 const evidencePath = path.join(
   root,
@@ -59,13 +74,31 @@ const p40HarnessPath = path.join(
   root,
   "experiments/p40-construction-reservation-gate-exact.mjs",
 );
+const p42EvidencePath = path.join(
+  root,
+  "experiments/p42-construction-priority-counterfactual-evidence.json",
+);
+const p42PluginPath = path.join(
+  root,
+  "experiments/p42-construction-priority-counterfactual-trace.mjs",
+);
+const p42PolicyPath = path.join(
+  root,
+  "experiments/p42-construction-priority-counterfactual-policy.mjs",
+);
+const p42HarnessPath = path.join(
+  root,
+  "experiments/p42-construction-priority-counterfactual-exact.mjs",
+);
 const jobsEvidencePath = path.join(
   root,
   "experiments/p38-quarry-production-validation-jobs.json",
 );
 const interimPath = path.join(
   root,
-  "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+  p42Mode
+    ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+    : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -79,6 +112,10 @@ const checkpoints = [
   8, 48, 56, 64, 72, 80, 96, 112, 272, 448, 688, 1_000, 2_000, 3_000, 4_000,
   5_000, 6_000, 7_000, 8_000, 9_000, 10_000,
 ];
+const p42Checkpoints = [
+  719,
+  ...Array.from({ length: 36 }, (_, index) => 720 + index * 8),
+];
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => JSON.stringify(value);
 const replayHarnessSha256 = hash(
@@ -91,6 +128,29 @@ const retainedP38Evidence =
   retainedP38EvidenceText === undefined
     ? undefined
     : JSON.parse(retainedP38EvidenceText);
+const p42RetainedBaseline = p42Mode
+  ? retainedP38Evidence?.arms?.find((arm) => arm.arm === "B")
+  : undefined;
+if (p42Mode) {
+  assert.ok(p42RetainedBaseline, "P42 requires the retained P38 B baseline");
+}
+const withoutArm = (event) => {
+  const { arm: _arm, ...rest } = event;
+  return rest;
+};
+const p42ExpectedAuthorizationHistory = p42Mode
+  ? {
+      p36: p42RetainedBaseline.p36.policyEvents
+        .filter((event) => Number(event.period) <= 688)
+        .map(withoutArm),
+      p38: p42RetainedBaseline.p38.policyEvents
+        .filter((event) => Number(event.period) <= 720)
+        .map(withoutArm),
+    }
+  : null;
+const p42ExecutionClockExpression = p42Mode
+  ? "(window.eaDiagnosticsNow?.() ?? 0)"
+  : "performance.now()";
 
 const [fixtureText, settingsText, gameBytes, metadata] = await Promise.all([
   readFile(fixturePath, "utf8"),
@@ -104,6 +164,19 @@ assert.equal(hash(gameBytes), pinnedGameSha256);
 assert.equal(settings.buildingAlwaysClick, false);
 assert.equal(settings.autoBuild, true);
 assert.equal(settings.autoJobs, true);
+if (p42Mode) {
+  assert.deepEqual(
+    {
+      fixtureName: path.basename(fixturePath),
+      fixtureSha256,
+      pinnedGame,
+      pinnedGameSha256,
+      seed,
+      epoch,
+    },
+    P42_INTERVENTION_IDENTITY,
+  );
+}
 
 await mkdir(path.dirname(bundlePath), { recursive: true });
 const metricPlugin = {
@@ -129,9 +202,9 @@ const metricPlugin = {
                 if (isRecord(p36Metrics)) Reflect.set(p36Metrics, name, Number(readProperty(p36Metrics, name) ?? 0) + amount);
               };
               const p38ReadNativePrice = (id: string) => {
-                const startedAt = performance.now();
+                const startedAt = ${p42ExecutionClockExpression};
                 const value = buildCosts.readCost(id);
-                p36Metric("freshPriceProbeElapsedMs", performance.now() - startedAt);
+                p36Metric("freshPriceProbeElapsedMs", ${p42ExecutionClockExpression} - startedAt);
                 return value;
               };
               const nativePrice =
@@ -145,7 +218,7 @@ const metricPlugin = {
                 let failureReason = "changed-state-during-revalidation";`,
         `              const isNativeRequestCurrent = () => {
                 p36Metric("validationFences");
-                const p38FenceStartedAt = performance.now();
+                const p38FenceStartedAt = ${p42ExecutionClockExpression};
                 let failureReason = "changed-state-during-revalidation";`,
         "per-action native validation fence",
       );
@@ -163,7 +236,7 @@ const metricPlugin = {
       replaceOnce(
         `                  lastRevalidationFailureReason = failureReason;`,
         `                  lastRevalidationFailureReason = failureReason;
-                  p36Metric("validationFenceElapsedMs", performance.now() - p38FenceStartedAt);`,
+                  p36Metric("validationFenceElapsedMs", ${p42ExecutionClockExpression} - p38FenceStartedAt);`,
         "measure native per-action validation fence duration",
       );
       replaceOnce(
@@ -198,6 +271,16 @@ const metricPlugin = {
           },
         };
       },
+      readOwnerAuthority(actionId) {
+        const handle = pageCapture.controls.resolve(actionId);
+        return {
+          rootGeneration: progression.readRootGeneration(),
+          progressionGeneration: progression.readProgressionEpoch(),
+          controlGeneration: handle?.generation ?? null,
+          controlElementId: actionId,
+          controlActionAvailable: handle?.methods.includes("action") === true,
+        };
+      },
       transferFourResidentQuarryWorker() {
         const input = ordinaryJobs.reader.readCycle(false);
         const beforeRoot = pageCapture.rootState.readRoot();
@@ -227,10 +310,10 @@ const metricPlugin = {
           craftDebugMessage: null,
           authorityDebugMessage: null,
         };
-        const startedAt = performance.now();
+        const startedAt = ${p42ExecutionClockExpression};
         const controlsPort = createCapturedJobControls({ controls: pageCapture.controls, onInvocation: (invocation) => { invocations.push(invocation); const metrics = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__")?.p38Metrics; if (isRecord(metrics)) Reflect.set(metrics, "nativeJobOperations", Number(readProperty(metrics, "nativeJobOperations") ?? 0) + 1); } });
         const outcome = executeCapturedJobDecision(controlsPort, commandState, decision);
-        const elapsedMs = performance.now() - startedAt;
+        const elapsedMs = ${p42ExecutionClockExpression} - startedAt;
         const metrics = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__")?.p38Metrics;
         if (isRecord(metrics)) Reflect.set(metrics, "nativeJobControlElapsedMs", Number(readProperty(metrics, "nativeJobControlElapsedMs") ?? 0) + elapsedMs);
         const afterRoot = pageCapture.rootState.readRoot();
@@ -247,11 +330,11 @@ const metricPlugin = {
       replaceOnce(
         `    const outcome = runJobsAutomation(dependencies, craftOnly);`,
         `    const p38Metrics = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__")?.p38Metrics;
-    const p38StartedAt = performance.now();
+    const p38StartedAt = ${p42ExecutionClockExpression};
     const outcome = runJobsAutomation(dependencies, craftOnly);
     if (isRecord(p38Metrics)) {
       Reflect.set(p38Metrics, "ordinaryJobsExecutions", Number(readProperty(p38Metrics, "ordinaryJobsExecutions") ?? 0) + 1);
-      Reflect.set(p38Metrics, "ordinaryJobsExecutionElapsedMs", Number(readProperty(p38Metrics, "ordinaryJobsExecutionElapsedMs") ?? 0) + performance.now() - p38StartedAt);
+      Reflect.set(p38Metrics, "ordinaryJobsExecutionElapsedMs", Number(readProperty(p38Metrics, "ordinaryJobsExecutionElapsedMs") ?? 0) + ${p42ExecutionClockExpression} - p38StartedAt);
     }`,
         "measure native ordinary Jobs phase execution",
       );
@@ -278,6 +361,7 @@ window.__EA_TEST_HOOKS__ = {
   p38Metrics: { nativeJobOperations: 0, nativeJobControlElapsedMs: 0 },
   p38JobTrace: [],
   ${p40TraceEnabled ? P40_TRACE_HOOK_PROPERTIES : ""}
+  ${p42Mode ? P42_TRACE_HOOK_PROPERTIES : ""}
   observeJobsTrace(event) { this.p38JobTrace.push(event); },
   captureConstructionSavingTargetForTest(target, authority) {
     const period = window.__EA_RUNNER__?.periods?.() ?? null;
@@ -348,7 +432,11 @@ window.__EA_TEST_HOOKS__ = {
 };`,
   },
   plugins: p40TraceEnabled
-    ? [metricPlugin, createP40ConstructionTracePlugin()]
+    ? [
+        metricPlugin,
+        ...(p42Mode ? [createP42ConstructionPriorityTracePlugin()] : []),
+        createP40ConstructionTracePlugin(),
+      ]
     : [metricPlugin],
   platform: "browser",
   target: ["esnext"],
@@ -419,85 +507,95 @@ async function capture(session, period) {
   const [state, diagnostics, native] = await Promise.all([
     session.readState(),
     session.diagnostics(),
-    session.evaluate(() => {
-      const hooks = window.__EA_TEST_HOOKS__;
-      const pageCapture = window[Symbol.for("evolve-automation.page-capture")];
-      const global = pageCapture?.rootState.readRoot();
-      const jobsSnapshot = hooks?.p38JobsApi?.snapshot?.() ?? null;
-      const species = global?.race?.species;
-      const ledger = pageCapture?.mechanics?.readProductionBreakdown?.();
-      const sumUnits = (values) =>
-        Object.values(values ?? {}).reduce((sum, value) => {
-          if (typeof value === "number" && Number.isFinite(value))
-            return sum + value;
-          if (typeof value === "string" && /v$/.test(value)) {
-            const amount = Number.parseFloat(value);
-            return Number.isFinite(amount) ? sum + amount : sum;
-          }
-          return sum;
-        }, 0);
-      return {
-        population: global?.resource?.[species]?.amount ?? null,
-        populationCapacity: global?.resource?.[species]?.max ?? null,
-        jobs: Object.fromEntries(
-          Object.entries(global?.civic ?? {})
-            .filter(([, value]) => Number(value?.workers ?? 0) > 0)
-            .map(([id, value]) => [id, value.workers]),
-        ),
-        buildings: Object.fromEntries(
-          Object.entries(global?.city ?? {})
-            .filter(([, value]) => Number(value?.count ?? 0) > 0)
-            .map(([id, value]) => [id, value.count]),
-        ),
-        resources: Object.fromEntries(
-          ["Food", "Lumber", "Stone", "Money", "Knowledge"].map((id) => {
-            const resource = global?.resource?.[id];
-            return [
-              id,
-              resource
-                ? {
-                    amount: resource.amount ?? null,
-                    max: resource.max ?? null,
-                    diff: resource.diff ?? null,
-                  }
-                : null,
-            ];
-          }),
-        ),
-        foodProduction: ledger ? sumUnits(ledger.production?.Food) : null,
-        foodConsumption: ledger
-          ? Math.abs(sumUnits(ledger.consumption?.Food))
-          : null,
-        lumberProduction: sumUnits(ledger?.production?.Lumber),
-        stoneProduction: sumUnits(ledger?.production?.Stone),
-        days: global?.stats?.days ?? null,
-        starved: global?.stats?.starved ?? null,
-        deaths: global?.stats?.died ?? null,
-        research: global?.tech ?? {},
-        jobsSnapshot,
-        jobsInput: jobsSnapshot?.input ?? null,
-        jobsTraceCount: hooks?.p38JobTrace?.length ?? 0,
-        targets: hooks?.constructionSavingTargetObservations ?? [],
-        bootstrapEvents: hooks?.civilizationBootstrapEvents ?? [],
-        handoffEvents: hooks?.civilizationHandoffEvents ?? [],
-        p36: {
-          policyEvents: hooks?.p36PolicyEvents ?? [],
-          eligibility: hooks?.p36Eligibility ?? [],
-          firstAuthorization: hooks?.p36FirstAuthorization ?? null,
-          downstreamChanges: hooks?.p36DownstreamChanges ?? [],
-          shadowSummary: hooks?.p32LiveAuthoritySummary ?? null,
-          shadowRecords: hooks?.p32LiveAuthority ?? [],
-          metrics: hooks?.p36Metrics ?? null,
-          totalPolicyClicks: hooks?.p36Policy?.snapshot?.().totalClicks ?? 0,
-          policySnapshot: hooks?.p36Policy?.snapshot?.() ?? null,
-        },
-        p38: {
-          policyEventCount: hooks?.p38PolicyEvents?.length ?? 0,
-          policySnapshot: hooks?.p38Policy?.snapshot?.() ?? null,
-          metrics: hooks?.p38Metrics ?? null,
-        },
-      };
-    }),
+    session.evaluate(
+      (period, p42Mode) => {
+        const hooks = window.__EA_TEST_HOOKS__;
+        const pageCapture =
+          window[Symbol.for("evolve-automation.page-capture")];
+        const global = pageCapture?.rootState.readRoot();
+        const jobsSnapshot = hooks?.p38JobsApi?.snapshot?.() ?? null;
+        const species = global?.race?.species;
+        const ledger = pageCapture?.mechanics?.readProductionBreakdown?.();
+        const sumUnits = (values) =>
+          Object.values(values ?? {}).reduce((sum, value) => {
+            if (typeof value === "number" && Number.isFinite(value))
+              return sum + value;
+            if (typeof value === "string" && /v$/.test(value)) {
+              const amount = Number.parseFloat(value);
+              return Number.isFinite(amount) ? sum + amount : sum;
+            }
+            return sum;
+          }, 0);
+        return {
+          population: global?.resource?.[species]?.amount ?? null,
+          populationCapacity: global?.resource?.[species]?.max ?? null,
+          jobs: Object.fromEntries(
+            Object.entries(global?.civic ?? {})
+              .filter(([, value]) => Number(value?.workers ?? 0) > 0)
+              .map(([id, value]) => [id, value.workers]),
+          ),
+          buildings: Object.fromEntries(
+            Object.entries(global?.city ?? {})
+              .filter(([, value]) => Number(value?.count ?? 0) > 0)
+              .map(([id, value]) => [id, value.count]),
+          ),
+          resources: Object.fromEntries(
+            ["Food", "Lumber", "Stone", "Money", "Knowledge"].map((id) => {
+              const resource = global?.resource?.[id];
+              return [
+                id,
+                resource
+                  ? {
+                      amount: resource.amount ?? null,
+                      max: resource.max ?? null,
+                      diff: resource.diff ?? null,
+                    }
+                  : null,
+              ];
+            }),
+          ),
+          foodProduction: ledger ? sumUnits(ledger.production?.Food) : null,
+          foodConsumption: ledger
+            ? Math.abs(sumUnits(ledger.consumption?.Food))
+            : null,
+          lumberProduction: sumUnits(ledger?.production?.Lumber),
+          stoneProduction: sumUnits(ledger?.production?.Stone),
+          days: global?.stats?.days ?? null,
+          starved: global?.stats?.starved ?? null,
+          deaths: global?.stats?.died ?? null,
+          research: global?.tech ?? {},
+          jobsSnapshot,
+          jobsInput: jobsSnapshot?.input ?? null,
+          jobsTraceCount: hooks?.p38JobTrace?.length ?? 0,
+          targets: hooks?.constructionSavingTargetObservations ?? [],
+          bootstrapEvents: hooks?.civilizationBootstrapEvents ?? [],
+          handoffEvents: hooks?.civilizationHandoffEvents ?? [],
+          p36: {
+            policyEvents: hooks?.p36PolicyEvents ?? [],
+            eligibility: hooks?.p36Eligibility ?? [],
+            firstAuthorization: hooks?.p36FirstAuthorization ?? null,
+            downstreamChanges: hooks?.p36DownstreamChanges ?? [],
+            shadowSummary: hooks?.p32LiveAuthoritySummary ?? null,
+            shadowRecords: hooks?.p32LiveAuthority ?? [],
+            metrics: hooks?.p36Metrics ?? null,
+            totalPolicyClicks: hooks?.p36Policy?.snapshot?.().totalClicks ?? 0,
+            policySnapshot: hooks?.p36Policy?.snapshot?.() ?? null,
+          },
+          p38: {
+            policyEventCount: hooks?.p38PolicyEvents?.length ?? 0,
+            policySnapshot: hooks?.p38Policy?.snapshot?.() ?? null,
+            metrics: hooks?.p38Metrics ?? null,
+          },
+          savingTargetObservation: p42Mode
+            ? ((hooks?.constructionSavingTargetObservations ?? [])
+                .filter((entry) => entry.period === period)
+                .at(-1) ?? null)
+            : undefined,
+        };
+      },
+      period,
+      p42Mode,
+    ),
   ]);
   const species = state.race?.species;
   const canonicalState = {
@@ -579,6 +677,9 @@ async function capture(session, period) {
       jobsTraceCount: native.jobsTraceCount,
       p38: native.p38,
       jobsInput: native.jobsInput,
+      ...(p42Mode
+        ? { savingTargetObservation: native.savingTargetObservation ?? null }
+        : {}),
     },
   };
 }
@@ -631,7 +732,78 @@ async function replay(
           hooks.p40OwnerContext = null;
           hooks.p40CurrentBuildCandidate = null;
         }
-        hooks.observeJobsTrace = (event) => hooks.p38JobTrace.push(event);
+        if (configuration.p42Mode) {
+          hooks.p42Mode = true;
+          hooks.p42Enabled = configuration.p42Enabled;
+          hooks.p42Arm = configuration.arm;
+          hooks.p42Identity = configuration.p42Identity;
+          hooks.p42P38Authorization = configuration.p42P38Authorization;
+          hooks.p42ExpectedAuthorizationHistory =
+            configuration.p42ExpectedAuthorizationHistory;
+          hooks.p42PreSubstitutionBoundary = null;
+          hooks.p42BoundaryRecorded = false;
+          hooks.p42QuarryOrder = null;
+          hooks.p42BuildConflictReadActive = false;
+          hooks.p42OwnerCycleApplied = false;
+          hooks.p42AppliedReservationReads = 0;
+          hooks.p42Released = false;
+          hooks.p42Trace = [];
+          hooks.p42TraceBytes = 0;
+          hooks.p42TraceOverflow = 0;
+          hooks.p42ResourceAmountReads = 0;
+          hooks.p42OwnerAuthorityReads = 0;
+          hooks.p42DiagnosticClockReads = 0;
+          hooks.p42SynchronousMs = 0;
+          hooks.p42TraceElapsedMs = 0;
+          hooks.p42AuthorizationHistoryMatched = () => {
+            const normalize = (events) =>
+              events.map((event) => {
+                const { arm: _arm, ...rest } = event;
+                return rest;
+              });
+            const p36Events = hooks.p36PolicyEvents.filter(
+              (event) => Number(event.period) <= 688,
+            );
+            const p38Events = hooks.p38PolicyEvents.filter(
+              (event) => Number(event.period) <= 720,
+            );
+            const expected = hooks.p42ExpectedAuthorizationHistory;
+            const p36Stop = p36Events.find(
+              (event) =>
+                event.type === "stopped" &&
+                event.period === 688 &&
+                event.reason === "shortage-exceeds-remaining-budget",
+            );
+            const p36GatherActions = p36Events.filter(
+              (event) => event.type === "gather-click",
+            ).length;
+            const p38LatestPeriod = Math.max(
+              -1,
+              ...p38Events.map((event) => Number(event.period)),
+            );
+            const expectedP38Prefix = expected.p38.filter(
+              (event) => Number(event.period) <= p38LatestPeriod,
+            );
+            hooks.p42P36GatherActions = p36GatherActions;
+            return (
+              p36Stop !== undefined &&
+              p36GatherActions === 139 &&
+              JSON.stringify(normalize(p36Events)) ===
+                JSON.stringify(expected.p36) &&
+              JSON.stringify(normalize(p38Events)) ===
+                JSON.stringify(expectedP38Prefix) &&
+              hooks.p42P38Authorization?.id ===
+                "p38-test-only-quarry-lumber-gather-18" &&
+              hooks.p42P38Authorization?.additionalGatherLimit === 18
+            );
+          };
+        }
+        hooks.observeJobsTrace = (event) =>
+          hooks.p38JobTrace.push(
+            configuration.p42Mode
+              ? { period: window.__EA_RUNNER__?.periods?.() ?? null, ...event }
+              : event,
+          );
         hooks.observeJobsAutomation = (phase, outcome, details) => {
           hooks.p38JobTrace.push({
             period: currentPeriod(),
@@ -848,7 +1020,7 @@ async function replay(
         const p38Enabled = configuration.p38Enabled === true;
         hooks.p38Policy = p38Enabled
           ? p38PolicyModule.createP38QuarryDiagnosticAuthorization({
-              arm: configuration.arm,
+              arm: configuration.p38PolicyArm ?? configuration.arm,
               readP36Stop() {
                 const stopped = hooks.p36PolicyEvents.find(
                   (event) =>
@@ -1022,16 +1194,28 @@ async function replay(
         policy: true,
         arm,
         p40Trace: p40TraceEnabled,
-        p38Enabled: arm !== "A",
+        p38Enabled: p42Mode || arm !== "A",
+        p38PolicyArm: p42Mode && arm === "A" ? "B" : arm,
+        p42Mode,
+        p42Enabled: p42Mode && (arm === "B" || arm === "B-repeat"),
+        p42Identity: P42_INTERVENTION_IDENTITY,
+        p42P38Authorization: P38_DIAGNOSTIC_AUTHORIZATION,
+        p42ExpectedAuthorizationHistory,
         p38PolicySource: p38PolicyBundleSource,
-        parityCapturePeriods: [...new Set([448, 688, ...extraCheckpoints])],
+        parityCapturePeriods: p42Mode
+          ? [448, 688, 719, 720, 728, 1_000]
+          : [...new Set([448, 688, ...extraCheckpoints])],
         policySource: policyBundleSource,
       },
     );
 
-    const requested = [...new Set([...checkpoints, ...extraCheckpoints])].sort(
-      (left, right) => left - right,
-    );
+    const requested = [
+      ...new Set([
+        ...checkpoints,
+        ...extraCheckpoints,
+        ...(p42Mode ? p42Checkpoints : []),
+      ]),
+    ].sort((left, right) => left - right);
     const captured = [];
     let elapsed = 0;
     let workerTransfer = null;
@@ -1110,6 +1294,34 @@ async function replay(
                   policyBackend: value.p40BuildPolicyBackend ?? null,
                 }
               : null,
+          p42:
+            value.p42Mode === true
+              ? {
+                  arm: value.p42Arm ?? null,
+                  enabled: value.p42Enabled === true,
+                  identity: value.p42Identity ?? null,
+                  authorizationHistoryMatched:
+                    value.p42AuthorizationHistoryMatched?.() ?? false,
+                  p36GatherActions: value.p42P36GatherActions ?? 0,
+                  quarryOrder: value.p42QuarryOrder ?? null,
+                  preSubstitutionBoundary:
+                    value.p42PreSubstitutionBoundary ?? null,
+                  events: value.p42Trace ?? [],
+                  appliedReservationReads:
+                    value.p42AppliedReservationReads ?? 0,
+                  ownerCycleApplied: value.p42OwnerCycleApplied === true,
+                  released: value.p42Released === true,
+                  resourceAmountReads: value.p42ResourceAmountReads ?? 0,
+                  ownerAuthorityReads: value.p42OwnerAuthorityReads ?? 0,
+                  diagnosticClockReads: value.p42DiagnosticClockReads ?? 0,
+                  synchronousMs: value.p42SynchronousMs ?? 0,
+                  traceElapsedMs: value.p42TraceElapsedMs ?? 0,
+                  traceClockUnavailable:
+                    value.p42TraceClockUnavailable === true,
+                  traceOverflow: value.p42TraceOverflow ?? 0,
+                  traceBytes: value.p42TraceBytes ?? 0,
+                }
+              : null,
         };
       }),
     ]);
@@ -1165,6 +1377,7 @@ async function replay(
         manualTransfer: workerTransfer,
       },
       p40: hooks.p40,
+      p42: hooks.p42,
       controlUsage: diagnostics.controlUsage ?? {},
       nativeCalls: (diagnostics.nativeInvocations ?? [])
         .filter(
@@ -1439,6 +1652,55 @@ try {
       entry.jobsInput ??= entry.native?.jobsInput ?? null;
       entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
     }
+  }
+  if (p42Mode) {
+    const p39EvidenceText = await readFile(
+      path.join(
+        root,
+        "experiments/p39-cross-owner-economic-coordination-evidence.json",
+      ),
+      "utf8",
+    );
+    const p39Evidence = {
+      ...JSON.parse(p39EvidenceText),
+      sha256: hash(p39EvidenceText),
+    };
+    const p42Evidence = createP42ConstructionPriorityEvidence({
+      A,
+      B,
+      BRepeat,
+      retainedP38Evidence,
+      retainedP38EvidenceSha256: hash(retainedP38EvidenceText),
+      p39Evidence,
+      checkpointParity,
+      hash,
+      canonicalJson: canonical,
+      runtimeBundleSha256,
+      policyBundleSha256,
+      p38PolicyBundleSha256,
+      replayHarnessSha256,
+      p42PluginSha256: hash(await readFile(p42PluginPath)),
+      p42PolicySha256: hash(await readFile(p42PolicyPath)),
+    });
+    await writeFile(
+      p42EvidencePath,
+      await prettier.format(JSON.stringify(p42Evidence), { parser: "json" }),
+    );
+    console.log(
+      JSON.stringify({
+        experiment: p42Evidence.experiment,
+        outcome: p42Evidence.outcome,
+        p42EvidencePath,
+        p42TraceBytes:
+          p42Evidence.construction.measuredInstrumentation.p42TraceEventBytes,
+        replayHashes: {
+          runtimeBundleSha256,
+          replayHarnessSha256,
+          p42PluginSha256: p42Evidence.replay.p42PluginSha256,
+        },
+      }),
+    );
+    process.exit(0);
   }
   const checkpoint = (arm, period) =>
     arm.checkpoints.find((entry) => entry.period === period);

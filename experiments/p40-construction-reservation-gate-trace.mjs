@@ -517,20 +517,27 @@ function instrumentCapturedBuild(source) {
   );
 }
 
+const p40Transforms = [
+  ["captured-progression-control.ts", instrumentProgressionControl],
+  ["captured-construction.ts", instrumentConstructionAdapter],
+  ["captured-cost-conflict.ts", instrumentCostConflictReader],
+  ["application/build.ts", instrumentBuildApplication],
+  ["captured-build.ts", instrumentCapturedBuild],
+];
+
+export function applyP40ConstructionTraceInstrumentation(suffix, source) {
+  return (
+    p40Transforms.find(([entry]) => entry === suffix)?.[1](source) ?? source
+  );
+}
+
 export function createP40ConstructionTracePlugin() {
-  const transforms = [
-    ["captured-progression-control.ts", instrumentProgressionControl],
-    ["captured-construction.ts", instrumentConstructionAdapter],
-    ["captured-cost-conflict.ts", instrumentCostConflictReader],
-    ["application/build.ts", instrumentBuildApplication],
-    ["captured-build.ts", instrumentCapturedBuild],
-  ];
   return {
     name: "p40-test-only-construction-reservation-trace",
     setup(build) {
       build.onLoad({ filter: /\.ts$/ }, async (args) => {
         const normalized = args.path.replaceAll("\\", "/");
-        const entry = transforms.find(([suffix]) =>
+        const entry = p40Transforms.find(([suffix]) =>
           normalized.endsWith(suffix),
         );
         if (entry === undefined) return undefined;
