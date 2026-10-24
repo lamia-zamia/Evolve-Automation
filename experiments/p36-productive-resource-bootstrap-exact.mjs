@@ -446,18 +446,20 @@ async function replay(arm, extraCheckpoints = []) {
             perTargetEpisode: 80,
             totalEpisode: 140,
           };
-        const currentPeriod = () =>
-          window.__EA_RUNNER__?.periods?.() ?? null;
+        const currentPeriod = () => window.__EA_RUNNER__?.periods?.() ?? null;
         const nativeTargetReady = (expectedTarget) => {
           const published = hooks.constructionPublicationTarget;
           if (published?.name !== expectedTarget) return false;
           const root =
-            window[Symbol.for("evolve-automation.page-capture")]
-              ?.rootState.readRoot();
+            window[
+              Symbol.for("evolve-automation.page-capture")
+            ]?.rootState.readRoot();
           return Object.entries(published.cost ?? {})
             .filter(([resourceId]) => !["Lumber", "Stone"].includes(resourceId))
-            .every(([resourceId, amount]) =>
-              Number(root?.resource?.[resourceId]?.amount ?? 0) >= Number(amount),
+            .every(
+              ([resourceId, amount]) =>
+                Number(root?.resource?.[resourceId]?.amount ?? 0) >=
+                Number(amount),
             );
         };
         if (!configuration.policy) {
@@ -615,8 +617,9 @@ async function replay(arm, extraCheckpoints = []) {
           get enabled() {
             const stage = hooks.p36Policy.snapshot().stage;
             const root =
-              window[Symbol.for("evolve-automation.page-capture")]
-                ?.rootState.readRoot();
+              window[
+                Symbol.for("evolve-automation.page-capture")
+              ]?.rootState.readRoot();
             const shedPurchased = Number(root?.city?.shed?.count ?? 0) >= 1;
             const expectedTarget =
               stage === "shed" && !shedPurchased
@@ -626,8 +629,7 @@ async function replay(arm, extraCheckpoints = []) {
                   ? "city-rock_quarry"
                   : undefined;
             return (
-              expectedTarget !== undefined &&
-              nativeTargetReady(expectedTarget)
+              expectedTarget !== undefined && nativeTargetReady(expectedTarget)
             );
           },
           onRejected(event) {
