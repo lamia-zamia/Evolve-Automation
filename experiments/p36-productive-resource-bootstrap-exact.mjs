@@ -118,18 +118,6 @@ const metricPlugin = {
                       : undefined;`,
         "fresh native price probe inside validation fence",
       );
-      replaceOnce(
-        `          if (demandReady === true) {
-            runPhase("buildingAlwaysClick", () => gatherResources());
-          }`,
-        `          if (demandReady === true) {
-            const p36Hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
-            const p36Capture = readProperty(p36Hooks, "captureP36NativePreGatherBoundary");
-            if (typeof p36Capture === "function") Reflect.apply(p36Capture, p36Hooks, []);
-            runPhase("buildingAlwaysClick", () => gatherResources());
-          }`,
-        "read-only pre-Gather parity capture",
-      );
       return { contents: source, loader: "ts" };
     });
   },
@@ -458,7 +446,38 @@ async function replay(arm, extraCheckpoints = []) {
             perTargetEpisode: 80,
             totalEpisode: 140,
           };
-        if (!configuration.policy) return;
+        const currentPeriod = () =>
+          window.__EA_RUNNER__?.periods?.() ?? null;
+        const nativeTargetReady = (expectedTarget) => {
+          const published = hooks.constructionPublicationTarget;
+          if (published?.name !== expectedTarget) return false;
+          const root =
+            window[Symbol.for("evolve-automation.page-capture")]
+              ?.rootState.readRoot();
+          return Object.entries(published.cost ?? {})
+            .filter(([resourceId]) => !["Lumber", "Stone"].includes(resourceId))
+            .every(([resourceId, amount]) =>
+              Number(root?.resource?.[resourceId]?.amount ?? 0) >= Number(amount),
+            );
+        };
+        if (!configuration.policy) {
+          // Read-only exact-boundary probe. The native Construction owner runs
+          // its regular complete authority checks, then this callback records
+          // state and returns no allocation, so no Gather action is authorized.
+          gatherIntervention.constructionAllocation = {
+            get enabled() {
+              return (
+                hooks.p36ParityCapturePeriods.includes(currentPeriod()) &&
+                nativeTargetReady("city-shed")
+              );
+            },
+            authorize() {
+              hooks.captureP36NativePreGatherBoundary();
+              return undefined;
+            },
+          };
+          return;
+        }
         const p36PolicyModule = new Function(
           `${configuration.policySource}\nreturn __EA_P36_TEST_POLICY__;`,
         )();
@@ -538,6 +557,7 @@ async function replay(arm, extraCheckpoints = []) {
             event.type === "authorized" &&
             hooks.p36FirstAuthorization === null
           ) {
+            hooks.captureP36NativePreGatherBoundary();
             const diagnostics = window.__EA_RUNNER__?.diagnostics?.() ?? {};
             const pageCapture =
               window[Symbol.for("evolve-automation.page-capture")];
@@ -592,7 +612,24 @@ async function replay(arm, extraCheckpoints = []) {
           onEvent: recordPolicyEvent,
         });
         gatherIntervention.constructionAllocation = {
-          enabled: true,
+          get enabled() {
+            const stage = hooks.p36Policy.snapshot().stage;
+            const root =
+              window[Symbol.for("evolve-automation.page-capture")]
+                ?.rootState.readRoot();
+            const shedPurchased = Number(root?.city?.shed?.count ?? 0) >= 1;
+            const expectedTarget =
+              stage === "shed" && !shedPurchased
+                ? "city-shed"
+                : (stage === "quarry" || shedPurchased) &&
+                    Number(root?.city?.rock_quarry?.count ?? 0) === 0
+                  ? "city-rock_quarry"
+                  : undefined;
+            return (
+              expectedTarget !== undefined &&
+              nativeTargetReady(expectedTarget)
+            );
+          },
           onRejected(event) {
             hooks.p36Policy.onRejected(event);
           },
