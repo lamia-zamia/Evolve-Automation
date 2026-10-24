@@ -209,4 +209,31 @@ assert.equal(
   "shortage-exceeds-remaining-budget",
 );
 
+const unaffordableMoneyPolicy = createP36BootstrapPolicy();
+const moneyShort = {
+  ...unspentShed(),
+  stock: { Money: 74, Lumber: 20, Stone: 0 },
+};
+assert.equal(
+  unaffordableMoneyPolicy.authorize(moneyShort, unopenedCity, 448),
+  undefined,
+  "the test policy does not gather materials before Money and other costs are affordable",
+);
+assert.equal(unaffordableMoneyPolicy.snapshot().totalClicks, 0);
+assert.equal(unaffordableMoneyPolicy.snapshot().stoppedReason, null);
+
+const liveMoneyPolicy = createP36BootstrapPolicy();
+const liveMoneyRoot = {
+  ...unopenedCity,
+  resource: { Money: { amount: 100 } },
+};
+const liveMoneyContract = unspentShed();
+assert.ok(liveMoneyPolicy.authorize(liveMoneyContract, liveMoneyRoot, 448));
+liveMoneyRoot.resource.Money.amount = 0;
+assert.equal(
+  liveMoneyPolicy.isCurrent(liveMoneyContract, liveMoneyRoot),
+  false,
+  "each pre-action validation rechecks live non-gatherable affordability",
+);
+
 console.log("P36 productive-resource bootstrap policy limits and stops ok");
