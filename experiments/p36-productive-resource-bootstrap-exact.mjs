@@ -1435,7 +1435,7 @@ try {
         nativePriority: settings.job_p_quarry_worker,
         farmerPriority: settings.job_p_farmer,
         housingHeadroomAtP19: 0,
-        path: "native autoJobs may transfer the third resident while retaining at least two Farmers; no extra housing or manual job action is allowed",
+        path: "P19 starts with no housing headroom and all three residents as Farmers. In C, native Basic Housing at p672 enables population 4 by p688; all four remain Farmers because Quarry is still unaffordable, so Quarry Worker assignment and its Food tradeoff are not observed.",
         sustainableFoodMustBeProvenInReplay: true,
       },
       exactMaterialClickSum: 140,
@@ -1580,6 +1580,11 @@ try {
       quarryNativeWorkerAssigned: Boolean(
         treatmentFinal.state.jobs.quarry_worker,
       ),
+      incidentalNativeHousingPopulationGain:
+        populationAndJobs.length > 0 &&
+        treatmentFinal.state.population > baselineFinal.state.population,
+      classificationRationale:
+        "C is selected because the native Quarry purchase is blocked by the fixed stage and total budgets; the native housing/population gain is recorded as a side effect, with no Quarry Worker or Lumber/Stone production established.",
       foodSustainable: sustainableFood,
       noStarvation,
       preservedProductiveCapacity: downstreamProgression,
