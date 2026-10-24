@@ -1,0 +1,561 @@
+{
+  "experiment": "P38 captured and hypothetical Native Jobs planner audit",
+  "provenance": {
+    "capturedInput": "genuine native P688 four-resident input while Quarry Worker remains locked",
+    "hypotheticalInput": "pure formula catalog projection; Quarry Worker unlock, row fields and smart maximum were not natively observed",
+    "priority": "captured settings order Farmer 5 before Quarry Worker 8; hypothetical row inserted after Farmer"
+  },
+  "capturedP688Input": {
+    "craftOnly": false,
+    "hunterActsAsUnemployed": false,
+    "autoCraftsmen": false,
+    "autoCraftWithoutBuilding": false,
+    "craftsmenMode": "other",
+    "foundryWeighting": "other",
+    "manageServants": true,
+    "setDefault": true,
+    "servantModifier": 1,
+    "servantsMaximum": 0,
+    "skilledServantsMaximum": 0,
+    "craftsmenMaximum": 0,
+    "minimumDefault": 0,
+    "reserveMiner": false,
+    "defaultJobToken": 3,
+    "hunterToken": 1,
+    "farmerToken": 3,
+    "lumberjackToken": 4,
+    "quarryToken": 5,
+    "crystalMinerToken": 6,
+    "scavengerToken": 7,
+    "foragerToken": 2,
+    "entertainerToken": 19,
+    "minerToken": 13,
+    "population": 4,
+    "craftDebug": false,
+    "lastCraftWinner": null,
+    "authority": {
+      "enabled": false,
+      "current": 0,
+      "morale": 0,
+      "moralePotential": 0,
+      "moraleMaximum": 0,
+      "moraleCeiling": null,
+      "entertainerMorale": 0,
+      "superstarMorale": 0,
+      "previousCap": null,
+      "debug": false
+    },
+    "crafting": [],
+    "available": true,
+    "jobs": [
+      {
+        "token": 0,
+        "id": "unemployed",
+        "kind": "other",
+        "workers": 0,
+        "servants": 0,
+        "count": 0,
+        "maximum": -1,
+        "managed": true,
+        "unlocked": true,
+        "smart": false,
+        "crafting": false,
+        "serves": false,
+        "split": false,
+        "isDefault": false,
+        "breakpoints": [0, 0, 0],
+        "uncappedBreakpoints": [0, 0, 0],
+        "smartMaximum": null,
+        "farmerMinimum": null,
+        "storageBackedMinimum": null,
+        "demonicLumber": false,
+        "warlordMiner": false
+      },
+      {
+        "token": 3,
+        "id": "farmer",
+        "kind": "farmer",
+        "workers": 4,
+        "servants": 0,
+        "count": 4,
+        "maximum": -1,
+        "managed": true,
+        "unlocked": true,
+        "smart": true,
+        "crafting": false,
+        "serves": false,
+        "split": false,
+        "isDefault": true,
+        "breakpoints": [9007199254740991, 9007199254740991, 9007199254740991],
+        "uncappedBreakpoints": [
+          9007199254740991, 9007199254740991, 9007199254740991
+        ],
+        "smartMaximum": 2,
+        "farmerMinimum": 2,
+        "storageBackedMinimum": null,
+        "demonicLumber": false,
+        "warlordMiner": false
+      }
+    ],
+    "splitEntries": [
+      { "jobToken": 4, "weighting": 50, "breakpoints": [4, 10, 0] },
+      { "jobToken": 5, "weighting": 50, "breakpoints": [4, 10, 0] },
+      { "jobToken": 6, "weighting": 50, "breakpoints": [2, 5, 0] },
+      { "jobToken": 7, "weighting": 5, "breakpoints": [0, 0, 0] },
+      { "jobToken": 2, "weighting": 50, "breakpoints": [4, 10, 0] }
+    ],
+    "defaultPreference": [
+      {
+        "jobToken": 5,
+        "allocationToken": 5,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 4,
+        "allocationToken": 4,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 6,
+        "allocationToken": 6,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 7,
+        "allocationToken": 7,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 2,
+        "allocationToken": 2,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 1,
+        "allocationToken": 1,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 3,
+        "allocationToken": 3,
+        "requirement": "managed",
+        "managed": true,
+        "unlocked": true
+      },
+      {
+        "jobToken": 9,
+        "allocationToken": 9,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 7,
+        "allocationToken": 7,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 6,
+        "allocationToken": 6,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 5,
+        "allocationToken": 5,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 4,
+        "allocationToken": 4,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 2,
+        "allocationToken": 2,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 1,
+        "allocationToken": 1,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 0,
+        "allocationToken": 0,
+        "requirement": "unlocked",
+        "managed": true,
+        "unlocked": true
+      }
+    ]
+  },
+  "capturedP688Planner": {
+    "label": "captured p688 four-resident Jobs state",
+    "available": true,
+    "defaultJobId": "farmer",
+    "population": 4,
+    "farmer": {
+      "workers": 4,
+      "minimum": 2,
+      "maximum": -1,
+      "smartMaximum": 2,
+      "managed": true,
+      "breakpoints": [9007199254740991, 9007199254740991, 9007199254740991],
+      "uncappedBreakpoints": [
+        9007199254740991, 9007199254740991, 9007199254740991
+      ]
+    },
+    "quarryWorker": null,
+    "existingAssignments": { "unemployed": 0, "farmer": 4 },
+    "predictedAssignments": { "unemployed": 0, "farmer": 4 },
+    "selectedDefaultJobId": "farmer",
+    "decision": {
+      "kind": "assign-jobs",
+      "assignments": [
+        { "jobToken": 0, "workers": 0, "servants": 0 },
+        { "jobToken": 3, "workers": 4, "servants": 0 }
+      ],
+      "selectedDefaultToken": 3,
+      "moraleIncomeAdjusted": false,
+      "ironIncomeAdjusted": false,
+      "maximumSpaceMiners": 0,
+      "lastPopulationCount": 4,
+      "lastFarmerCount": 4,
+      "authorityEntertainerCap": null,
+      "clearAuthorityEntertainerCap": true,
+      "craftWinner": null,
+      "craftDebugMessage": null,
+      "authorityDebugMessage": null
+    }
+  },
+  "capturedSettings": {
+    "autoJobs": true,
+    "jobSetDefault": true,
+    "farmerEnabled": true,
+    "quarryWorkerEnabled": true,
+    "farmerPriority": 5,
+    "quarryWorkerPriority": 8,
+    "farmerBreakpoints": [-1, -1, -1],
+    "quarryWorkerBreakpoints": [4, 10, 0]
+  },
+  "hypotheticalUnlockedInput": {
+    "craftOnly": false,
+    "hunterActsAsUnemployed": false,
+    "autoCraftsmen": false,
+    "autoCraftWithoutBuilding": false,
+    "craftsmenMode": "other",
+    "foundryWeighting": "other",
+    "manageServants": true,
+    "setDefault": true,
+    "servantModifier": 1,
+    "servantsMaximum": 0,
+    "skilledServantsMaximum": 0,
+    "craftsmenMaximum": 0,
+    "minimumDefault": 0,
+    "reserveMiner": false,
+    "defaultJobToken": 3,
+    "hunterToken": 1,
+    "farmerToken": 3,
+    "lumberjackToken": 4,
+    "quarryToken": 5,
+    "crystalMinerToken": 6,
+    "scavengerToken": 7,
+    "foragerToken": 2,
+    "entertainerToken": 19,
+    "minerToken": 13,
+    "population": 4,
+    "craftDebug": false,
+    "lastCraftWinner": null,
+    "authority": {
+      "enabled": false,
+      "current": 0,
+      "morale": 0,
+      "moralePotential": 0,
+      "moraleMaximum": 0,
+      "moraleCeiling": null,
+      "entertainerMorale": 0,
+      "superstarMorale": 0,
+      "previousCap": null,
+      "debug": false
+    },
+    "crafting": [],
+    "available": true,
+    "jobs": [
+      {
+        "token": 0,
+        "id": "unemployed",
+        "kind": "other",
+        "workers": 0,
+        "servants": 0,
+        "count": 0,
+        "maximum": -1,
+        "managed": true,
+        "unlocked": true,
+        "smart": false,
+        "crafting": false,
+        "serves": false,
+        "split": false,
+        "isDefault": false,
+        "breakpoints": [0, 0, 0],
+        "uncappedBreakpoints": [0, 0, 0],
+        "smartMaximum": null,
+        "farmerMinimum": null,
+        "storageBackedMinimum": null,
+        "demonicLumber": false,
+        "warlordMiner": false
+      },
+      {
+        "token": 3,
+        "id": "farmer",
+        "kind": "farmer",
+        "workers": 4,
+        "servants": 0,
+        "count": 4,
+        "maximum": -1,
+        "managed": true,
+        "unlocked": true,
+        "smart": true,
+        "crafting": false,
+        "serves": false,
+        "split": false,
+        "isDefault": true,
+        "breakpoints": [9007199254740991, 9007199254740991, 9007199254740991],
+        "uncappedBreakpoints": [
+          9007199254740991, 9007199254740991, 9007199254740991
+        ],
+        "smartMaximum": 2,
+        "farmerMinimum": 2,
+        "storageBackedMinimum": null,
+        "demonicLumber": false,
+        "warlordMiner": false
+      },
+      {
+        "token": 5,
+        "id": "quarry_worker",
+        "kind": "quarry-worker",
+        "workers": 0,
+        "servants": 0,
+        "count": 0,
+        "maximum": -1,
+        "managed": true,
+        "unlocked": true,
+        "smart": true,
+        "crafting": false,
+        "serves": false,
+        "split": true,
+        "isDefault": false,
+        "breakpoints": [4, 10, 0],
+        "uncappedBreakpoints": [4, 10, 0],
+        "smartMaximum": 9007199254740991,
+        "farmerMinimum": null,
+        "storageBackedMinimum": null,
+        "demonicLumber": false,
+        "warlordMiner": false
+      }
+    ],
+    "splitEntries": [
+      { "jobToken": 4, "weighting": 50, "breakpoints": [4, 10, 0] },
+      { "jobToken": 5, "weighting": 50, "breakpoints": [4, 10, 0] },
+      { "jobToken": 6, "weighting": 50, "breakpoints": [2, 5, 0] },
+      { "jobToken": 7, "weighting": 5, "breakpoints": [0, 0, 0] },
+      { "jobToken": 2, "weighting": 50, "breakpoints": [4, 10, 0] }
+    ],
+    "defaultPreference": [
+      {
+        "jobToken": 5,
+        "allocationToken": 5,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 4,
+        "allocationToken": 4,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 6,
+        "allocationToken": 6,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 7,
+        "allocationToken": 7,
+        "requirement": "managed-with-workers",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 2,
+        "allocationToken": 2,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 1,
+        "allocationToken": 1,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 3,
+        "allocationToken": 3,
+        "requirement": "managed",
+        "managed": true,
+        "unlocked": true
+      },
+      {
+        "jobToken": 9,
+        "allocationToken": 9,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 7,
+        "allocationToken": 7,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 6,
+        "allocationToken": 6,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 5,
+        "allocationToken": 5,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 4,
+        "allocationToken": 4,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 2,
+        "allocationToken": 2,
+        "requirement": "unlocked",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 1,
+        "allocationToken": 1,
+        "requirement": "managed",
+        "managed": false,
+        "unlocked": false
+      },
+      {
+        "jobToken": 0,
+        "allocationToken": 0,
+        "requirement": "unlocked",
+        "managed": true,
+        "unlocked": true
+      }
+    ]
+  },
+  "hypotheticalUnlockedPlanner": {
+    "label": "hypothetical unlocked-Quarry catalog applied to captured p688 economy",
+    "available": true,
+    "defaultJobId": "farmer",
+    "population": 4,
+    "farmer": {
+      "workers": 4,
+      "minimum": 2,
+      "maximum": -1,
+      "smartMaximum": 2,
+      "managed": true,
+      "breakpoints": [9007199254740991, 9007199254740991, 9007199254740991],
+      "uncappedBreakpoints": [
+        9007199254740991, 9007199254740991, 9007199254740991
+      ]
+    },
+    "quarryWorker": {
+      "workers": 0,
+      "maximum": -1,
+      "smartMaximum": 9007199254740991,
+      "managed": true,
+      "breakpoints": [4, 10, 0],
+      "uncappedBreakpoints": [4, 10, 0]
+    },
+    "existingAssignments": { "unemployed": 0, "farmer": 4, "quarry_worker": 0 },
+    "predictedAssignments": {
+      "unemployed": 0,
+      "farmer": 2,
+      "quarry_worker": 2
+    },
+    "selectedDefaultJobId": "farmer",
+    "decision": {
+      "kind": "assign-jobs",
+      "assignments": [
+        { "jobToken": 0, "workers": 0, "servants": 0 },
+        { "jobToken": 3, "workers": 2, "servants": 0 },
+        { "jobToken": 5, "workers": 2, "servants": 0 }
+      ],
+      "selectedDefaultToken": 3,
+      "moraleIncomeAdjusted": false,
+      "ironIncomeAdjusted": false,
+      "maximumSpaceMiners": 0,
+      "lastPopulationCount": 4,
+      "lastFarmerCount": 2,
+      "authorityEntertainerCap": null,
+      "clearAuthorityEntertainerCap": true,
+      "craftWinner": null,
+      "craftDebugMessage": null,
+      "authorityDebugMessage": null
+    },
+    "nativeObservation": false,
+    "catalogSource": {
+      "label": "hypothetical unlock; not a native post-purchase observation",
+      "tokenAndKind": "captured-job-catalog canonical quarry_worker token/kind",
+      "managedPriorityOrder": "inserted after Farmer using captured settings priority 5 < 8",
+      "breakpoints": "captured p688 split-entry settings for the locked Quarry Worker",
+      "maximum": "hypothetical unlimited native maximum (-1)",
+      "smartMaximum": "optimistic unbounded cap; pure planner result is a formula projection",
+      "remainingFields": "zero workers/count, managed/unlocked/smart/split flags, and no servant/crafting capacity are hypothetical catalog fields"
+    }
+  },
+  "livePostPurchasePlanner": {
+    "label": "live ordinary Jobs planner input after native Quarry unlock",
+    "available": false,
+    "reason": "no native Quarry purchase"
+  },
+  "physicalManualTransfer": "not reached: native Construction did not purchase Quarry"
+}
