@@ -16,11 +16,7 @@ import type { GameResourceSource } from "../../ports/game-world-state.ts";
 import { ANYWHERE_POOL } from "./captured-affordability.ts";
 
 export type CapturedCostConflict =
-  | {
-      readonly status: "none";
-      /** Diagnostic-only detail; legacy selection still treats this as no conflict. */
-      readonly evidence?: "unavailable";
-    }
+  | { readonly status: "none" }
   | {
       /** A commitment exists that could not be priced, so spending is not known to be safe. */
       readonly status: "unavailable";
@@ -99,8 +95,7 @@ export function createCapturedCostConflictReader(
         wanted,
         pool === undefined ? undefined : { pool },
       );
-      if (held === undefined)
-        return Object.freeze({ status: "none", evidence: "unavailable" });
+      if (held === undefined) return UNAVAILABLE;
       const holdings: Record<string, CostConflictResource> = {};
       for (const id of wanted) {
         // The game's display names are localized strings with no captured route, so a reservation

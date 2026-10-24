@@ -6586,8 +6586,7 @@
           wanted,
           pool === void 0 ? void 0 : { pool }
         );
-        if (held === void 0)
-          return Object.freeze({ status: "none", evidence: "unavailable" });
+        if (held === void 0) return UNAVAILABLE2;
         let holdings = {};
         for (let id of wanted)
           holdings[id] = Object.freeze({
