@@ -890,7 +890,9 @@ function compareTreatmentCheckpointToBaseline(checkpoint, baselineCheckpoint) {
             baseline: baselineCheckpoint.state.populationCapacity,
             treatment: checkpoint.state.populationCapacity,
           },
-    stocks: resources,
+    stocks: Object.values(resources).some((change) => change !== null)
+      ? resources
+      : null,
     buildings:
       canonical(checkpoint.state.buildings) ===
       canonical(baselineCheckpoint.state.buildings)
