@@ -53,6 +53,9 @@ const checkpoints = [
 ];
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => JSON.stringify(value);
+const replayHarnessSha256 = hash(
+  await readFile(fileURLToPath(import.meta.url)),
+);
 
 const [fixtureText, settingsText, gameBytes, metadata] = await Promise.all([
   readFile(fixturePath, "utf8"),
@@ -60,12 +63,6 @@ const [fixtureText, settingsText, gameBytes, metadata] = await Promise.all([
   readFile(gamePath),
   readFile(metadataPath, "utf8"),
 ]);
-let previousBundleBytes;
-try {
-  previousBundleBytes = await readFile(bundlePath);
-} catch {
-  previousBundleBytes = undefined;
-}
 const settings = JSON.parse(settingsText);
 assert.equal(hash(fixtureText), fixtureSha256);
 assert.equal(hash(gameBytes), pinnedGameSha256);
@@ -185,7 +182,7 @@ window.__EA_TEST_HOOKS__ = {
             (entry.method === "action" &&
               (/^(undefined-food|city-lumber|undefined-stone)$/.test(
                 entry.elementId ?? "",
-              ) || /^(tech-|city-)/.test(entry.elementId ?? "")),
+              ) || /^(tech-|city-)/.test(entry.elementId ?? ""))),
         )
         .map(({ period: callPeriod, elementId, method }) => ({
           period: callPeriod,
@@ -230,22 +227,18 @@ const policyBundle = await esbuild.build({
   target: ["esnext"],
   minifySyntax: true,
 });
+const policyBundleSource = Buffer.from(
+  policyBundle.outputFiles[0].contents,
+).toString("utf8");
 const bundleBytes = Buffer.concat([
   Buffer.from(mainBundle.outputFiles[0].contents),
   Buffer.from("\n;\n"),
   Buffer.from(policyBundle.outputFiles[0].contents),
-  Buffer.from(
-    "\n;globalThis.window.__EA_TEST_HOOKS__.createP36BootstrapPolicy = __EA_P36_TEST_POLICY__.createP36BootstrapPolicy;",
-  ),
 ]);
 const runtimeBundleSha256 = hash(mainBundle.outputFiles[0].contents);
 const policyBundleSha256 = hash(policyBundle.outputFiles[0].contents);
-const sameRuntimeAsPreviousBundle =
-  previousBundleBytes !== undefined &&
-  previousBundleBytes
-    .subarray(0, mainBundle.outputFiles[0].contents.length)
-    .equals(Buffer.from(mainBundle.outputFiles[0].contents));
 await writeFile(bundlePath, bundleBytes);
+execFileSync(process.execPath, ["--check", bundlePath]);
 const bundleSha256 = hash(bundleBytes);
 
 const runner = await createChromiumRunner({ game: gamePath });
@@ -427,7 +420,7 @@ async function replay(arm, extraCheckpoints = []) {
         hooks.p36FirstAuthorization = null;
         hooks.p36ParityCapturePeriods =
           configuration.parityCapturePeriods ?? [];
-        hooks.gatherIntervention = {
+        const gatherIntervention = {
           civilizationBootstrap: {
             authorized: true,
             authorizationId: "p19-human-candidate-1",
@@ -446,6 +439,7 @@ async function replay(arm, extraCheckpoints = []) {
             });
           },
         };
+        hooks.gatherIntervention = gatherIntervention;
         if (configuration.shadow)
           hooks.constructionAllocationShadowBudgets = {
             perCycle: 5,
@@ -453,6 +447,9 @@ async function replay(arm, extraCheckpoints = []) {
             totalEpisode: 140,
           };
         if (!configuration.policy) return;
+        const p36PolicyModule = new Function(
+          `${configuration.policySource}\nreturn __EA_P36_TEST_POLICY__;`,
+        )();
 
         const snapshotNative = () => {
           const pageCapture =
@@ -579,10 +576,10 @@ async function replay(arm, extraCheckpoints = []) {
             record.state = snapshotNative();
           hooks.p36PolicyEvents.push(record);
         };
-        hooks.p36Policy = hooks.createP36BootstrapPolicy({
+        hooks.p36Policy = p36PolicyModule.createP36BootstrapPolicy({
           onEvent: recordPolicyEvent,
         });
-        hooks.gatherIntervention.constructionAllocation = {
+        gatherIntervention.constructionAllocation = {
           enabled: true,
           onRejected(event) {
             hooks.p36Policy.onRejected(event);
@@ -681,6 +678,9 @@ async function replay(arm, extraCheckpoints = []) {
         shadow: arm === "B",
         policy: arm === "C" || arm === "C-repeat",
         parityCapturePeriods: [...new Set([448, ...extraCheckpoints])],
+        ...(arm === "C" || arm === "C-repeat"
+          ? { policySource: policyBundleSource }
+          : {}),
       },
     );
 
@@ -986,20 +986,21 @@ try {
     bundleSha256,
     runtimeBundleSha256,
     policyBundleSha256,
+    replayHarnessSha256,
     arms: {},
   };
   if (process.argv.includes("--reuse")) {
     try {
       const retained = JSON.parse(await readFile(interimPath, "utf8"));
       if (
-        retained.bundleSha256 === bundleSha256 ||
-        retained.runtimeBundleSha256 === runtimeBundleSha256 ||
-        (retained.runtimeBundleSha256 === undefined &&
-          sameRuntimeAsPreviousBundle)
+        retained.replayHarnessSha256 === replayHarnessSha256 &&
+        (retained.bundleSha256 === bundleSha256 ||
+          retained.runtimeBundleSha256 === runtimeBundleSha256)
       )
         interim = {
           ...retained,
           runtimeBundleSha256,
+          replayHarnessSha256,
           ...(retained.bundleSha256 === bundleSha256
             ? { policyBundleSha256 }
             : {}),
@@ -1010,10 +1011,11 @@ try {
   }
   const replayOrReuse = async (arm, extraCheckpoints = []) => {
     const compatibleReuse =
-      arm === "A" || arm === "B"
+      interim.replayHarnessSha256 === replayHarnessSha256 &&
+      (arm === "A" || arm === "B"
         ? interim.runtimeBundleSha256 === runtimeBundleSha256
         : interim.runtimeBundleSha256 === runtimeBundleSha256 &&
-          interim.policyBundleSha256 === policyBundleSha256;
+          interim.policyBundleSha256 === policyBundleSha256);
     if (
       process.argv.includes("--reuse") &&
       compatibleReuse &&
@@ -1024,6 +1026,7 @@ try {
     interim.bundleSha256 = bundleSha256;
     interim.runtimeBundleSha256 = runtimeBundleSha256;
     interim.policyBundleSha256 = policyBundleSha256;
+    interim.replayHarnessSha256 = replayHarnessSha256;
     interim.arms[arm] = result;
     await writeFile(
       interimPath,
@@ -1301,6 +1304,7 @@ try {
     seed,
     epoch,
     testBundleSha256: bundleSha256,
+    replayHarnessSha256,
     debugExposeSet: false,
     debugGlobalsUsed: false,
     provenance: {
