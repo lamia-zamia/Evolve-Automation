@@ -91,8 +91,7 @@ const unreadableHoldingsReader = createCapturedCostConflictReader({
   },
 });
 assert.deepEqual(unreadableHoldingsReader.evaluate({ Money: 20 }), {
-  status: "none",
-  evidence: "unavailable",
+  status: "unavailable",
 });
 
 // Regional commitments only contend with the action's pool. The holdings sample must use that
