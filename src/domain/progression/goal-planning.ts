@@ -12,7 +12,10 @@ export type GoalScope = "run" | "account" | "campaign";
 export type GoalStatus =
   "satisfied" | "unsatisfied" | "blocked" | "unavailable";
 export type GoalProvenance =
-  "player-selected" | "native-prerequisite" | "derived-requirement";
+  | "player-selected"
+  | "diagnostic-objective"
+  | "native-prerequisite"
+  | "derived-requirement";
 
 export interface GoalActionIdentity {
   readonly family: string;
