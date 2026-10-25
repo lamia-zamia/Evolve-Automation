@@ -4,6 +4,7 @@ import {
   createCapturedFullJobsAutomation,
   createCapturedOrdinaryJobsAutomation,
 } from "../../../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
+import { runJobsAutomation } from "../../../src/application/jobs.ts";
 import {
   createCapturedJobCatalogReader,
   readCapturedJobCountSnapshot,
@@ -1999,6 +2000,130 @@ assert.equal(
   "none",
 );
 assert.equal(allocationDiagnosticB.observation.nativeRootExposed, false);
+
+const makeOrdinaryOnlyAllocationDiagnosticRun = (request) => {
+  const state = {
+    civic: {
+      d_job: "unemployed",
+      unemployed: {
+        job: "unemployed",
+        assigned: 1,
+        workers: 1,
+        max: 0,
+        display: true,
+      },
+      farmer: {
+        job: "farmer",
+        assigned: 0,
+        workers: 0,
+        max: -1,
+        display: true,
+      },
+    },
+    race: { species: "elven" },
+    resource: { elven: { amount: 1, max: 4 } },
+  };
+  const nativeCalls = [];
+  const events = [];
+  let readerCalls = 0;
+  let plannedInput;
+  const automation = createCapturedOrdinaryJobsAutomation({
+    rootState: { readRoot: () => state },
+    controls: {
+      capturedElementIds: () => ["civ-unemployed", "civ-farmer"],
+      resolve: (elementId) =>
+        elementId.startsWith("civ-")
+          ? {
+              elementId,
+              generation: 1,
+              methods: ["add", "sub", "setDefault"],
+            }
+          : undefined,
+      invoke: (handle, method, args = []) => {
+        nativeCalls.push({ elementId: handle.elementId, method, args });
+        if (method === "setDefault") {
+          state.civic.d_job = args[0];
+        } else {
+          const job = state.civic[handle.elementId.slice("civ-".length)];
+          job.workers += method === "add" ? 1 : -1;
+          job.assigned = job.workers;
+        }
+        return { ok: true, value: undefined };
+      },
+    },
+    readSettings: () => ({
+      job_unemployed: true,
+      job_farmer: true,
+      jobSetDefault: true,
+      ...resetBreakpoints,
+    }),
+    readTestAllocationDiagnosticRequest: () => request,
+    readTestWorkCycleIdentity: () => 901,
+    nowTestMs: () => performance.now(),
+    onTestAllocationDiagnosticAdmission: (event) => events.push(event),
+  });
+  const reader = {
+    readCycle(craftOnly) {
+      readerCalls += 1;
+      plannedInput = automation.reader.readCycle(craftOnly);
+      return plannedInput;
+    },
+  };
+  const outcome = runJobsAutomation(
+    { reader, executor: automation.executor },
+    false,
+  );
+  return { state, nativeCalls, events, readerCalls, plannedInput, outcome };
+};
+const ordinaryOnlyRequest = {
+  ...diagnosticOnlyRequest,
+  requestId: "fixture:p49:ordinary-jobs:1",
+};
+const ordinaryOnlyA = makeOrdinaryOnlyAllocationDiagnosticRun(undefined);
+const ordinaryOnlyB =
+  makeOrdinaryOnlyAllocationDiagnosticRun(ordinaryOnlyRequest);
+const ordinaryOnlyBRepeat =
+  makeOrdinaryOnlyAllocationDiagnosticRun(ordinaryOnlyRequest);
+for (const run of [ordinaryOnlyA, ordinaryOnlyB, ordinaryOnlyBRepeat]) {
+  assert.equal(
+    run.readerCalls,
+    1,
+    "ordinary owner sampling remains single-read",
+  );
+  assert.equal(
+    run.events.length,
+    1,
+    "one observation belongs to the owner cycle",
+  );
+  assert.equal(run.outcome.status, "succeeded");
+}
+assert.deepEqual(ordinaryOnlyB.nativeCalls, ordinaryOnlyA.nativeCalls);
+assert.deepEqual(ordinaryOnlyBRepeat.nativeCalls, ordinaryOnlyA.nativeCalls);
+assert.deepEqual(ordinaryOnlyB.state, ordinaryOnlyA.state);
+assert.deepEqual(ordinaryOnlyBRepeat.state, ordinaryOnlyA.state);
+assert.equal(ordinaryOnlyA.events[0].admission.status, "inactive");
+assert.equal(ordinaryOnlyA.events[0].admissionEvaluations, 0);
+assert.equal("evidence" in ordinaryOnlyA.events[0], false);
+for (const run of [ordinaryOnlyB, ordinaryOnlyBRepeat]) {
+  assert.equal(run.events[0].admission.status, "admitted-for-observation");
+  assert.equal(run.events[0].evidence.ownerScope, "ordinary-jobs-only");
+  assert.equal(run.events[0].evidence.jobsFoundryFreshness, "unavailable");
+  assert.equal(run.events[0].evidence.foundryJobs, null);
+  assert.equal(run.events[0].evidence.foundryCrafts, null);
+  assert.equal(run.events[0].evidence.foundryWorkerPool, null);
+  assert.equal(run.events[0].evidence.population, run.plannedInput.population);
+  assert.equal(run.events[0].evidence.executionAuthority, "none");
+  assert.equal(run.events[0].controlResolutionReadsDuringObservation, 0);
+  assert.equal(run.events[0].settingsReadsDuringObservation, 0);
+  assert.equal(run.events[0].catalogReadsDuringObservation, 0);
+  assert.equal(run.events[0].demandReadsDuringObservation, 0);
+  assert.equal(run.events[0].nativeRootReadsDuringObservation, 0);
+  assert.equal(run.events[0].nativeRootExposed, false);
+}
+assert.deepEqual(
+  ordinaryOnlyB.events[0].evidence,
+  ordinaryOnlyBRepeat.events[0].evidence,
+);
 
 allocationDiagnosticEvents.length = 0;
 const allocationDiagnosticLifecycle = makeAllocationDiagnosticAutomation();

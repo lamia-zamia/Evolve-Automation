@@ -11,6 +11,7 @@ export default defineConfig(
       "evolve.js",
       "evolve_automation.user.js",
       "evolve_automation.meta.js",
+      "test-artifacts/benchmark/tmp/**",
       "docs/**",
       "progress_log/**",
       "tools/**",
