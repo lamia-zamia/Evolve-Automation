@@ -1,0 +1,831 @@
+{
+  "schema": "p51-construction-jobs-handoff-v1",
+  "decision": {
+    "outcome": "B — Event delivered, authority incomplete",
+    "reason": "Construction is natively verified and the same-cycle Jobs owner observes Quarry Worker unlocked, while P49 explicitly lacks cross-owner root and progression generations.",
+    "autonomousSpendingAuthorized": false,
+    "jobsAllocationAuthorized": false
+  },
+  "game": {
+    "pinned": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    "snapshotSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "fixtureName": "p18-standard-human-fixture.txt",
+    "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+    "seed": 44,
+    "epoch": "2026-09-21T00:00:00.000Z"
+  },
+  "comparison": {
+    "arms": {
+      "A": "Historical P42 control; Farm saving priority remains and Quarry is not purchased.",
+      "B": "P42 qualification and exact substitution gated by a bounded P51 test-only Quarry request.",
+      "BRepeat": "Same request and intervention as B."
+    },
+    "interventionInstalledAfterPeriod": 719,
+    "constructionAndJobsPeriod": 720,
+    "constructionWorkCycleId": 90,
+    "constructionInput": {
+      "candidate": {
+        "buildingId": "city-rock_quarry",
+        "orderingIndex": 0,
+        "orderingGeneration": 90,
+        "weighting": 300,
+        "cost": { "Lumber": 50, "Stone": 10 }
+      },
+      "candidateAffordable": true,
+      "conflictPlan": { "result": "proceed", "conflict": null },
+      "competitionPlan": {
+        "result": "build",
+        "selectedTarget": "city-rock_quarry"
+      },
+      "reservationSubstitution": {
+        "applied": true,
+        "reason": "exact-p720-construction-owner-cycle",
+        "previousCompletedPublication": 89,
+        "before": [
+          {
+            "name": "city-farm",
+            "cause": "Saving",
+            "cost": { "Lumber": 27, "Stone": 14 }
+          }
+        ],
+        "after": [
+          {
+            "name": "city-rock_quarry",
+            "cause": "Saving",
+            "cost": { "Lumber": 50, "Stone": 10 }
+          }
+        ]
+      }
+    },
+    "beforeInterventionAEqualsB": true,
+    "beforeInterventionBEqualsBRepeat": true,
+    "afterInterventionBEqualsBRepeat": true,
+    "verifiedPurchase": {
+      "controlId": "city-rock_quarry",
+      "beforeCount": 0,
+      "afterCount": 1,
+      "resourceDebit": { "Lumber": 50, "Stone": 10 },
+      "nativeActionObserved": true
+    },
+    "P36GatherActionsRetained": 139,
+    "P38GatherActionsRetained": 17,
+    "gatherActionsAddedByP51": 0
+  },
+  "receipt": {
+    "contract": {
+      "receiptId": "construction:90:90:city-rock_quarry",
+      "origin": {
+        "owner": "Construction",
+        "workCycleId": 90,
+        "orderingGeneration": 90,
+        "period": 720,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+      },
+      "targetBuildingId": "city-rock_quarry",
+      "result": "verified-purchase",
+      "nativePostcondition": {
+        "source": "captured-build-count-postcondition",
+        "targetBuildingId": "city-rock_quarry",
+        "beforeCount": 0,
+        "afterCount": 1,
+        "actionReportedSuccess": true,
+        "constructionCycleCompleted": true
+      },
+      "cost": { "Lumber": 50, "Stone": 10 },
+      "requestIdentity": {
+        "requestId": "p51-test-only-quarry-priority-request-v1",
+        "generation": 1
+      },
+      "executionAuthority": "none"
+    },
+    "exactSizeBytes": 1302,
+    "creationFrequency": { "A": 0, "B": 1, "BRepeat": 1 },
+    "publicationPoint": "Build application stages the candidate immediately after the verified-success disposition guard; the immutable receipt is published after runBuildAutomation calls finishCycle(true). Its native proof reuses captured-build's existing before/after count check.",
+    "jobsConsumption": {
+      "status": "handoff-authority-incomplete",
+      "reason": "cross-owner-root-or-progression-generation-unavailable",
+      "period": 720,
+      "agePeriods": 0,
+      "ageWorkCycles": 0,
+      "ownerScope": "ordinary-jobs-only",
+      "ownerSessionFreshness": "verified-current",
+      "workCycleIdentity": 90,
+      "jobsPreparationGeneration": 90,
+      "quarryWorker": { "status": "observed", "unlocked": true },
+      "jobCatalog": [
+        {
+          "id": "unemployed",
+          "kind": "other",
+          "workers": 0,
+          "servants": 0,
+          "managed": true,
+          "unlocked": true,
+          "count": 0,
+          "maximum": -1
+        },
+        {
+          "id": "farmer",
+          "kind": "farmer",
+          "workers": 4,
+          "servants": 0,
+          "managed": true,
+          "unlocked": true,
+          "count": 4,
+          "maximum": -1
+        },
+        {
+          "id": "quarry_worker",
+          "kind": "quarry-worker",
+          "workers": 0,
+          "servants": 0,
+          "managed": true,
+          "unlocked": true,
+          "count": 0,
+          "maximum": -1
+        }
+      ],
+      "postOrdinaryJobsState": { "farmer": 2, "quarry_worker": 2 },
+      "plannedDecisionIdentity": "[\"assign-jobs\",[[0,0,0],[3,2,0],[5,2,0]],5,false,false,0,4,2,null,true,null,null,null]",
+      "crossOwnerIdentity": {
+        "workCycle": "matched-current",
+        "rootGeneration": "missing-from-p49-jobs-evidence",
+        "progressionEpoch": "missing-from-p49-jobs-evidence",
+        "jobsPreparationGeneration": 90,
+        "constructionRootGeneration": 0,
+        "constructionProgressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+      },
+      "release": "intended-jobs-handoff-window-ended"
+    },
+    "request": {
+      "requestId": "p51-test-only-quarry-priority-request-v1",
+      "origin": "test-only",
+      "generation": 1,
+      "active": true,
+      "period": 720,
+      "workCycleId": 90,
+      "orderingGeneration": 90,
+      "targetBuildingId": "city-rock_quarry",
+      "suspendSavingPriorityForBuildingId": "city-farm",
+      "suspendSavingPriorityAcknowledged": true,
+      "maximumPurchases": 1,
+      "playerSelected": false,
+      "productionAuthorized": false
+    }
+  },
+  "instrumentation": {
+    "testOnly": true,
+    "receiptNativeReads": 0,
+    "receiptNativeControls": 0,
+    "receiptNativePortAudit": {
+      "method": "static callsite audit of the P51 receipt contract and injected handoff adapter; P49 observation deltas are recorded separately",
+      "sourceFiles": [
+        "experiments/p51-construction-jobs-handoff-contract.mjs",
+        "experiments/p51-construction-jobs-handoff-trace.mjs"
+      ],
+      "readCallsites": 0,
+      "controlCallsites": 0
+    },
+    "p49ObservationReads": {
+      "controlResolution": 0,
+      "settings": 0,
+      "catalog": 0,
+      "demand": 0,
+      "nativeRoot": 0
+    },
+    "publicationMilliseconds": 0.09999999403953552,
+    "consumptionMilliseconds": 0.10000000149011612,
+    "maximumCallbackIncrement": 1,
+    "retainedEventCount": 3,
+    "retainedEventBytes": 3782,
+    "invalidations": 0,
+    "p42AndP40ExistingInstrumentation": {
+      "p40ResourceReadCount": 4,
+      "p40DiagnosticClockReads": 44,
+      "p42ResourceAmountReads": 2,
+      "p42OwnerAuthorityReads": 2,
+      "p42AppliedReservationReads": 1,
+      "p42DiagnosticClockReads": 6
+    },
+    "rendererCpuClaim": "not made; callback timings are not a renderer CPU-share measurement"
+  },
+  "lifecycle": {
+    "A": [],
+    "B": [
+      {
+        "kind": "receipt-published",
+        "period": 720,
+        "receipt": {
+          "receiptId": "construction:90:90:city-rock_quarry",
+          "origin": {
+            "owner": "Construction",
+            "workCycleId": 90,
+            "orderingGeneration": 90,
+            "period": 720,
+            "rootGeneration": 0,
+            "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+          },
+          "targetBuildingId": "city-rock_quarry",
+          "result": "verified-purchase",
+          "nativePostcondition": {
+            "source": "captured-build-count-postcondition",
+            "targetBuildingId": "city-rock_quarry",
+            "beforeCount": 0,
+            "afterCount": 1,
+            "actionReportedSuccess": true,
+            "constructionCycleCompleted": true
+          },
+          "cost": { "Lumber": 50, "Stone": 10 },
+          "requestIdentity": {
+            "requestId": "p51-test-only-quarry-priority-request-v1",
+            "generation": 1
+          },
+          "executionAuthority": "none"
+        }
+      },
+      {
+        "kind": "receipt-consumed",
+        "receiptId": "construction:90:90:city-rock_quarry",
+        "status": "handoff-authority-incomplete",
+        "reason": "cross-owner-root-or-progression-generation-unavailable",
+        "period": 720,
+        "receiptAgePeriods": 0,
+        "receiptAgeWorkCycles": 0,
+        "ownerScope": "ordinary-jobs-only",
+        "ownerSessionFreshness": "verified-current",
+        "jobsPreparationGeneration": 90,
+        "workCycleIdentity": 90,
+        "capturedRootIdentity": {
+          "preparationGeneration": 90,
+          "referenceMatchedAtExecution": true
+        },
+        "progressionEvidence": {
+          "workCycle": 90,
+          "progressionEpoch": "unavailable",
+          "rootGeneration": "unavailable"
+        },
+        "quarryWorker": { "status": "observed", "unlocked": true },
+        "plannedDecisionIdentity": "[\"assign-jobs\",[[0,0,0],[3,2,0],[5,2,0]],5,false,false,0,4,2,null,true,null,null,null]",
+        "crossOwnerIdentity": {
+          "workCycle": "matched-current",
+          "rootGeneration": "missing-from-p49-jobs-evidence",
+          "progressionEpoch": "missing-from-p49-jobs-evidence",
+          "jobsPreparationGeneration": 90,
+          "constructionRootGeneration": 0,
+          "constructionProgressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+        },
+        "executionAuthority": "none"
+      },
+      {
+        "kind": "receipt-released",
+        "receiptId": "construction:90:90:city-rock_quarry",
+        "reason": "intended-jobs-handoff-window-ended"
+      }
+    ],
+    "BRepeat": [
+      {
+        "kind": "receipt-published",
+        "period": 720,
+        "receipt": {
+          "receiptId": "construction:90:90:city-rock_quarry",
+          "origin": {
+            "owner": "Construction",
+            "workCycleId": 90,
+            "orderingGeneration": 90,
+            "period": 720,
+            "rootGeneration": 0,
+            "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+          },
+          "targetBuildingId": "city-rock_quarry",
+          "result": "verified-purchase",
+          "nativePostcondition": {
+            "source": "captured-build-count-postcondition",
+            "targetBuildingId": "city-rock_quarry",
+            "beforeCount": 0,
+            "afterCount": 1,
+            "actionReportedSuccess": true,
+            "constructionCycleCompleted": true
+          },
+          "cost": { "Lumber": 50, "Stone": 10 },
+          "requestIdentity": {
+            "requestId": "p51-test-only-quarry-priority-request-v1",
+            "generation": 1
+          },
+          "executionAuthority": "none"
+        }
+      },
+      {
+        "kind": "receipt-consumed",
+        "receiptId": "construction:90:90:city-rock_quarry",
+        "status": "handoff-authority-incomplete",
+        "reason": "cross-owner-root-or-progression-generation-unavailable",
+        "period": 720,
+        "receiptAgePeriods": 0,
+        "receiptAgeWorkCycles": 0,
+        "ownerScope": "ordinary-jobs-only",
+        "ownerSessionFreshness": "verified-current",
+        "jobsPreparationGeneration": 90,
+        "workCycleIdentity": 90,
+        "capturedRootIdentity": {
+          "preparationGeneration": 90,
+          "referenceMatchedAtExecution": true
+        },
+        "progressionEvidence": {
+          "workCycle": 90,
+          "progressionEpoch": "unavailable",
+          "rootGeneration": "unavailable"
+        },
+        "quarryWorker": { "status": "observed", "unlocked": true },
+        "plannedDecisionIdentity": "[\"assign-jobs\",[[0,0,0],[3,2,0],[5,2,0]],5,false,false,0,4,2,null,true,null,null,null]",
+        "crossOwnerIdentity": {
+          "workCycle": "matched-current",
+          "rootGeneration": "missing-from-p49-jobs-evidence",
+          "progressionEpoch": "missing-from-p49-jobs-evidence",
+          "jobsPreparationGeneration": 90,
+          "constructionRootGeneration": 0,
+          "constructionProgressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0"
+        },
+        "executionAuthority": "none"
+      },
+      {
+        "kind": "receipt-released",
+        "receiptId": "construction:90:90:city-rock_quarry",
+        "reason": "intended-jobs-handoff-window-ended"
+      }
+    ],
+    "jobsAdmissions": [
+      {
+        "kind": "p48-allocation-diagnostic-observation",
+        "ownerScope": "ordinary-jobs-only",
+        "admission": {
+          "requestId": "p51-jobs-owner-observation-v1",
+          "origin": "test-only",
+          "executionAuthority": "none",
+          "status": "admitted-for-observation",
+          "reason": "current owner-local facts may be inspected for this diagnostic request"
+        },
+        "evidence": {
+          "ownerScope": "ordinary-jobs-only",
+          "ownerSessionFreshness": "verified-current",
+          "workCycleIdentity": 90,
+          "jobsPreparationGeneration": 90,
+          "capturedRootIdentity": {
+            "preparationGeneration": 90,
+            "referenceMatchedAtExecution": true
+          },
+          "jobsFoundryFreshness": "unavailable",
+          "jobsAvailable": true,
+          "population": 4,
+          "ordinaryJobs": [
+            {
+              "id": "unemployed",
+              "kind": "other",
+              "workers": 0,
+              "servants": 0,
+              "managed": true,
+              "unlocked": true,
+              "count": 0,
+              "maximum": -1
+            },
+            {
+              "id": "farmer",
+              "kind": "farmer",
+              "workers": 4,
+              "servants": 0,
+              "managed": true,
+              "unlocked": true,
+              "count": 4,
+              "maximum": -1
+            },
+            {
+              "id": "quarry_worker",
+              "kind": "quarry-worker",
+              "workers": 0,
+              "servants": 0,
+              "managed": true,
+              "unlocked": true,
+              "count": 0,
+              "maximum": -1
+            }
+          ],
+          "foundryJobs": null,
+          "foundryCrafts": null,
+          "foundryWorkerPool": null,
+          "plannedDecisionIdentity": "[\"assign-jobs\",[[0,0,0],[3,2,0],[5,2,0]],5,false,false,0,4,2,null,true,null,null,null]",
+          "requestIdentity": {
+            "requestId": "p51-jobs-owner-observation-v1",
+            "origin": "test-only",
+            "generation": 1
+          },
+          "progressionEvidence": {
+            "workCycle": 90,
+            "progressionEpoch": "unavailable",
+            "rootGeneration": "unavailable"
+          },
+          "controlGenerationEvidence": "unavailable",
+          "crossOwnerCommitments": "unavailable",
+          "executionAuthority": "none"
+        },
+        "requestPresenceChecks": 1,
+        "admissionEvaluations": 1,
+        "controlResolutionCountAtObservation": 12384,
+        "controlResolutionReadsDuringObservation": 0,
+        "settingsReadCountAtObservation": 539,
+        "settingsReadsDuringObservation": 0,
+        "catalogReadCountAtObservation": 359,
+        "catalogReadsDuringObservation": 0,
+        "demandReadCountAtObservation": 0,
+        "demandReadsDuringObservation": 0,
+        "nativeRootReadCountAtObservation": 13431,
+        "nativeRootReadsDuringObservation": 0,
+        "requestPresenceCheckMs": 0,
+        "inputProjectionMs": 0.09999999403953552,
+        "envelopeConstructionMs": 0,
+        "admissionPredicateMs": 0.10000000149011612,
+        "additionalSynchronousCallbackMs": 0.5999999940395355,
+        "nativeRootExposed": false
+      }
+    ]
+  },
+  "replay": {
+    "checkpoints": {
+      "A": [
+        {
+          "period": 719,
+          "saveSha256": "5f214aca09ac34f20123274a8a37ff8f4c23a7f4ee9390abbd10b769adb94fd6",
+          "state": {
+            "population": 4,
+            "populationCapacity": 4,
+            "resources": {
+              "Food": { "amount": 157.84862000000152, "max": 1000, "diff": 0 },
+              "Lumber": { "amount": 47, "max": 500, "diff": 0 },
+              "Stone": { "amount": 10, "max": 500, "diff": 0 },
+              "Money": { "amount": 87.59999999999924, "max": 1000, "diff": 0 },
+              "Knowledge": {
+                "amount": 12.709999999999795,
+                "max": 100,
+                "diff": 0
+              }
+            },
+            "buildings": { "farm": 1, "basic_housing": 4, "shed": 1 },
+            "jobs": { "farmer": 4 },
+            "tech": {
+              "primitive": 3,
+              "wsc": 0,
+              "agriculture": 2,
+              "housing": 1,
+              "currency": 1,
+              "storage": 1,
+              "mining": 1
+            },
+            "days": 35,
+            "starved": 0,
+            "deaths": 0
+          },
+          "nativeCallsSha256": "38c529201a14679627537d3add669006021318056b4173c7bab38b48889df20b",
+          "controlUsage": {
+            "#mainColumn div.content.swapTab": { "returned": 98, "threw": 0 },
+            "undefined-stone.action": { "returned": 75, "threw": 0 },
+            "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+            "tech-sundial.action": { "returned": 1, "threw": 0 },
+            "tech-agriculture.action": { "returned": 1, "threw": 0 },
+            "buildQueue.setData": { "returned": 2599, "threw": 0 },
+            "city-farm.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+            "tech-housing.action": { "returned": 1, "threw": 0 },
+            "city-basic_housing.action": { "returned": 4, "threw": 0 },
+            "tech-currency.action": { "returned": 1, "threw": 0 },
+            "tech-storage.action": { "returned": 1, "threw": 0 },
+            "city-lumber.action": { "returned": 101, "threw": 0 },
+            "tech-mining.action": { "returned": 1, "threw": 0 },
+            "city-shed.action": { "returned": 1, "threw": 0 },
+            "tech-irrigation.action": { "returned": 1, "threw": 0 }
+          },
+          "randomCalls": 134,
+          "rngState": 7017682
+        },
+        {
+          "period": 720,
+          "saveSha256": "2c775c6d7509b3c104ed7ec6ab59816d8e5c62f7b81a0c961ffebded121de508",
+          "state": {
+            "population": 4,
+            "populationCapacity": 5,
+            "resources": {
+              "Food": { "amount": 158.17762000000153, "max": 1000, "diff": 0 },
+              "Lumber": { "amount": 27, "max": 500, "diff": 0 },
+              "Stone": { "amount": 10, "max": 500, "diff": 0 },
+              "Money": { "amount": 87.99999999999925, "max": 1000, "diff": 0 },
+              "Knowledge": {
+                "amount": 12.959999999999795,
+                "max": 100,
+                "diff": 0
+              }
+            },
+            "buildings": { "farm": 1, "basic_housing": 5, "shed": 1 },
+            "jobs": { "farmer": 4 },
+            "tech": {
+              "primitive": 3,
+              "wsc": 0,
+              "agriculture": 2,
+              "housing": 1,
+              "currency": 1,
+              "storage": 1,
+              "mining": 1
+            },
+            "days": 36,
+            "starved": 0,
+            "deaths": 0
+          },
+          "nativeCallsSha256": "b9e109b07b69b3be7ea6f38f45b232ee77dfb5bb2bcb43a773dac90dd3e1f0ad",
+          "controlUsage": {
+            "#mainColumn div.content.swapTab": { "returned": 99, "threw": 0 },
+            "undefined-stone.action": { "returned": 75, "threw": 0 },
+            "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+            "tech-sundial.action": { "returned": 1, "threw": 0 },
+            "tech-agriculture.action": { "returned": 1, "threw": 0 },
+            "buildQueue.setData": { "returned": 2651, "threw": 0 },
+            "city-farm.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.setDefault": { "returned": 82, "threw": 0 },
+            "tech-housing.action": { "returned": 1, "threw": 0 },
+            "city-basic_housing.action": { "returned": 5, "threw": 0 },
+            "tech-currency.action": { "returned": 1, "threw": 0 },
+            "tech-storage.action": { "returned": 1, "threw": 0 },
+            "city-lumber.action": { "returned": 104, "threw": 0 },
+            "tech-mining.action": { "returned": 1, "threw": 0 },
+            "city-shed.action": { "returned": 1, "threw": 0 },
+            "tech-irrigation.action": { "returned": 1, "threw": 0 }
+          },
+          "randomCalls": 137,
+          "rngState": 3167897891
+        }
+      ],
+      "B": [
+        {
+          "period": 719,
+          "saveSha256": "5f214aca09ac34f20123274a8a37ff8f4c23a7f4ee9390abbd10b769adb94fd6",
+          "state": {
+            "population": 4,
+            "populationCapacity": 4,
+            "resources": {
+              "Food": { "amount": 157.84862000000152, "max": 1000, "diff": 0 },
+              "Lumber": { "amount": 47, "max": 500, "diff": 0 },
+              "Stone": { "amount": 10, "max": 500, "diff": 0 },
+              "Money": { "amount": 87.59999999999924, "max": 1000, "diff": 0 },
+              "Knowledge": {
+                "amount": 12.709999999999795,
+                "max": 100,
+                "diff": 0
+              }
+            },
+            "buildings": { "farm": 1, "basic_housing": 4, "shed": 1 },
+            "jobs": { "farmer": 4 },
+            "tech": {
+              "primitive": 3,
+              "wsc": 0,
+              "agriculture": 2,
+              "housing": 1,
+              "currency": 1,
+              "storage": 1,
+              "mining": 1
+            },
+            "days": 35,
+            "starved": 0,
+            "deaths": 0
+          },
+          "nativeCallsSha256": "38c529201a14679627537d3add669006021318056b4173c7bab38b48889df20b",
+          "controlUsage": {
+            "#mainColumn div.content.swapTab": { "returned": 98, "threw": 0 },
+            "undefined-stone.action": { "returned": 75, "threw": 0 },
+            "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+            "tech-sundial.action": { "returned": 1, "threw": 0 },
+            "tech-agriculture.action": { "returned": 1, "threw": 0 },
+            "buildQueue.setData": { "returned": 2599, "threw": 0 },
+            "city-farm.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+            "tech-housing.action": { "returned": 1, "threw": 0 },
+            "city-basic_housing.action": { "returned": 4, "threw": 0 },
+            "tech-currency.action": { "returned": 1, "threw": 0 },
+            "tech-storage.action": { "returned": 1, "threw": 0 },
+            "city-lumber.action": { "returned": 101, "threw": 0 },
+            "tech-mining.action": { "returned": 1, "threw": 0 },
+            "city-shed.action": { "returned": 1, "threw": 0 },
+            "tech-irrigation.action": { "returned": 1, "threw": 0 }
+          },
+          "randomCalls": 134,
+          "rngState": 7017682
+        },
+        {
+          "period": 720,
+          "saveSha256": "46bc00021fde9b3eabf1514896fd1facd571f0947f35b061c205304f67179bc4",
+          "state": {
+            "population": 4,
+            "populationCapacity": 4,
+            "resources": {
+              "Food": { "amount": 158.17762000000153, "max": 1000, "diff": 0 },
+              "Lumber": { "amount": 0, "max": 500, "diff": 0 },
+              "Stone": { "amount": 0, "max": 600, "diff": 0 },
+              "Money": { "amount": 87.99999999999925, "max": 1000, "diff": 0 },
+              "Knowledge": {
+                "amount": 12.959999999999795,
+                "max": 100,
+                "diff": 0
+              }
+            },
+            "buildings": {
+              "farm": 1,
+              "basic_housing": 4,
+              "shed": 1,
+              "rock_quarry": 1
+            },
+            "jobs": { "farmer": 2, "quarry_worker": 2 },
+            "tech": {
+              "primitive": 3,
+              "wsc": 0,
+              "agriculture": 2,
+              "housing": 1,
+              "currency": 1,
+              "storage": 1,
+              "mining": 1
+            },
+            "days": 36,
+            "starved": 0,
+            "deaths": 0
+          },
+          "nativeCallsSha256": "32552750e7141b1281c181d0ce8a9373eabd01509eb012d26cb79107e37f9295",
+          "controlUsage": {
+            "#mainColumn div.content.swapTab": { "returned": 99, "threw": 0 },
+            "undefined-stone.action": { "returned": 75, "threw": 0 },
+            "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+            "tech-sundial.action": { "returned": 1, "threw": 0 },
+            "tech-agriculture.action": { "returned": 1, "threw": 0 },
+            "buildQueue.setData": { "returned": 2649, "threw": 0 },
+            "city-farm.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+            "tech-housing.action": { "returned": 1, "threw": 0 },
+            "city-basic_housing.action": { "returned": 4, "threw": 0 },
+            "tech-currency.action": { "returned": 1, "threw": 0 },
+            "tech-storage.action": { "returned": 1, "threw": 0 },
+            "city-lumber.action": { "returned": 104, "threw": 0 },
+            "tech-mining.action": { "returned": 1, "threw": 0 },
+            "city-shed.action": { "returned": 1, "threw": 0 },
+            "tech-irrigation.action": { "returned": 1, "threw": 0 },
+            "city-rock_quarry.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.sub": { "returned": 2, "threw": 0 },
+            "civ-quarry_worker.add": { "returned": 2, "threw": 0 },
+            "civ-quarry_worker.setDefault": { "returned": 1, "threw": 0 }
+          },
+          "randomCalls": 137,
+          "rngState": 3167897891
+        }
+      ],
+      "B-repeat": [
+        {
+          "period": 719,
+          "saveSha256": "5f214aca09ac34f20123274a8a37ff8f4c23a7f4ee9390abbd10b769adb94fd6",
+          "state": {
+            "population": 4,
+            "populationCapacity": 4,
+            "resources": {
+              "Food": { "amount": 157.84862000000152, "max": 1000, "diff": 0 },
+              "Lumber": { "amount": 47, "max": 500, "diff": 0 },
+              "Stone": { "amount": 10, "max": 500, "diff": 0 },
+              "Money": { "amount": 87.59999999999924, "max": 1000, "diff": 0 },
+              "Knowledge": {
+                "amount": 12.709999999999795,
+                "max": 100,
+                "diff": 0
+              }
+            },
+            "buildings": { "farm": 1, "basic_housing": 4, "shed": 1 },
+            "jobs": { "farmer": 4 },
+            "tech": {
+              "primitive": 3,
+              "wsc": 0,
+              "agriculture": 2,
+              "housing": 1,
+              "currency": 1,
+              "storage": 1,
+              "mining": 1
+            },
+            "days": 35,
+            "starved": 0,
+            "deaths": 0
+          },
+          "nativeCallsSha256": "38c529201a14679627537d3add669006021318056b4173c7bab38b48889df20b",
+          "controlUsage": {
+            "#mainColumn div.content.swapTab": { "returned": 98, "threw": 0 },
+            "undefined-stone.action": { "returned": 75, "threw": 0 },
+            "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+            "tech-sundial.action": { "returned": 1, "threw": 0 },
+            "tech-agriculture.action": { "returned": 1, "threw": 0 },
+            "buildQueue.setData": { "returned": 2599, "threw": 0 },
+            "city-farm.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+            "tech-housing.action": { "returned": 1, "threw": 0 },
+            "city-basic_housing.action": { "returned": 4, "threw": 0 },
+            "tech-currency.action": { "returned": 1, "threw": 0 },
+            "tech-storage.action": { "returned": 1, "threw": 0 },
+            "city-lumber.action": { "returned": 101, "threw": 0 },
+            "tech-mining.action": { "returned": 1, "threw": 0 },
+            "city-shed.action": { "returned": 1, "threw": 0 },
+            "tech-irrigation.action": { "returned": 1, "threw": 0 }
+          },
+          "randomCalls": 134,
+          "rngState": 7017682
+        },
+        {
+          "period": 720,
+          "saveSha256": "46bc00021fde9b3eabf1514896fd1facd571f0947f35b061c205304f67179bc4",
+          "state": {
+            "population": 4,
+            "populationCapacity": 4,
+            "resources": {
+              "Food": { "amount": 158.17762000000153, "max": 1000, "diff": 0 },
+              "Lumber": { "amount": 0, "max": 500, "diff": 0 },
+              "Stone": { "amount": 0, "max": 600, "diff": 0 },
+              "Money": { "amount": 87.99999999999925, "max": 1000, "diff": 0 },
+              "Knowledge": {
+                "amount": 12.959999999999795,
+                "max": 100,
+                "diff": 0
+              }
+            },
+            "buildings": {
+              "farm": 1,
+              "basic_housing": 4,
+              "shed": 1,
+              "rock_quarry": 1
+            },
+            "jobs": { "farmer": 2, "quarry_worker": 2 },
+            "tech": {
+              "primitive": 3,
+              "wsc": 0,
+              "agriculture": 2,
+              "housing": 1,
+              "currency": 1,
+              "storage": 1,
+              "mining": 1
+            },
+            "days": 36,
+            "starved": 0,
+            "deaths": 0
+          },
+          "nativeCallsSha256": "32552750e7141b1281c181d0ce8a9373eabd01509eb012d26cb79107e37f9295",
+          "controlUsage": {
+            "#mainColumn div.content.swapTab": { "returned": 99, "threw": 0 },
+            "undefined-stone.action": { "returned": 75, "threw": 0 },
+            "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+            "tech-sundial.action": { "returned": 1, "threw": 0 },
+            "tech-agriculture.action": { "returned": 1, "threw": 0 },
+            "buildQueue.setData": { "returned": 2649, "threw": 0 },
+            "city-farm.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+            "tech-housing.action": { "returned": 1, "threw": 0 },
+            "city-basic_housing.action": { "returned": 4, "threw": 0 },
+            "tech-currency.action": { "returned": 1, "threw": 0 },
+            "tech-storage.action": { "returned": 1, "threw": 0 },
+            "city-lumber.action": { "returned": 104, "threw": 0 },
+            "tech-mining.action": { "returned": 1, "threw": 0 },
+            "city-shed.action": { "returned": 1, "threw": 0 },
+            "tech-irrigation.action": { "returned": 1, "threw": 0 },
+            "city-rock_quarry.action": { "returned": 1, "threw": 0 },
+            "civ-farmer.sub": { "returned": 2, "threw": 0 },
+            "civ-quarry_worker.add": { "returned": 2, "threw": 0 },
+            "civ-quarry_worker.setDefault": { "returned": 1, "threw": 0 }
+          },
+          "randomCalls": 137,
+          "rngState": 3167897891
+        }
+      ]
+    },
+    "bundleSha256": "d7111982bcf34f695f84e5d81389fe35157f7e41b59d449dd4f4fe7dab78e617",
+    "replayHarnessSha256": "7f260d6c178f37094893c153acadd084e4e6233b10a0bf8317ba994fcd1eacc4",
+    "sourceHashes": {
+      "src/application/build.ts": "a3b2486e4b5520c08c5e68ec743c528b10f537a7d407b7d6db06691982a9f0c0",
+      "src/ports/build.ts": "03ce17e0e6da9461c537c3dd555dbeb3c41f764895c64722e830daeba4c500ea",
+      "src/adapters/evolve/progression/build/captured-build.ts": "0a8901ce80ac09c8bfe3958f20bce4a245fa4384a1e78005e7af35056d9cc116",
+      "src/adapters/evolve/progression/construction/captured-construction.ts": "05324d6fcf4b709d56dda98bef8390c5e91cfa731f3a9f9a63b5b7e370810a32",
+      "src/bootstrap/captured-progression-control.ts": "5ace24f248374650419c5ad06fdd5a7b69305dacd8736755f37f10e1339e4b5f",
+      "src/bootstrap/captured-runtime-control.ts": "d21f36999a0bde9376e141d6d916d1718e29a529de9aefbabf17445aee7fa240",
+      "src/adapters/evolve/civic/captured-ordinary-jobs.ts": "23b31f1dd60499127f8f05c28c200ee440f67a3389381b661aa26232dc6c8ec2",
+      "src/domain/civic/allocation-diagnostic-admission.ts": "bed680cc7cba12a582b75211d78e006ea30d27c5cd64d2b09c5a466ee9fd4538",
+      "experiments/p42-construction-priority-counterfactual-policy.mjs": "d0cb22e450d75db984ad823346c8b9ba0635036c2f892ad543e11096e9c49302",
+      "experiments/p42-construction-priority-counterfactual-trace.mjs": "26000f5eca986c4cbdf125395c16efba01f6e76b1f09684fb278f61395303038",
+      "experiments/p49-jobs-admission-evidence.mjs": "a4e2f2705f4739d5e1aa6e162750a9ea9e34a02976b7ae8d4fb6596ba3f725b0",
+      "experiments/p51-construction-jobs-handoff-contract.mjs": "97863a62d17d7df0c5fda606f0a008a5e27bf86bd8a444996054abe94908696a",
+      "experiments/p51-construction-jobs-handoff-trace.mjs": "9dd6fa623d4b9fd92369fd0c202e664149a8969cc7ee3d781b8cbeaee55663ac",
+      "experiments/p51-construction-jobs-handoff-evidence.mjs": "dcc374e4ab56aecc4edb40f835e0ca86e1e82330f40b2099b8d9d86869a56281",
+      "experiments/p51-construction-jobs-handoff-exact.mjs": "e93aa7a0559e89ffaf1f4b527a43c6a339850cd0d0a856f892aa3fdb5f73afc2",
+      "experiments/p38-quarry-production-validation-exact.mjs": "7f260d6c178f37094893c153acadd084e4e6233b10a0bf8317ba994fcd1eacc4",
+      "tests/experiments/p51-construction-jobs-handoff-test.mjs": "81fd3f7607505cab41abfa78f9169debfd9208157d5e5f8d0c78a15dc96e21c5",
+      "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs": "971ca2b700f51ec1ed6d86cf04f14ed570cd717de0dc3bc6661d39de8beb761b",
+      "tools/chromium-evolve-runner.mjs": "fd3a8f3f4b1b7ac47d4424ec603c28459c3b61766dd76a4509ea46ce044d7059",
+      "tools/chromium/bridge.js": "88f0c7671faaefefdd394e706d46dea965e0390eb56fa7d5740d44eeb4132120"
+    },
+    "baselineTunedNativeParityFixture": {
+      "path": "test-artifacts/benchmark/settings/baseline-tuned.json",
+      "present": false,
+      "limitation": "The existing baseline-tuned.json native-parity fixture is absent; this experiment uses controlled exact Chromium A/B/B-repeat."
+    }
+  }
+}
