@@ -2,7 +2,7 @@
 
 ## Decision: B — owner-local observation established; allocation authority blocked
 
-A test-only diagnostic request reaches the prepared Full Jobs owner boundary on the retained late-game fixture. The request is admitted for observation over the existing Jobs and Foundry session; the request and evidence both carry `executionAuthority: "none"`. A/B/B-repeat had identical gameplay and native action traces, and the admission path performed no additional measured Full Jobs settings reads or control-registry resolutions. The maximum added synchronous callback duration was 0.3 ms in these bounded runs.
+A test-only diagnostic request reaches the prepared Full Jobs owner boundary on the retained late-game fixture. The request is admitted for observation over the existing Jobs and Foundry session; the request and evidence both carry `executionAuthority: "none"`. A/B/B-repeat had identical gameplay and native action traces, and the admission path performed no additional measured Full Jobs settings reads or control-registry resolutions. The maximum added synchronous callback duration was 0.2 ms in these bounded runs.
 
 This does not establish a complete Food/Stone feasibility decision or permission to allocate. The envelope has no same-cycle Construction, Research, Build/Research queue, or cross-owner reservation commitment, and no root/progression or control-generation contract. The retained authentic Standard/Human P18 checkpoint also does not produce an available Full Jobs session: its combined planner has zero plan calls, so it cannot qualify as a second admission boundary. The controlled A/B/B-repeat parity claim therefore applies to the late-game boundary only.
 
