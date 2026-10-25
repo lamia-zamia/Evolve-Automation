@@ -1,0 +1,243 @@
+{
+  "schema": "p52-independent-construction-jobs-identity-v1",
+  "decision": {
+    "outcome": "A — Historical handoff correlation established",
+    "reason": "Construction and Jobs independently identified the same runtime reader and compatible post-success progression state.",
+    "executionAuthority": "none",
+    "allocatorIntroduced": false,
+    "productionChanged": false
+  },
+  "game": {
+    "pinned": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    "snapshotSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "fixtureName": "p18-standard-human-fixture.txt",
+    "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+    "seed": 44,
+    "epoch": "2026-09-21T00:00:00.000Z",
+    "scenario": "P42-derived Chromium A/B/B-repeat at p719 and p720"
+  },
+  "comparison": {
+    "A": "Historical control: Farm saving priority remains; Quarry receipt absent.",
+    "B": "P42 test-only one-cycle Quarry reservation substitution and verified P51 purchase receipt.",
+    "BRepeat": "Exact repeat of B.",
+    "parity": {
+      "AEqualsBBeforeIntervention": true,
+      "BEqualsBRepeatBeforeIntervention": true,
+      "BEqualsBRepeatAfterIntervention": true
+    },
+    "p720": {
+      "verifiedNativeQuarryPurchase": true,
+      "quarryWorkerUnlockedInJobsObservation": true,
+      "ordinaryJobsOutcome": {
+        "farmer": 2,
+        "quarryWorker": 2,
+        "interpretation": "ordinary Jobs gameplay only"
+      },
+      "jobsOwnerScope": "ordinary-jobs-only",
+      "nativeMutationsBetweenPublicationAndJobs": []
+    }
+  },
+  "identityProvenance": {
+    "sourceMatrix": {
+      "construction": {
+        "value": "constructionPublicationAuthority after successful Construction cycle",
+        "service": "the runtime's existing shared ProgressionEpochReader",
+        "provenance": "captured-runtime-shared-progression-reader",
+        "samplePoint": "post-construction-success",
+        "rootGeneration": 0,
+        "progressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "runtimeWorkCycle": 90,
+        "orderingGeneration": 90,
+        "rootObjectIdentityCompared": false,
+        "additionalP52RootObservations": 0
+      },
+      "jobs": {
+        "value": "one bounded shared-reader sample inside P49's Jobs admission callback",
+        "service": "the same runtime ProgressionEpochReader object",
+        "provenance": "captured-runtime-shared-progression-reader",
+        "samplePoint": "jobs-owner-admission",
+        "rootGeneration": 0,
+        "progressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "workCycleIdentity": 90,
+        "jobsPreparationGeneration": 90,
+        "capturedRootReferenceMatched": true,
+        "sameSourceObject": true
+      },
+      "distinction": {
+        "rootReplacementGeneration": "reader-local incremented counter; root may retain the same wrapped reference",
+        "progressionFingerprint": "coarse offer identity derived from sampled native root fields",
+        "runtimeInstance": "opaque shared ProgressionEpochReader object identity",
+        "jobsSessionGeneration": "Jobs-local preparation counter",
+        "workCycleIdentity": "runtime automationCycle shared into Jobs evidence",
+        "constructionOrderingGeneration": "Construction adapter cycle identity"
+      }
+    },
+    "currentProgressionRelationship": {
+      "classification": "same-fingerprint",
+      "equality": true,
+      "constructionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+      "jobsFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+      "equalityDoesNotEstablish": [
+        "current resources or prices",
+        "current queues or reservations",
+        "worker commitments",
+        "food sustainability"
+      ]
+    }
+  },
+  "receipt": {
+    "published": {
+      "receiptId": "construction:90:90:city-rock_quarry",
+      "origin": {
+        "owner": "Construction",
+        "workCycleId": 90,
+        "orderingGeneration": 90,
+        "period": 720,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "identityProvenance": {
+          "source": "captured-runtime-shared-progression-reader",
+          "samplePoint": "post-construction-success"
+        }
+      },
+      "targetBuildingId": "city-rock_quarry",
+      "result": "verified-purchase",
+      "nativePostcondition": {
+        "source": "captured-build-count-postcondition",
+        "targetBuildingId": "city-rock_quarry",
+        "beforeCount": 0,
+        "afterCount": 1,
+        "actionReportedSuccess": true,
+        "constructionCycleCompleted": true
+      },
+      "cost": { "Lumber": 50, "Stone": 10 },
+      "requestIdentity": {
+        "requestId": "p51-test-only-quarry-priority-request-v1",
+        "generation": 1
+      },
+      "executionAuthority": "none"
+    },
+    "consumed": {
+      "kind": "receipt-consumed",
+      "receiptId": "construction:90:90:city-rock_quarry",
+      "status": "correlated-owner-event",
+      "reason": "same-runtime-identities-and-current-jobs-observation",
+      "period": 720,
+      "receiptAgePeriods": 0,
+      "receiptAgeWorkCycles": 0,
+      "ownerScope": "ordinary-jobs-only",
+      "ownerSessionFreshness": "verified-current",
+      "jobsPreparationGeneration": 90,
+      "workCycleIdentity": 90,
+      "capturedRootIdentity": {
+        "preparationGeneration": 90,
+        "referenceMatchedAtExecution": true
+      },
+      "progressionEvidence": {
+        "workCycle": 90,
+        "progressionEpoch": "unavailable",
+        "rootGeneration": "unavailable"
+      },
+      "identityEvidence": {
+        "constructionSource": "verified",
+        "jobsSource": "verified",
+        "sameRuntimeSource": true,
+        "constructionSamplePoint": "post-construction-success",
+        "jobsSamplePoint": "jobs-owner-admission",
+        "constructionRootGeneration": 0,
+        "jobsRootGeneration": 0,
+        "constructionProgressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "jobsProgressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "jobsPreparationGeneration": 90
+      },
+      "progressionRelationship": "same-fingerprint",
+      "nativeMutationsAfterPublication": [],
+      "quarryWorker": { "status": "observed", "unlocked": true },
+      "plannedDecisionIdentity": "[\"assign-jobs\",[[0,0,0],[3,2,0],[5,2,0]],5,false,false,0,4,2,null,true,null,null,null]",
+      "crossOwnerIdentity": {
+        "workCycle": "matched-current",
+        "rootGeneration": "matched-current",
+        "progression": "same-fingerprint",
+        "runtimeSource": "same-runtime-reader"
+      },
+      "executionAuthority": "none"
+    },
+    "releaseCount": 1,
+    "retainedEvidenceBytes": 4882,
+    "maxReceiptBytes": 1646,
+    "oneTimeConsumption": true,
+    "handoffStatus": "correlated-owner-event",
+    "reason": "same-runtime-identities-and-current-jobs-observation",
+    "executionAuthority": "none"
+  },
+  "measurements": {
+    "dormantNoReceiptPath": {
+      "identitySamples": 0,
+      "admissionCallbacks": 1,
+      "callbackDurationsMs": [0.19999999552965164]
+    },
+    "constructionIdentityReuse": {
+      "reusedFromP51PostSuccessSample": true,
+      "identitySamplingPoint": "post-construction-success",
+      "synchronousMs": 0,
+      "nativeRootObservations": 1,
+      "incrementalNativeRootObservations": 0
+    },
+    "jobsIdentityAcquisition": {
+      "sampleCount": 1,
+      "nativeRootObservations": 1,
+      "synchronousMs": 0.10000000149011612,
+      "noCatalogOrControlReads": true,
+      "p49ObservationDeltas": {
+        "controls": 0,
+        "settings": 0,
+        "catalog": 0,
+        "demand": 0,
+        "ownerWrappedRootReads": 0
+      }
+    },
+    "pureCorrelationChecksMs": 0,
+    "receiptConsumptionMs": 0.10000000149011612,
+    "completeConsumerMs": 0.10000000149011612,
+    "additionalNativeRootObservations": 1,
+    "callbackDurationMs": 0.9000000059604645,
+    "sourceCallsiteAudit": {
+      "method": "bounded P52 Jobs callback source audit plus exact shared-reader root observation counter",
+      "jobsIdentitySampleSites": 1,
+      "jobsIdentityAccessorCalls": 2,
+      "jobsIdentityRootReadCallsites": 1,
+      "sharedReaderRootReadCallsites": 1,
+      "perJobsSampleRootObservations": 1
+    },
+    "callbackTimingIsNotRendererCpuShare": true
+  },
+  "artifacts": {
+    "bundleSha256": "56413e68739958b07e3b7bc6c67c24586ed862ee6ef2d1ebaf5075e66d50388f",
+    "replayHarnessSha256": "efefb2285ab3729239744c5242740a117bad5772e30a8c8d9428a1c8aaaaebd0",
+    "sourceHashes": {
+      "src/adapters/evolve/progression-epoch.ts": "4673a6d15c2af723944273980eacd2df28d97e9dd9c8a9b4704389a8755c2897",
+      "src/bootstrap/captured-runtime-control.ts": "d21f36999a0bde9376e141d6d916d1718e29a529de9aefbabf17445aee7fa240",
+      "src/adapters/evolve/civic/captured-ordinary-jobs.ts": "23b31f1dd60499127f8f05c28c200ee440f67a3389381b661aa26232dc6c8ec2",
+      "src/domain/civic/allocation-diagnostic-admission.ts": "bed680cc7cba12a582b75211d78e006ea30d27c5cd64d2b09c5a466ee9fd4538",
+      "experiments/p42-construction-priority-counterfactual-policy.mjs": "d0cb22e450d75db984ad823346c8b9ba0635036c2f892ad543e11096e9c49302",
+      "experiments/p42-construction-priority-counterfactual-trace.mjs": "26000f5eca986c4cbdf125395c16efba01f6e76b1f09684fb278f61395303038",
+      "experiments/p49-jobs-admission-evidence.mjs": "a4e2f2705f4739d5e1aa6e162750a9ea9e34a02976b7ae8d4fb6596ba3f725b0",
+      "experiments/p51-construction-jobs-handoff-contract.mjs": "b2cd13c90a2035f241d2b49a5898a2a08f3a56eaa0dba531ba233f29978e937f",
+      "experiments/p51-construction-jobs-handoff-trace.mjs": "ac25a840f181e5134ccf32d6b68b78f15bd4cf629f19593d87805097ec1ab250",
+      "experiments/p52-independent-construction-jobs-identity-evidence.mjs": "d1284e4df753c35ff3ce77f65393fe6055d5a7be79dc80ca29f716bbc5e89a50",
+      "experiments/p52-independent-construction-jobs-identity-exact.mjs": "71d0ede7429d23c98fad0aa05efaddc0d52ebad4cdeeb3031b8f3b0f85c35e10",
+      "experiments/p38-quarry-production-validation-exact.mjs": "efefb2285ab3729239744c5242740a117bad5772e30a8c8d9428a1c8aaaaebd0",
+      "tests/experiments/p52-independent-construction-jobs-identity-test.mjs": "61999c36bc9de5f5b07065ccb233e285e459b1d1d2a59fb8085ad23c8c6f17a3",
+      "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs": "e1b7a775374fc6d9362e9971ce015af3b2d7dad8232e16c30424572e75574007",
+      "tools/chromium-evolve-runner.mjs": "fd3a8f3f4b1b7ac47d4424ec603c28459c3b61766dd76a4509ea46ce044d7059",
+      "tools/chromium/bridge.js": "88f0c7671faaefefdd394e706d46dea965e0390eb56fa7d5740d44eeb4132120"
+    },
+    "baselineTunedNativeParity": "not run; test-artifacts/benchmark/settings/baseline-tuned.json is absent",
+    "p46RendererCpuGate": "unresolved; no benchmark rerun or 2% claim"
+  },
+  "limitations": [
+    "The progression fingerprint is coarse and excludes volatile resources, building counts, queues, prices, and worker commitments.",
+    "A source-backed known progression mutation can preserve historical-event correlation only when its exact before/after fingerprints and native mutation evidence are supplied; unexplained changes are rejected.",
+    "The additional Jobs identity sample reads the shared root once and measures synchronous time; this is not a renderer CPU-share benchmark."
+  ]
+}
