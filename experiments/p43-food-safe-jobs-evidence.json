@@ -1,0 +1,2947 @@
+{
+  "schema": "p43-food-safe-jobs-evidence-v1",
+  "experiment": "P43 — Food-safe Jobs allocation and population-growth attribution",
+  "outcome": "D",
+  "diagnosticOutcome": "C",
+  "interpretation": "Diagnostic replay is recorded, but missing authoritative worker-commitment evidence or formula/control qualification prevents an authority claim.",
+  "identity": {
+    "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    "pinnedGameSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "p42BaseCommit": "62e9d353",
+    "p42HarnessCommit": "3b10fe0e",
+    "p42TestsCommit": "bb848c55",
+    "arms": ["A", "B", "B-repeat"],
+    "finalPeriod": 10000
+  },
+  "intervention": {
+    "scope": "captured full Jobs planner decision before the existing Jobs executor",
+    "changedJobs": ["farmer", "quarry_worker"],
+    "constructionAndGatherParity": true,
+    "commitmentMode": "test-only-assume-empty",
+    "workerCommitmentsEvidence": "unavailable from the pinned captured Jobs catalog",
+    "authoritative": false,
+    "directGameStateMutation": false,
+    "persistedJobSettingsChanged": false
+  },
+  "comparison": {
+    "firstDivergencePeriod": 720,
+    "firstChangedJobsDecision": {
+      "period": 720,
+      "workCycle": { "sequence": 1, "period": 720 },
+      "identity": {
+        "rootMatches": true,
+        "inputIdentityAvailable": true,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "nativeDefaultJobId": "farmer",
+        "rootDefaultJobId": "farmer",
+        "farmerControlGeneration": 1,
+        "quarryControlGeneration": 1,
+        "farmerControlReady": true,
+        "quarryControlReady": true,
+        "controlGenerationReads": 2
+      },
+      "status": "diagnostic-assumption",
+      "applied": true,
+      "reason": "formula-supported-positive-food-margin",
+      "floorStatus": "feasible",
+      "minimumFarmers": 3,
+      "foodOutput": 5.32,
+      "foodConsumption": 4,
+      "foodNet": 1.32,
+      "foodStock": 158.17762000000153,
+      "foodStockMaximum": 1000,
+      "nativeFoodDiff": 1.32,
+      "foodLedger": {
+        "production": {
+          "Food": {
+            "Farmer": "5.315999999999999v",
+            "ᄂMill": "0%",
+            "ᄂVirgo+0": "0%",
+            "ᄂWeather": "0%",
+            "ᄂQuarantine+0": "0%",
+            "Biodome": "0v",
+            "Soldiers": "0v"
+          }
+        },
+        "consumption": { "Food": { "Human": -4 } }
+      },
+      "modifier": 1.200902934537246,
+      "farmerLedgerOutput": 5.315999999999999,
+      "modifierInputs": {
+        "species": "human",
+        "raceFlags": {
+          "living_tool": false,
+          "iceage": false,
+          "low_light": false,
+          "high_pop": false,
+          "strong": false,
+          "swift": false,
+          "humongous": false,
+          "servants": false,
+          "photosynth": false,
+          "ravenous": false,
+          "carnivore": false,
+          "artifical": false
+        },
+        "research": {
+          "agriculture": 2,
+          "hoe": 0,
+          "science": 0,
+          "military": 0,
+          "hunting": 0,
+          "foraging": 0
+        },
+        "biome": "grassland",
+        "calendar": {},
+        "planetTraits": {},
+        "buildings": { "farm": 1, "mill": 0, "millOn": 0 },
+        "farmerSourceModifierFactors": [1, 1, 1, 1],
+        "soldierLedgerOutput": 0,
+        "soldierQuarantineFactor": 1,
+        "globalProductionModifier": 1.0007524454477053,
+        "effectiveOtherFoodProduction": 0
+      },
+      "population": 4,
+      "populationCapacity": 4,
+      "occupiedJobs": { "farmer": { "workers": 4, "servants": 0 } },
+      "unassignedWorkers": 0,
+      "servants": {},
+      "starved": 0,
+      "deaths": 0,
+      "stoneStock": 0,
+      "stoneProduction": 0,
+      "stoneConsumption": 0,
+      "stoneNet": 0,
+      "buildings": {
+        "city": { "farm": 1, "basic_housing": 4, "shed": 1, "rock_quarry": 1 },
+        "underground": {},
+        "space": {},
+        "tauceti": {},
+        "galaxy": {},
+        "interstellar": {},
+        "eden": {}
+      },
+      "defaultJobId": "farmer",
+      "jobs": [
+        {
+          "id": "farmer",
+          "workers": 4,
+          "servants": 0,
+          "minimum": 2,
+          "storageBackedMinimum": null,
+          "maximum": -1,
+          "smartMaximum": 2,
+          "managed": true,
+          "unlocked": true,
+          "split": false,
+          "breakpoints": [9007199254740991, 9007199254740991, 9007199254740991]
+        },
+        {
+          "id": "quarry_worker",
+          "workers": 0,
+          "servants": 0,
+          "minimum": null,
+          "storageBackedMinimum": null,
+          "maximum": -1,
+          "smartMaximum": 9007199254740991,
+          "managed": true,
+          "unlocked": true,
+          "split": true,
+          "breakpoints": [4, 10, 0]
+        }
+      ],
+      "ordinaryAssignments": {
+        "unemployed": { "workers": 0, "servants": 0 },
+        "farmer": { "workers": 2, "servants": 0 },
+        "quarry_worker": { "workers": 2, "servants": 0 }
+      },
+      "assignments": {
+        "unemployed": { "workers": 0, "servants": 0 },
+        "farmer": { "workers": 3, "servants": 0 },
+        "quarry_worker": { "workers": 1, "servants": 0 }
+      },
+      "foodPositive": true,
+      "ordinaryPlanFood": {
+        "farmers": 2,
+        "foodOutput": 3.3505191873589157,
+        "foodConsumption": 4,
+        "foodNet": -0.6494808126410843,
+        "sustainable": false
+      },
+      "alternative": {
+        "farmers": 3,
+        "quarryWorkers": 1,
+        "otherWorkers": 0,
+        "population": 4,
+        "populationConserved": true,
+        "retainsQuarryWorker": true,
+        "foodOutput": 4.335259593679457,
+        "foodConsumption": 4,
+        "foodNet": 0.33525959367945735,
+        "foodPositive": true,
+        "projected": true,
+        "reason": "formula-supported-positive-food-margin",
+        "requiresOtherJobTransfer": false,
+        "additionalWorkersRequired": 0,
+        "movableOtherWorkers": 0,
+        "otherJobTransferPossibleByNativeCaps": true,
+        "canRetainOneQuarryWorker": true,
+        "zeroQuarryFallback": false,
+        "zeroQuarryFallbackImprovesFood": false,
+        "exceedsFarmerSmartMaximum": true,
+        "nativeDefaultPreserved": false
+      },
+      "workerCommitments": "unavailable",
+      "workerCommitmentsAssumedEmpty": true
+    },
+    "firstDecisionNativePostconditionMatchesCheckpoint": true,
+    "firstDecisionNativePostcondition": {
+      "matched": true,
+      "populationConserved": true,
+      "servantsConserved": true,
+      "expectedPopulation": 4,
+      "assignedWorkers": 4,
+      "expectedServants": 0,
+      "actualServants": 0,
+      "defaultPreserved": true,
+      "expectedDefaultJobId": "quarry_worker",
+      "actualDefaultJobId": "quarry_worker",
+      "mismatches": []
+    },
+    "firstDecisionDefaultEvidence": {
+      "ordinarySelectedDefaultToken": 5,
+      "ordinarySelectedDefaultId": "quarry_worker",
+      "capturedDefaultBeforeDecision": "farmer",
+      "capturedDefaultAfterDecision": "quarry_worker",
+      "nextJobsObservationPeriod": 728,
+      "p43KeepsOrdinarySelectedDefault": true,
+      "ordinarySelectedDefaultMatchesPriorNativeDefault": false
+    },
+    "AtoBBoundaryEqualBeforeJobsDecision": true,
+    "AtoBBoundaryCapture": { "A": true, "B": true, "BRepeat": true },
+    "p720JobsBoundary": {
+      "A": {
+        "captured": true,
+        "jobsInput": {
+          "craftOnly": false,
+          "hunterActsAsUnemployed": false,
+          "autoCraftsmen": false,
+          "autoCraftWithoutBuilding": false,
+          "craftsmenMode": "other",
+          "foundryWeighting": "other",
+          "manageServants": true,
+          "setDefault": true,
+          "servantModifier": 1,
+          "servantsMaximum": 0,
+          "skilledServantsMaximum": 0,
+          "craftsmenMaximum": 0,
+          "minimumDefault": 0,
+          "reserveMiner": false,
+          "defaultJobToken": 3,
+          "hunterToken": 1,
+          "farmerToken": 3,
+          "lumberjackToken": 4,
+          "quarryToken": 5,
+          "crystalMinerToken": 6,
+          "scavengerToken": 7,
+          "foragerToken": 2,
+          "entertainerToken": 19,
+          "minerToken": 13,
+          "population": 4,
+          "craftDebug": false,
+          "lastCraftWinner": null,
+          "authority": {
+            "enabled": false,
+            "current": 0,
+            "morale": 0,
+            "moralePotential": 0,
+            "moraleMaximum": 0,
+            "moraleCeiling": null,
+            "entertainerMorale": 0,
+            "superstarMorale": 0,
+            "previousCap": null,
+            "debug": false
+          },
+          "crafting": [],
+          "available": true,
+          "jobs": [
+            {
+              "token": 0,
+              "id": "unemployed",
+              "kind": "other",
+              "workers": 0,
+              "servants": 0,
+              "count": 0,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": false,
+              "crafting": false,
+              "serves": false,
+              "split": false,
+              "isDefault": false,
+              "breakpoints": [0, 0, 0],
+              "uncappedBreakpoints": [0, 0, 0],
+              "smartMaximum": null,
+              "farmerMinimum": null,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            },
+            {
+              "token": 3,
+              "id": "farmer",
+              "kind": "farmer",
+              "workers": 4,
+              "servants": 0,
+              "count": 4,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": true,
+              "crafting": false,
+              "serves": false,
+              "split": false,
+              "isDefault": true,
+              "breakpoints": [
+                9007199254740991, 9007199254740991, 9007199254740991
+              ],
+              "uncappedBreakpoints": [
+                9007199254740991, 9007199254740991, 9007199254740991
+              ],
+              "smartMaximum": 2,
+              "farmerMinimum": 2,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            },
+            {
+              "token": 5,
+              "id": "quarry_worker",
+              "kind": "quarry-worker",
+              "workers": 0,
+              "servants": 0,
+              "count": 0,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": true,
+              "crafting": false,
+              "serves": false,
+              "split": true,
+              "isDefault": false,
+              "breakpoints": [4, 10, 0],
+              "uncappedBreakpoints": [4, 10, 0],
+              "smartMaximum": 9007199254740991,
+              "farmerMinimum": null,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            }
+          ],
+          "splitEntries": [
+            { "jobToken": 4, "weighting": 50, "breakpoints": [4, 10, 0] },
+            { "jobToken": 5, "weighting": 50, "breakpoints": [4, 10, 0] },
+            { "jobToken": 6, "weighting": 50, "breakpoints": [2, 5, 0] },
+            { "jobToken": 7, "weighting": 5, "breakpoints": [0, 0, 0] },
+            { "jobToken": 2, "weighting": 50, "breakpoints": [4, 10, 0] }
+          ],
+          "defaultPreference": [
+            {
+              "jobToken": 5,
+              "allocationToken": 5,
+              "requirement": "managed-with-workers",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 4,
+              "allocationToken": 4,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 6,
+              "allocationToken": 6,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 7,
+              "allocationToken": 7,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 2,
+              "allocationToken": 2,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 1,
+              "allocationToken": 1,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 3,
+              "allocationToken": 3,
+              "requirement": "managed",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 9,
+              "allocationToken": 9,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 7,
+              "allocationToken": 7,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 6,
+              "allocationToken": 6,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 5,
+              "allocationToken": 5,
+              "requirement": "unlocked",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 4,
+              "allocationToken": 4,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 2,
+              "allocationToken": 2,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 1,
+              "allocationToken": 1,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 0,
+              "allocationToken": 0,
+              "requirement": "unlocked",
+              "managed": true,
+              "unlocked": true
+            }
+          ]
+        },
+        "ordinaryDecision": {
+          "kind": "assign-jobs",
+          "assignments": [
+            { "jobToken": 0, "workers": 0, "servants": 0 },
+            { "jobToken": 3, "workers": 2, "servants": 0 },
+            { "jobToken": 5, "workers": 2, "servants": 0 }
+          ],
+          "selectedDefaultToken": 5,
+          "moraleIncomeAdjusted": false,
+          "ironIncomeAdjusted": false,
+          "maximumSpaceMiners": 0,
+          "lastPopulationCount": 4,
+          "lastFarmerCount": 2,
+          "authorityEntertainerCap": null,
+          "clearAuthorityEntertainerCap": true,
+          "craftWinner": null,
+          "craftDebugMessage": null,
+          "authorityDebugMessage": null
+        },
+        "foodLedger": {
+          "production": {
+            "Food": {
+              "Farmer": "5.315999999999999v",
+              "ᄂMill": "0%",
+              "ᄂVirgo+0": "0%",
+              "ᄂWeather": "0%",
+              "ᄂQuarantine+0": "0%",
+              "Biodome": "0v",
+              "Soldiers": "0v"
+            }
+          },
+          "consumption": { "Food": { "Human": -4 } }
+        },
+        "state": {
+          "population": 4,
+          "populationCapacity": 4,
+          "occupiedJobs": { "farmer": { "workers": 4, "servants": 0 } },
+          "unassignedWorkers": 0,
+          "servants": {},
+          "food": { "amount": 158.17762000000153, "max": 1000, "diff": 1.32 },
+          "stone": {
+            "amount": 0,
+            "max": 600,
+            "diff": 0,
+            "production": 0,
+            "consumption": 0
+          },
+          "buildings": {
+            "city": {
+              "farm": 1,
+              "basic_housing": 4,
+              "shed": 1,
+              "rock_quarry": 1
+            },
+            "underground": {},
+            "space": {},
+            "tauceti": {},
+            "galaxy": {},
+            "interstellar": {},
+            "eden": {}
+          },
+          "research": {},
+          "race": {},
+          "biome": "grassland",
+          "calendar": {},
+          "planetTraits": {},
+          "starved": 0,
+          "deaths": 0
+        },
+        "identity": {
+          "rootMatches": true,
+          "inputIdentityAvailable": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "nativeDefaultJobId": "farmer",
+          "rootDefaultJobId": "farmer",
+          "farmerControlGeneration": 1,
+          "quarryControlGeneration": 1,
+          "farmerControlReady": true,
+          "quarryControlReady": true,
+          "controlGenerationReads": 2
+        },
+        "nativeInvocationCount": 6060,
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": { "returned": 99, "threw": 0 },
+          "undefined-stone.action": { "returned": 75, "threw": 0 },
+          "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+          "tech-sundial.action": { "returned": 1, "threw": 0 },
+          "tech-agriculture.action": { "returned": 1, "threw": 0 },
+          "buildQueue.setData": { "returned": 2649, "threw": 0 },
+          "city-farm.action": { "returned": 1, "threw": 0 },
+          "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+          "tech-housing.action": { "returned": 1, "threw": 0 },
+          "city-basic_housing.action": { "returned": 4, "threw": 0 },
+          "tech-currency.action": { "returned": 1, "threw": 0 },
+          "tech-storage.action": { "returned": 1, "threw": 0 },
+          "city-lumber.action": { "returned": 104, "threw": 0 },
+          "tech-mining.action": { "returned": 1, "threw": 0 },
+          "city-shed.action": { "returned": 1, "threw": 0 },
+          "tech-irrigation.action": { "returned": 1, "threw": 0 },
+          "city-rock_quarry.action": { "returned": 1, "threw": 0 }
+        },
+        "randomCalls": 137,
+        "rngState": 3167897891,
+        "saveSha256": null
+      },
+      "B": {
+        "captured": true,
+        "jobsInput": {
+          "craftOnly": false,
+          "hunterActsAsUnemployed": false,
+          "autoCraftsmen": false,
+          "autoCraftWithoutBuilding": false,
+          "craftsmenMode": "other",
+          "foundryWeighting": "other",
+          "manageServants": true,
+          "setDefault": true,
+          "servantModifier": 1,
+          "servantsMaximum": 0,
+          "skilledServantsMaximum": 0,
+          "craftsmenMaximum": 0,
+          "minimumDefault": 0,
+          "reserveMiner": false,
+          "defaultJobToken": 3,
+          "hunterToken": 1,
+          "farmerToken": 3,
+          "lumberjackToken": 4,
+          "quarryToken": 5,
+          "crystalMinerToken": 6,
+          "scavengerToken": 7,
+          "foragerToken": 2,
+          "entertainerToken": 19,
+          "minerToken": 13,
+          "population": 4,
+          "craftDebug": false,
+          "lastCraftWinner": null,
+          "authority": {
+            "enabled": false,
+            "current": 0,
+            "morale": 0,
+            "moralePotential": 0,
+            "moraleMaximum": 0,
+            "moraleCeiling": null,
+            "entertainerMorale": 0,
+            "superstarMorale": 0,
+            "previousCap": null,
+            "debug": false
+          },
+          "crafting": [],
+          "available": true,
+          "jobs": [
+            {
+              "token": 0,
+              "id": "unemployed",
+              "kind": "other",
+              "workers": 0,
+              "servants": 0,
+              "count": 0,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": false,
+              "crafting": false,
+              "serves": false,
+              "split": false,
+              "isDefault": false,
+              "breakpoints": [0, 0, 0],
+              "uncappedBreakpoints": [0, 0, 0],
+              "smartMaximum": null,
+              "farmerMinimum": null,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            },
+            {
+              "token": 3,
+              "id": "farmer",
+              "kind": "farmer",
+              "workers": 4,
+              "servants": 0,
+              "count": 4,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": true,
+              "crafting": false,
+              "serves": false,
+              "split": false,
+              "isDefault": true,
+              "breakpoints": [
+                9007199254740991, 9007199254740991, 9007199254740991
+              ],
+              "uncappedBreakpoints": [
+                9007199254740991, 9007199254740991, 9007199254740991
+              ],
+              "smartMaximum": 2,
+              "farmerMinimum": 2,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            },
+            {
+              "token": 5,
+              "id": "quarry_worker",
+              "kind": "quarry-worker",
+              "workers": 0,
+              "servants": 0,
+              "count": 0,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": true,
+              "crafting": false,
+              "serves": false,
+              "split": true,
+              "isDefault": false,
+              "breakpoints": [4, 10, 0],
+              "uncappedBreakpoints": [4, 10, 0],
+              "smartMaximum": 9007199254740991,
+              "farmerMinimum": null,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            }
+          ],
+          "splitEntries": [
+            { "jobToken": 4, "weighting": 50, "breakpoints": [4, 10, 0] },
+            { "jobToken": 5, "weighting": 50, "breakpoints": [4, 10, 0] },
+            { "jobToken": 6, "weighting": 50, "breakpoints": [2, 5, 0] },
+            { "jobToken": 7, "weighting": 5, "breakpoints": [0, 0, 0] },
+            { "jobToken": 2, "weighting": 50, "breakpoints": [4, 10, 0] }
+          ],
+          "defaultPreference": [
+            {
+              "jobToken": 5,
+              "allocationToken": 5,
+              "requirement": "managed-with-workers",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 4,
+              "allocationToken": 4,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 6,
+              "allocationToken": 6,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 7,
+              "allocationToken": 7,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 2,
+              "allocationToken": 2,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 1,
+              "allocationToken": 1,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 3,
+              "allocationToken": 3,
+              "requirement": "managed",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 9,
+              "allocationToken": 9,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 7,
+              "allocationToken": 7,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 6,
+              "allocationToken": 6,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 5,
+              "allocationToken": 5,
+              "requirement": "unlocked",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 4,
+              "allocationToken": 4,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 2,
+              "allocationToken": 2,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 1,
+              "allocationToken": 1,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 0,
+              "allocationToken": 0,
+              "requirement": "unlocked",
+              "managed": true,
+              "unlocked": true
+            }
+          ]
+        },
+        "ordinaryDecision": {
+          "kind": "assign-jobs",
+          "assignments": [
+            { "jobToken": 0, "workers": 0, "servants": 0 },
+            { "jobToken": 3, "workers": 2, "servants": 0 },
+            { "jobToken": 5, "workers": 2, "servants": 0 }
+          ],
+          "selectedDefaultToken": 5,
+          "moraleIncomeAdjusted": false,
+          "ironIncomeAdjusted": false,
+          "maximumSpaceMiners": 0,
+          "lastPopulationCount": 4,
+          "lastFarmerCount": 2,
+          "authorityEntertainerCap": null,
+          "clearAuthorityEntertainerCap": true,
+          "craftWinner": null,
+          "craftDebugMessage": null,
+          "authorityDebugMessage": null
+        },
+        "foodLedger": {
+          "production": {
+            "Food": {
+              "Farmer": "5.315999999999999v",
+              "ᄂMill": "0%",
+              "ᄂVirgo+0": "0%",
+              "ᄂWeather": "0%",
+              "ᄂQuarantine+0": "0%",
+              "Biodome": "0v",
+              "Soldiers": "0v"
+            }
+          },
+          "consumption": { "Food": { "Human": -4 } }
+        },
+        "state": {
+          "population": 4,
+          "populationCapacity": 4,
+          "occupiedJobs": { "farmer": { "workers": 4, "servants": 0 } },
+          "unassignedWorkers": 0,
+          "servants": {},
+          "food": { "amount": 158.17762000000153, "max": 1000, "diff": 1.32 },
+          "stone": {
+            "amount": 0,
+            "max": 600,
+            "diff": 0,
+            "production": 0,
+            "consumption": 0
+          },
+          "buildings": {
+            "city": {
+              "farm": 1,
+              "basic_housing": 4,
+              "shed": 1,
+              "rock_quarry": 1
+            },
+            "underground": {},
+            "space": {},
+            "tauceti": {},
+            "galaxy": {},
+            "interstellar": {},
+            "eden": {}
+          },
+          "research": {},
+          "race": {},
+          "biome": "grassland",
+          "calendar": {},
+          "planetTraits": {},
+          "starved": 0,
+          "deaths": 0
+        },
+        "identity": {
+          "rootMatches": true,
+          "inputIdentityAvailable": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "nativeDefaultJobId": "farmer",
+          "rootDefaultJobId": "farmer",
+          "farmerControlGeneration": 1,
+          "quarryControlGeneration": 1,
+          "farmerControlReady": true,
+          "quarryControlReady": true,
+          "controlGenerationReads": 2
+        },
+        "nativeInvocationCount": 6060,
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": { "returned": 99, "threw": 0 },
+          "undefined-stone.action": { "returned": 75, "threw": 0 },
+          "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+          "tech-sundial.action": { "returned": 1, "threw": 0 },
+          "tech-agriculture.action": { "returned": 1, "threw": 0 },
+          "buildQueue.setData": { "returned": 2649, "threw": 0 },
+          "city-farm.action": { "returned": 1, "threw": 0 },
+          "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+          "tech-housing.action": { "returned": 1, "threw": 0 },
+          "city-basic_housing.action": { "returned": 4, "threw": 0 },
+          "tech-currency.action": { "returned": 1, "threw": 0 },
+          "tech-storage.action": { "returned": 1, "threw": 0 },
+          "city-lumber.action": { "returned": 104, "threw": 0 },
+          "tech-mining.action": { "returned": 1, "threw": 0 },
+          "city-shed.action": { "returned": 1, "threw": 0 },
+          "tech-irrigation.action": { "returned": 1, "threw": 0 },
+          "city-rock_quarry.action": { "returned": 1, "threw": 0 }
+        },
+        "randomCalls": 137,
+        "rngState": 3167897891,
+        "saveSha256": null
+      },
+      "BRepeat": {
+        "captured": true,
+        "jobsInput": {
+          "craftOnly": false,
+          "hunterActsAsUnemployed": false,
+          "autoCraftsmen": false,
+          "autoCraftWithoutBuilding": false,
+          "craftsmenMode": "other",
+          "foundryWeighting": "other",
+          "manageServants": true,
+          "setDefault": true,
+          "servantModifier": 1,
+          "servantsMaximum": 0,
+          "skilledServantsMaximum": 0,
+          "craftsmenMaximum": 0,
+          "minimumDefault": 0,
+          "reserveMiner": false,
+          "defaultJobToken": 3,
+          "hunterToken": 1,
+          "farmerToken": 3,
+          "lumberjackToken": 4,
+          "quarryToken": 5,
+          "crystalMinerToken": 6,
+          "scavengerToken": 7,
+          "foragerToken": 2,
+          "entertainerToken": 19,
+          "minerToken": 13,
+          "population": 4,
+          "craftDebug": false,
+          "lastCraftWinner": null,
+          "authority": {
+            "enabled": false,
+            "current": 0,
+            "morale": 0,
+            "moralePotential": 0,
+            "moraleMaximum": 0,
+            "moraleCeiling": null,
+            "entertainerMorale": 0,
+            "superstarMorale": 0,
+            "previousCap": null,
+            "debug": false
+          },
+          "crafting": [],
+          "available": true,
+          "jobs": [
+            {
+              "token": 0,
+              "id": "unemployed",
+              "kind": "other",
+              "workers": 0,
+              "servants": 0,
+              "count": 0,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": false,
+              "crafting": false,
+              "serves": false,
+              "split": false,
+              "isDefault": false,
+              "breakpoints": [0, 0, 0],
+              "uncappedBreakpoints": [0, 0, 0],
+              "smartMaximum": null,
+              "farmerMinimum": null,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            },
+            {
+              "token": 3,
+              "id": "farmer",
+              "kind": "farmer",
+              "workers": 4,
+              "servants": 0,
+              "count": 4,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": true,
+              "crafting": false,
+              "serves": false,
+              "split": false,
+              "isDefault": true,
+              "breakpoints": [
+                9007199254740991, 9007199254740991, 9007199254740991
+              ],
+              "uncappedBreakpoints": [
+                9007199254740991, 9007199254740991, 9007199254740991
+              ],
+              "smartMaximum": 2,
+              "farmerMinimum": 2,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            },
+            {
+              "token": 5,
+              "id": "quarry_worker",
+              "kind": "quarry-worker",
+              "workers": 0,
+              "servants": 0,
+              "count": 0,
+              "maximum": -1,
+              "managed": true,
+              "unlocked": true,
+              "smart": true,
+              "crafting": false,
+              "serves": false,
+              "split": true,
+              "isDefault": false,
+              "breakpoints": [4, 10, 0],
+              "uncappedBreakpoints": [4, 10, 0],
+              "smartMaximum": 9007199254740991,
+              "farmerMinimum": null,
+              "storageBackedMinimum": null,
+              "demonicLumber": false,
+              "warlordMiner": false
+            }
+          ],
+          "splitEntries": [
+            { "jobToken": 4, "weighting": 50, "breakpoints": [4, 10, 0] },
+            { "jobToken": 5, "weighting": 50, "breakpoints": [4, 10, 0] },
+            { "jobToken": 6, "weighting": 50, "breakpoints": [2, 5, 0] },
+            { "jobToken": 7, "weighting": 5, "breakpoints": [0, 0, 0] },
+            { "jobToken": 2, "weighting": 50, "breakpoints": [4, 10, 0] }
+          ],
+          "defaultPreference": [
+            {
+              "jobToken": 5,
+              "allocationToken": 5,
+              "requirement": "managed-with-workers",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 4,
+              "allocationToken": 4,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 6,
+              "allocationToken": 6,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 7,
+              "allocationToken": 7,
+              "requirement": "managed-with-workers",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 2,
+              "allocationToken": 2,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 1,
+              "allocationToken": 1,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 3,
+              "allocationToken": 3,
+              "requirement": "managed",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 9,
+              "allocationToken": 9,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 7,
+              "allocationToken": 7,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 6,
+              "allocationToken": 6,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 5,
+              "allocationToken": 5,
+              "requirement": "unlocked",
+              "managed": true,
+              "unlocked": true
+            },
+            {
+              "jobToken": 4,
+              "allocationToken": 4,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 2,
+              "allocationToken": 2,
+              "requirement": "unlocked",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 1,
+              "allocationToken": 1,
+              "requirement": "managed",
+              "managed": false,
+              "unlocked": false
+            },
+            {
+              "jobToken": 0,
+              "allocationToken": 0,
+              "requirement": "unlocked",
+              "managed": true,
+              "unlocked": true
+            }
+          ]
+        },
+        "ordinaryDecision": {
+          "kind": "assign-jobs",
+          "assignments": [
+            { "jobToken": 0, "workers": 0, "servants": 0 },
+            { "jobToken": 3, "workers": 2, "servants": 0 },
+            { "jobToken": 5, "workers": 2, "servants": 0 }
+          ],
+          "selectedDefaultToken": 5,
+          "moraleIncomeAdjusted": false,
+          "ironIncomeAdjusted": false,
+          "maximumSpaceMiners": 0,
+          "lastPopulationCount": 4,
+          "lastFarmerCount": 2,
+          "authorityEntertainerCap": null,
+          "clearAuthorityEntertainerCap": true,
+          "craftWinner": null,
+          "craftDebugMessage": null,
+          "authorityDebugMessage": null
+        },
+        "foodLedger": {
+          "production": {
+            "Food": {
+              "Farmer": "5.315999999999999v",
+              "ᄂMill": "0%",
+              "ᄂVirgo+0": "0%",
+              "ᄂWeather": "0%",
+              "ᄂQuarantine+0": "0%",
+              "Biodome": "0v",
+              "Soldiers": "0v"
+            }
+          },
+          "consumption": { "Food": { "Human": -4 } }
+        },
+        "state": {
+          "population": 4,
+          "populationCapacity": 4,
+          "occupiedJobs": { "farmer": { "workers": 4, "servants": 0 } },
+          "unassignedWorkers": 0,
+          "servants": {},
+          "food": { "amount": 158.17762000000153, "max": 1000, "diff": 1.32 },
+          "stone": {
+            "amount": 0,
+            "max": 600,
+            "diff": 0,
+            "production": 0,
+            "consumption": 0
+          },
+          "buildings": {
+            "city": {
+              "farm": 1,
+              "basic_housing": 4,
+              "shed": 1,
+              "rock_quarry": 1
+            },
+            "underground": {},
+            "space": {},
+            "tauceti": {},
+            "galaxy": {},
+            "interstellar": {},
+            "eden": {}
+          },
+          "research": {},
+          "race": {},
+          "biome": "grassland",
+          "calendar": {},
+          "planetTraits": {},
+          "starved": 0,
+          "deaths": 0
+        },
+        "identity": {
+          "rootMatches": true,
+          "inputIdentityAvailable": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "nativeDefaultJobId": "farmer",
+          "rootDefaultJobId": "farmer",
+          "farmerControlGeneration": 1,
+          "quarryControlGeneration": 1,
+          "farmerControlReady": true,
+          "quarryControlReady": true,
+          "controlGenerationReads": 2
+        },
+        "nativeInvocationCount": 6060,
+        "controlUsage": {
+          "#mainColumn div.content.swapTab": { "returned": 99, "threw": 0 },
+          "undefined-stone.action": { "returned": 75, "threw": 0 },
+          "civ-unemployed.setDefault": { "returned": 8, "threw": 0 },
+          "tech-sundial.action": { "returned": 1, "threw": 0 },
+          "tech-agriculture.action": { "returned": 1, "threw": 0 },
+          "buildQueue.setData": { "returned": 2649, "threw": 0 },
+          "city-farm.action": { "returned": 1, "threw": 0 },
+          "civ-farmer.setDefault": { "returned": 81, "threw": 0 },
+          "tech-housing.action": { "returned": 1, "threw": 0 },
+          "city-basic_housing.action": { "returned": 4, "threw": 0 },
+          "tech-currency.action": { "returned": 1, "threw": 0 },
+          "tech-storage.action": { "returned": 1, "threw": 0 },
+          "city-lumber.action": { "returned": 104, "threw": 0 },
+          "tech-mining.action": { "returned": 1, "threw": 0 },
+          "city-shed.action": { "returned": 1, "threw": 0 },
+          "tech-irrigation.action": { "returned": 1, "threw": 0 },
+          "city-rock_quarry.action": { "returned": 1, "threw": 0 }
+        },
+        "randomCalls": 137,
+        "rngState": 3167897891,
+        "saveSha256": null
+      }
+    },
+    "AtoBParityBeforeFirstChangedDecision": [
+      {
+        "period": 8,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 48,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 56,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 64,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 72,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 80,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 96,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 112,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 272,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 448,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 688,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 719,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      }
+    ],
+    "BtoBRepeatExact": true,
+    "BtoBRepeatCheckpointParity": [
+      {
+        "period": 8,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 48,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 56,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 64,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 72,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 80,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 96,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 112,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 272,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 448,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 688,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 719,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 720,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 728,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 736,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 744,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 752,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 760,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 768,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 776,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 784,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 792,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 800,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 808,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 816,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 824,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 832,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 840,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 848,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 856,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 864,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 872,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 880,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 888,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 896,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 904,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 912,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 920,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 928,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 936,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 944,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 952,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 960,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 968,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 976,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 984,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 992,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1584,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1585,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1586,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1587,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1588,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1589,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1590,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1591,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1592,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1593,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1594,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1595,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1596,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1597,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1598,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1599,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1600,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1984,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1985,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1986,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1987,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1988,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1989,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1990,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1991,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1992,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1993,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1994,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1995,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1996,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1997,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1998,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 1999,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2001,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2002,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2003,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2004,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2005,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2006,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2007,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2008,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2009,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2010,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2011,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2012,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2013,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2014,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2015,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 2016,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 3000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 4000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5624,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5625,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5626,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5627,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5628,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5629,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5630,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5631,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5632,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5633,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5634,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5635,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5636,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5637,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5638,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5639,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 5640,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 6000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 7000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 8000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 9000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      },
+      {
+        "period": 10000,
+        "present": true,
+        "saveHashEqual": true,
+        "stateEqual": true,
+        "nativeCallsEqual": true,
+        "controlUsageEqual": true,
+        "rngEqual": true
+      }
+    ],
+    "BtoBRepeatFinalExportEqual": true,
+    "BtoBRepeatNativeActionSequenceEqual": true,
+    "BtoBRepeatControlsEqual": true,
+    "BtoBRepeatRngEqual": true,
+    "P42AtoBNativeCallsEqualBeforeDivergence": true
+  },
+  "outcomes": {
+    "A": {
+      "startPeriod": 720,
+      "endPeriod": 10000,
+      "checkpointCount": 111,
+      "jobsObservationCount": 1161,
+      "allSampledFoodFlowsPositive": false,
+      "noNewStarvationAtSampledCheckpoints": false,
+      "noNewDeathsAtSampledCheckpoints": true,
+      "anySampledPositiveStoneProduction": true,
+      "quarryWorkerAtEnd": false,
+      "finalPopulation": 4,
+      "finalStarvationCount": 26,
+      "finalDeaths": 0,
+      "finalFoodStock": 46.60883839999997,
+      "finalStoneStock": 600
+    },
+    "B": {
+      "startPeriod": 720,
+      "endPeriod": 10000,
+      "checkpointCount": 111,
+      "jobsObservationCount": 1161,
+      "allSampledFoodFlowsPositive": false,
+      "noNewStarvationAtSampledCheckpoints": false,
+      "noNewDeathsAtSampledCheckpoints": true,
+      "anySampledPositiveStoneProduction": true,
+      "quarryWorkerAtEnd": false,
+      "finalPopulation": 4,
+      "finalStarvationCount": 14,
+      "finalDeaths": 0,
+      "finalFoodStock": 36.26381866666674,
+      "finalStoneStock": 72.63013999999019
+    },
+    "ordinaryPlanConflicts": 1159,
+    "interventionCount": 1158,
+    "firstStarvationSample": {
+      "A": {
+        "period": 1592,
+        "workCycle": { "sequence": 110, "period": 1592 },
+        "identity": {
+          "rootMatches": true,
+          "inputIdentityAvailable": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|9:12|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "nativeDefaultJobId": "quarry_worker",
+          "rootDefaultJobId": "quarry_worker",
+          "farmerControlGeneration": 3,
+          "quarryControlGeneration": 3,
+          "farmerControlReady": true,
+          "quarryControlReady": true,
+          "controlGenerationReads": 2
+        },
+        "status": "diagnostic-assumption",
+        "applied": false,
+        "reason": "zero-quarry-fallback-required-for-positive-food-flow",
+        "floorStatus": "feasible",
+        "minimumFarmers": 3,
+        "foodOutput": 3.68,
+        "foodConsumption": 4,
+        "foodNet": -0.32,
+        "foodStock": 50,
+        "foodStockMaximum": 1000,
+        "nativeFoodDiff": -0.32,
+        "foodLedger": {
+          "production": {
+            "Food": {
+              "Farmer": "3.3479999999999994v",
+              "ᄂMill": "0%",
+              "ᄂVirgo+0": "0%",
+              "ᄂWeather": "0%",
+              "ᄂQuarantine+0": "0%",
+              "Biodome": "0v",
+              "Soldiers": "0.3333333333333333v",
+              "ᄂQuarantine+1": "0%"
+            }
+          },
+          "consumption": { "Food": { "Human": -4 } }
+        },
+        "modifier": 1.1995653748641797,
+        "farmerLedgerOutput": 3.3479999999999994,
+        "modifierInputs": {
+          "species": "human",
+          "raceFlags": {
+            "living_tool": false,
+            "iceage": false,
+            "low_light": false,
+            "high_pop": false,
+            "strong": false,
+            "swift": false,
+            "humongous": false,
+            "servants": false,
+            "photosynth": false,
+            "ravenous": false,
+            "carnivore": false,
+            "artifical": false
+          },
+          "research": {
+            "agriculture": 3,
+            "hoe": 0,
+            "science": 1,
+            "military": 1,
+            "hunting": 0,
+            "foraging": 0
+          },
+          "biome": "grassland",
+          "calendar": {},
+          "planetTraits": {},
+          "buildings": { "farm": 1, "mill": 0, "millOn": 0 },
+          "farmerSourceModifierFactors": [1, 1, 1, 1],
+          "soldierLedgerOutput": 0.3333333333333333,
+          "soldierQuarantineFactor": 1,
+          "globalProductionModifier": 0.9996378123868165,
+          "effectiveOtherFoodProduction": 0.3332126041289388
+        },
+        "population": 3,
+        "populationCapacity": 4,
+        "occupiedJobs": {
+          "farmer": { "workers": 2, "servants": 0 },
+          "quarry_worker": { "workers": 1, "servants": 0 },
+          "garrison": { "workers": 1, "servants": 0 }
+        },
+        "unassignedWorkers": 0,
+        "servants": {},
+        "starved": 1,
+        "deaths": 0,
+        "stoneStock": 181.619199999999,
+        "stoneProduction": 1,
+        "stoneConsumption": 0,
+        "stoneNet": 0.51,
+        "buildings": {
+          "city": {
+            "farm": 1,
+            "basic_housing": 4,
+            "shed": 1,
+            "rock_quarry": 1,
+            "garrison": 1
+          },
+          "underground": {},
+          "space": {},
+          "tauceti": {},
+          "galaxy": {},
+          "interstellar": {},
+          "eden": {}
+        },
+        "defaultJobId": "quarry_worker",
+        "jobs": [
+          {
+            "id": "farmer",
+            "workers": 2,
+            "servants": 0,
+            "minimum": 2,
+            "storageBackedMinimum": null,
+            "maximum": -1,
+            "smartMaximum": 2,
+            "managed": true,
+            "unlocked": true,
+            "split": false,
+            "breakpoints": [
+              9007199254740991, 9007199254740991, 9007199254740991
+            ]
+          },
+          {
+            "id": "quarry_worker",
+            "workers": 1,
+            "servants": 0,
+            "minimum": null,
+            "storageBackedMinimum": null,
+            "maximum": -1,
+            "smartMaximum": 9007199254740991,
+            "managed": true,
+            "unlocked": true,
+            "split": true,
+            "breakpoints": [4, 10, 0]
+          }
+        ],
+        "ordinaryAssignments": {
+          "unemployed": { "workers": 0, "servants": 0 },
+          "farmer": { "workers": 2, "servants": 0 },
+          "quarry_worker": { "workers": 1, "servants": 0 }
+        },
+        "assignments": {
+          "unemployed": { "workers": 0, "servants": 0 },
+          "farmer": { "workers": 2, "servants": 0 },
+          "quarry_worker": { "workers": 1, "servants": 0 }
+        },
+        "foodPositive": true,
+        "ordinaryPlanFood": {
+          "farmers": 2,
+          "foodOutput": 3.6799999999999997,
+          "foodConsumption": 4,
+          "foodNet": -0.3200000000000003,
+          "sustainable": false
+        },
+        "alternative": {
+          "farmers": 3,
+          "quarryWorkers": 0,
+          "otherWorkers": 0,
+          "population": 3,
+          "populationConserved": true,
+          "retainsQuarryWorker": false,
+          "foodOutput": 4.663643607388627,
+          "foodConsumption": 4,
+          "foodNet": 0.6636436073886269,
+          "foodPositive": true,
+          "projected": true,
+          "reason": "zero-quarry-fallback-required-for-positive-food-flow",
+          "requiresOtherJobTransfer": false,
+          "additionalWorkersRequired": 0,
+          "movableOtherWorkers": 0,
+          "otherJobTransferPossibleByNativeCaps": true,
+          "canRetainOneQuarryWorker": false,
+          "zeroQuarryFallback": true,
+          "zeroQuarryFallbackImprovesFood": true,
+          "exceedsFarmerSmartMaximum": true,
+          "nativeDefaultPreserved": true
+        },
+        "workerCommitments": "unavailable",
+        "workerCommitmentsAssumedEmpty": true
+      },
+      "B": {
+        "period": 5632,
+        "workCycle": { "sequence": 615, "period": 5632 },
+        "identity": {
+          "rootMatches": true,
+          "inputIdentityAvailable": true,
+          "rootGeneration": 0,
+          "progressionGeneration": "0|10:13|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+          "nativeDefaultJobId": "quarry_worker",
+          "rootDefaultJobId": "quarry_worker",
+          "farmerControlGeneration": 3,
+          "quarryControlGeneration": 3,
+          "farmerControlReady": true,
+          "quarryControlReady": true,
+          "controlGenerationReads": 2
+        },
+        "status": "food-floor-infeasible-zero-quarry-fallback",
+        "applied": true,
+        "reason": "zero-quarry-fallback-maximizes-food-but-still-negative",
+        "floorStatus": "infeasible",
+        "minimumFarmers": null,
+        "foodOutput": 4.75,
+        "foodConsumption": 7,
+        "foodNet": -2.25,
+        "foodStock": 50,
+        "foodStockMaximum": 1000,
+        "nativeFoodDiff": -2.25,
+        "foodLedger": {
+          "production": {
+            "Food": {
+              "Farmer": "4.331999999999999v",
+              "ᄂMill": "0%",
+              "ᄂVirgo+0": "0%",
+              "ᄂWeather": "-15.000000000000002%",
+              "ᄂQuarantine+0": "0%",
+              "Biodome": "0v",
+              "Soldiers": "1.3333333333333333v",
+              "ᄂQuarantine+1": "0%"
+            }
+          },
+          "consumption": { "Food": { "Human": -7 } }
+        },
+        "modifier": 0.9659989632209273,
+        "farmerLedgerOutput": 4.331999999999999,
+        "modifierInputs": {
+          "species": "human",
+          "raceFlags": {
+            "living_tool": false,
+            "iceage": false,
+            "low_light": false,
+            "high_pop": false,
+            "strong": false,
+            "swift": false,
+            "humongous": false,
+            "servants": false,
+            "photosynth": false,
+            "ravenous": false,
+            "carnivore": false,
+            "artifical": false
+          },
+          "research": {
+            "agriculture": 3,
+            "hoe": 0,
+            "science": 1,
+            "military": 1,
+            "hunting": 0,
+            "foraging": 0
+          },
+          "biome": "grassland",
+          "calendar": {},
+          "planetTraits": {},
+          "buildings": { "farm": 1, "mill": 0, "millOn": 0 },
+          "farmerSourceModifierFactors": [1, 1, 0.85, 1],
+          "soldierLedgerOutput": 1.3333333333333333,
+          "soldierQuarantineFactor": 1,
+          "globalProductionModifier": 0.9470578070793404,
+          "effectiveOtherFoodProduction": 1.2627437427724537
+        },
+        "population": 3,
+        "populationCapacity": 4,
+        "occupiedJobs": {
+          "farmer": { "workers": 3, "servants": 0 },
+          "garrison": { "workers": 4, "servants": 0 }
+        },
+        "unassignedWorkers": 0,
+        "servants": {},
+        "starved": 1,
+        "deaths": 0,
+        "stoneStock": 59.164099999990185,
+        "stoneProduction": 0,
+        "stoneConsumption": 0,
+        "stoneNet": 0,
+        "buildings": {
+          "city": {
+            "farm": 1,
+            "basic_housing": 4,
+            "shed": 1,
+            "rock_quarry": 1,
+            "garrison": 2
+          },
+          "underground": {},
+          "space": {},
+          "tauceti": {},
+          "galaxy": {},
+          "interstellar": {},
+          "eden": {}
+        },
+        "defaultJobId": "quarry_worker",
+        "jobs": [
+          {
+            "id": "farmer",
+            "workers": 3,
+            "servants": 0,
+            "minimum": 2,
+            "storageBackedMinimum": null,
+            "maximum": -1,
+            "smartMaximum": 2,
+            "managed": true,
+            "unlocked": true,
+            "split": false,
+            "breakpoints": [
+              9007199254740991, 9007199254740991, 9007199254740991
+            ]
+          },
+          {
+            "id": "quarry_worker",
+            "workers": 0,
+            "servants": 0,
+            "minimum": null,
+            "storageBackedMinimum": null,
+            "maximum": -1,
+            "smartMaximum": 9007199254740991,
+            "managed": true,
+            "unlocked": true,
+            "split": true,
+            "breakpoints": [4, 10, 0]
+          }
+        ],
+        "ordinaryAssignments": {
+          "unemployed": { "workers": 0, "servants": 0 },
+          "farmer": { "workers": 2, "servants": 0 },
+          "quarry_worker": { "workers": 1, "servants": 0 }
+        },
+        "assignments": {
+          "unemployed": { "workers": 0, "servants": 0 },
+          "farmer": { "workers": 3, "servants": 0 },
+          "quarry_worker": { "workers": 0, "servants": 0 }
+        },
+        "foodPositive": false,
+        "ordinaryPlanFood": {
+          "farmers": 2,
+          "foodOutput": 3.9578808501588405,
+          "foodConsumption": 7,
+          "foodNet": -3.0421191498411595,
+          "sustainable": false
+        },
+        "alternative": {
+          "farmers": 3,
+          "quarryWorkers": 0,
+          "otherWorkers": 0,
+          "population": 3,
+          "populationConserved": true,
+          "retainsQuarryWorker": false,
+          "foodOutput": 4.75,
+          "foodConsumption": 7,
+          "foodNet": -2.25,
+          "foodPositive": false,
+          "projected": true,
+          "reason": "zero-quarry-fallback-maximizes-food-but-still-negative",
+          "requiresOtherJobTransfer": false,
+          "additionalWorkersRequired": 0,
+          "movableOtherWorkers": 0,
+          "otherJobTransferPossibleByNativeCaps": true,
+          "canRetainOneQuarryWorker": false,
+          "zeroQuarryFallback": true,
+          "zeroQuarryFallbackImprovesFood": true,
+          "exceedsFarmerSmartMaximum": true,
+          "nativeDefaultPreserved": true
+        },
+        "workerCommitments": "unavailable",
+        "workerCommitmentsAssumedEmpty": true
+      }
+    },
+    "starvationStockCanBePositiveDespiteDeficit": true
+  },
+  "performance": {
+    "foodFloorPureComputationMs": 115.50000004656613,
+    "nativeFoodObservationMs": 164.09999996237457,
+    "nativeFoodObservationCount": 1161,
+    "nativeControlGenerationReads": 2322,
+    "fullJobsPlanCalls": 1161,
+    "baselineFarmerQuarryControlOperations": 2500,
+    "treatmentFarmerQuarryControlOperations": 2548,
+    "additionalFarmerQuarryControlOperations": 48,
+    "ordinaryJobsExecutionDurationMs": {
+      "A": 1558.2000000029802,
+      "B": 1561.7999999821186,
+      "delta": 3.5999999791383743,
+      "clock": "window.eaDiagnosticsNow native monotonic clock"
+    },
+    "wholeRunRelevantSynchronousJobsWorkMs": {
+      "A": 1558.2000000029802,
+      "B": 1561.7999999821186,
+      "note": "Accumulated captured full Jobs callback time, including native observation, pure planning, and existing executor work; excludes virtual game-time performance.now()."
+    },
+    "extraConstructionCalls": 0,
+    "extraGatherCalls": 0,
+    "extraCatalogReads": 0,
+    "addedFoodBreakdownReadsPerJobsCycle": 1,
+    "baselineJobsExecutionCount": 2500,
+    "treatmentJobsExecutionCount": 2500,
+    "traceOverflows": { "A": 0, "B": 0, "BRepeat": 0 },
+    "independentRendererCpuGate": "unresolved"
+  },
+  "formulaEvidence": {
+    "pinnedFarmerImpact": 0.82,
+    "farmCapacityFormula": "min(Farm count, Farmer count) receives native full-Farm bonus; remaining Farmers are farmhands and retain Farmer impact.",
+    "fullFarmBonusByAgriculture": "0.65 below Agriculture II; 1.15 from Agriculture II, pinned upstream source.",
+    "liveMultiplier": "Measured Food output = current Food.diff + absolute sum of all native Food consumers; current observed Farmer assignment and Farm formula derive the current effective per-Farmer multiplier.",
+    "otherSources": "All current Food consumer rows are included. An active non-Farmer producer without an independently verified effective-output formula makes the floor unavailable; no source is silently treated as Farmer output.",
+    "strictPositiveMargin": true,
+    "equalityIsSustainable": false,
+    "pinnedSourcePaths": {
+      "farmerValueAndImpact": "test-artifacts/game/evolve-deadspace.js:104296-104340",
+      "foodFarmerAndFarmhand": "test-artifacts/game/evolve-deadspace.js:150653-150678",
+      "foodConsumption": "test-artifacts/game/evolve-deadspace.js:150783-150895",
+      "jobsMinimumAndMaximum": "src/adapters/evolve/civic/captured-job-catalog.ts"
+    },
+    "p39Source": "experiments/p39-cross-owner-economic-coordination.md; P37's 1.2 multiplier is not reused.",
+    "commitmentsAndFormulaLimit": "Current commitments are not exposed by the catalog. The explicit empty-commitment test branch is diagnostic only."
+  },
+  "replay": {
+    "runtimeBundleSha256": "b45ab84f0d753ed6c110d2d5a53cf439f45fc91c5ef89de67318a2f40ff6d31b",
+    "policyBundleSha256": "e054292fb5bb232b39d297a030b580fa3c5abbc4393b5ad8624ce4d0200881c3",
+    "p38PolicyBundleSha256": "caf4e68c52fc5dd67f3d1431259a22b57c7ea8d75541cc10ee3f755b769ed7e6",
+    "replayHarnessSha256": "9cc86ed8b6ccec9006f6e61f5edc6a9a76ac9a978acaeca76e9df40ceb4e4688",
+    "p43PolicySha256": "59fa08c95814d3d9f09cdface71ab209947e4ef75eea32deb4a3f060f8ee7070",
+    "p43TraceSha256": "0059a4d3c67ebf8b95697817331171a00c1fd5e44c5cec40ab022f8e6893f212",
+    "traceOverflows": { "A": 0, "B": 0, "BRepeat": 0 },
+    "finalExports": {
+      "A": "a0702240940ec82f119f52ac0d7d767a14efd940c7ce338d740777930ae49ebf",
+      "B": "4ca006d76edddb98ae1c2cba2da35e1f7819ccc5dd76d5af956b8df08f066dc5",
+      "BRepeat": "4ca006d76edddb98ae1c2cba2da35e1f7819ccc5dd76d5af956b8df08f066dc5"
+    },
+    "finalRng": {
+      "A": { "calls": 2358, "state": 3483009474 },
+      "B": { "calls": 2111, "state": 3903296513 },
+      "BRepeat": { "calls": 2111, "state": 3903296513 }
+    },
+    "timelineSha256": "2164b4db0abde8dab6091f1463fe493f57b419600298fde60a13edf4cd6d80a9"
+  },
+  "caveats": [
+    "This is a controlled test-only Jobs intervention paired with P42's test-only Construction substitution.",
+    "It does not authorize ordinary Jobs overrides, Construction changes, Gather actions, or autonomous success.",
+    "A P43 result requiring the unapproved P42 Construction substitution and this Jobs experiment is not an autonomous production success.",
+    "Native breakpoints, smartMaximum, and physical maximum remain separate fields in the timeline."
+  ]
+}
