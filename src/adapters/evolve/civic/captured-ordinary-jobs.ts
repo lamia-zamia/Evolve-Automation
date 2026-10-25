@@ -116,6 +116,15 @@ export interface CapturedOrdinaryJobsDependencies {
   readonly readDemand?: () => CapturedDemandSample;
   readonly onSkipped?: (controlId: string, reason: string) => void;
   readonly testTrace?: CapturedJobsTraceSink;
+  readonly readTestAllocationDiagnosticRequest?:
+    (() => Readonly<AllocationDiagnosticRequest> | undefined) | undefined;
+  readonly readTestWorkCycleIdentity?: (() => number | undefined) | undefined;
+  readonly readTestCatalogReadCount?: (() => number | undefined) | undefined;
+  readonly readTestDemandReadCount?: (() => number | undefined) | undefined;
+  readonly readTestNativeRootReadCount?: (() => number | undefined) | undefined;
+  readonly nowTestMs?: (() => number) | undefined;
+  readonly onTestAllocationDiagnosticAdmission?:
+    ((event: Readonly<Record<string, unknown>>) => void) | undefined;
 }
 
 export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDependencies {
@@ -123,18 +132,13 @@ export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDepend
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
   readonly buildCosts?: GameActionCostReader;
   readonly diagnostics?: PhaseTimingSink;
-  readonly readTestAllocationDiagnosticRequest?:
-    (() => Readonly<AllocationDiagnosticRequest> | undefined) | undefined;
-  readonly readTestWorkCycleIdentity?: (() => number | undefined) | undefined;
   readonly readTestControlResolutionCount?:
     (() => number | undefined) | undefined;
   readonly readTestSettingsReadCount?: (() => number | undefined) | undefined;
-  readonly nowTestMs?: (() => number) | undefined;
-  readonly onTestAllocationDiagnosticAdmission?:
-    ((event: Readonly<Record<string, unknown>>) => void) | undefined;
 }
 
 interface OrdinaryJobsSession {
+  readonly preparationGeneration?: number;
   readonly root: unknown;
   readonly catalog: Readonly<CapturedJobCatalog>;
   readonly input: Readonly<JobsCycleInput>;
@@ -725,17 +729,64 @@ function capturedAllocationDiagnosticFacts(
   });
 }
 
+function capturedOrdinaryAllocationDiagnosticFacts(
+  session: Readonly<OrdinaryJobsSession>,
+): Pick<
+  AllocationDiagnosticEvidence,
+  | "jobsAvailable"
+  | "population"
+  | "ordinaryJobs"
+  | "foundryJobs"
+  | "foundryCrafts"
+  | "foundryWorkerPool"
+> {
+  const ordinaryJobs = session.input.jobs
+    .filter((job) => !job.crafting)
+    .map((job) =>
+      Object.freeze({
+        id: job.id,
+        kind: job.kind,
+        workers: job.workers,
+        servants: job.servants,
+        managed: job.managed,
+        unlocked: job.unlocked,
+        count: job.count,
+        maximum: job.maximum,
+      }),
+    );
+  return Object.freeze({
+    jobsAvailable: session.input.available,
+    population: session.input.population,
+    ordinaryJobs: Object.freeze(ordinaryJobs),
+    foundryJobs: null,
+    foundryCrafts: null,
+    foundryWorkerPool: null,
+  });
+}
+
 function observeTestAllocationDiagnosticRequest(
   dependencies: Pick<
     CapturedFullJobsDependencies,
     | "readTestAllocationDiagnosticRequest"
     | "readTestWorkCycleIdentity"
+    | "readTestCatalogReadCount"
+    | "readTestDemandReadCount"
+    | "readTestNativeRootReadCount"
     | "readTestControlResolutionCount"
     | "readTestSettingsReadCount"
     | "nowTestMs"
     | "onTestAllocationDiagnosticAdmission"
   >,
-  session: Readonly<FullJobsSession>,
+  ownerScope: "ordinary-jobs-only" | "full-jobs-and-foundry",
+  projectFacts: () => Pick<
+    AllocationDiagnosticEvidence,
+    | "jobsAvailable"
+    | "population"
+    | "ordinaryJobs"
+    | "foundryJobs"
+    | "foundryCrafts"
+    | "foundryWorkerPool"
+  >,
   generation: number,
   decision: Readonly<JobsDecision>,
   rootReferenceMatchedAtExecution: boolean,
@@ -756,6 +807,12 @@ function observeTestAllocationDiagnosticRequest(
     dependencies.readTestControlResolutionCount?.() ?? null;
   const settingsReadCountAtStart =
     dependencies.readTestSettingsReadCount?.() ?? null;
+  const catalogReadCountAtStart =
+    dependencies.readTestCatalogReadCount?.() ?? null;
+  const demandReadCountAtStart =
+    dependencies.readTestDemandReadCount?.() ?? null;
+  const nativeRootReadCountAtStart =
+    dependencies.readTestNativeRootReadCount?.() ?? null;
   const requestStartedAt = nowMs();
   const request = readRequest();
   const requestPresenceCheckMs = nowMs() - requestStartedAt;
@@ -764,8 +821,15 @@ function observeTestAllocationDiagnosticRequest(
       dependencies.readTestControlResolutionCount?.() ?? null;
     const settingsReadCountAtObservation =
       dependencies.readTestSettingsReadCount?.() ?? null;
+    const catalogReadCountAtObservation =
+      dependencies.readTestCatalogReadCount?.() ?? null;
+    const demandReadCountAtObservation =
+      dependencies.readTestDemandReadCount?.() ?? null;
+    const nativeRootReadCountAtObservation =
+      dependencies.readTestNativeRootReadCount?.() ?? null;
     const event: Record<string, unknown> = {
       kind: "p48-allocation-diagnostic-observation",
+      ownerScope,
       admission: {
         status: "inactive",
         requestId: null,
@@ -787,6 +851,23 @@ function observeTestAllocationDiagnosticRequest(
         settingsReadCountAtObservation === null
           ? null
           : settingsReadCountAtObservation - settingsReadCountAtStart,
+      catalogReadCountAtObservation,
+      catalogReadsDuringObservation:
+        catalogReadCountAtStart === null ||
+        catalogReadCountAtObservation === null
+          ? null
+          : catalogReadCountAtObservation - catalogReadCountAtStart,
+      demandReadCountAtObservation,
+      demandReadsDuringObservation:
+        demandReadCountAtStart === null || demandReadCountAtObservation === null
+          ? null
+          : demandReadCountAtObservation - demandReadCountAtStart,
+      nativeRootReadCountAtObservation,
+      nativeRootReadsDuringObservation:
+        nativeRootReadCountAtStart === null ||
+        nativeRootReadCountAtObservation === null
+          ? null
+          : nativeRootReadCountAtObservation - nativeRootReadCountAtStart,
       requestPresenceCheckMs,
       inputProjectionMs: 0,
       envelopeConstructionMs: 0,
@@ -800,11 +881,13 @@ function observeTestAllocationDiagnosticRequest(
   }
 
   const inputStartedAt = nowMs();
-  const facts = capturedAllocationDiagnosticFacts(session);
+  const facts = projectFacts();
   const inputProjectionMs = nowMs() - inputStartedAt;
   const envelopeStartedAt = nowMs();
   const workCycleIdentity = dependencies.readTestWorkCycleIdentity?.();
   const evidence: AllocationDiagnosticEvidence = Object.freeze({
+    ownerScope,
+    ownerSessionFreshness: "verified-current",
     workCycleIdentity:
       workCycleIdentity !== undefined && Number.isInteger(workCycleIdentity)
         ? workCycleIdentity
@@ -814,7 +897,10 @@ function observeTestAllocationDiagnosticRequest(
       preparationGeneration: generation,
       referenceMatchedAtExecution: rootReferenceMatchedAtExecution,
     }),
-    jobsFoundryFreshness: "verified-current",
+    jobsFoundryFreshness:
+      ownerScope === "full-jobs-and-foundry"
+        ? "verified-current"
+        : "unavailable",
     ...facts,
     plannedDecisionIdentity: capturedJobsDecisionIdentity(decision),
     requestIdentity: Object.freeze({
@@ -839,8 +925,15 @@ function observeTestAllocationDiagnosticRequest(
     dependencies.readTestControlResolutionCount?.() ?? null;
   const settingsReadCountAtObservation =
     dependencies.readTestSettingsReadCount?.() ?? null;
+  const catalogReadCountAtObservation =
+    dependencies.readTestCatalogReadCount?.() ?? null;
+  const demandReadCountAtObservation =
+    dependencies.readTestDemandReadCount?.() ?? null;
+  const nativeRootReadCountAtObservation =
+    dependencies.readTestNativeRootReadCount?.() ?? null;
   const event: Record<string, unknown> = {
     kind: "p48-allocation-diagnostic-observation",
+    ownerScope,
     admission,
     evidence,
     requestPresenceChecks: 1,
@@ -857,6 +950,22 @@ function observeTestAllocationDiagnosticRequest(
       settingsReadCountAtObservation === null
         ? null
         : settingsReadCountAtObservation - settingsReadCountAtStart,
+    catalogReadCountAtObservation,
+    catalogReadsDuringObservation:
+      catalogReadCountAtStart === null || catalogReadCountAtObservation === null
+        ? null
+        : catalogReadCountAtObservation - catalogReadCountAtStart,
+    demandReadCountAtObservation,
+    demandReadsDuringObservation:
+      demandReadCountAtStart === null || demandReadCountAtObservation === null
+        ? null
+        : demandReadCountAtObservation - demandReadCountAtStart,
+    nativeRootReadCountAtObservation,
+    nativeRootReadsDuringObservation:
+      nativeRootReadCountAtStart === null ||
+      nativeRootReadCountAtObservation === null
+        ? null
+        : nativeRootReadCountAtObservation - nativeRootReadCountAtStart,
     requestPresenceCheckMs,
     inputProjectionMs,
     envelopeConstructionMs,
@@ -1523,6 +1632,10 @@ export function createCapturedOrdinaryJobsAutomation({
   readDemand,
   onSkipped,
   testTrace,
+  readTestAllocationDiagnosticRequest,
+  readTestWorkCycleIdentity,
+  nowTestMs,
+  onTestAllocationDiagnosticAdmission,
 }: CapturedOrdinaryJobsDependencies): {
   readonly reader: JobsReader;
   readonly executor: JobsExecutor;
@@ -1531,18 +1644,74 @@ export function createCapturedOrdinaryJobsAutomation({
     jobIds: readonly string[],
   ) => CapturedJobCountSnapshot | undefined;
 } {
+  let testControlResolutionCount = 0;
+  let testSettingsReadCount = 0;
+  let testCatalogReadCount = 0;
+  let testDemandReadCount = 0;
+  let testNativeRootReadCount = 0;
+  const testObservationEnabled =
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    readTestAllocationDiagnosticRequest !== undefined &&
+    onTestAllocationDiagnosticAdmission !== undefined;
+  if (testObservationEnabled) {
+    const capturedControls = controls;
+    controls = Object.freeze({
+      ...capturedControls,
+      resolve(elementId: string) {
+        testControlResolutionCount += 1;
+        return capturedControls.resolve(elementId);
+      },
+    });
+  }
+  const ownerRootState = testObservationEnabled
+    ? Object.freeze({
+        readRoot() {
+          testNativeRootReadCount += 1;
+          return rootState.readRoot();
+        },
+        isReactivitySuppressed() {
+          return rootState.isReactivitySuppressed();
+        },
+        subscribeRootReplaced(listener: () => void) {
+          return rootState.subscribeRootReplaced(listener);
+        },
+      })
+    : rootState;
+  const readOwnerSettings = testObservationEnabled
+    ? () => {
+        testSettingsReadCount += 1;
+        return readSettings();
+      }
+    : readSettings;
+  const readOwnerDemand =
+    readDemand === undefined
+      ? undefined
+      : testObservationEnabled
+        ? () => {
+            testDemandReadCount += 1;
+            return readDemand();
+          }
+        : readDemand;
   let history: CapturedJobHistory | undefined;
   let historyRoot: unknown;
   let authorityCap: number | null = null;
-  const catalogReader = createCapturedJobCatalogReader({
-    rootState,
+  let preparationGeneration = 0;
+  const capturedCatalogReader = createCapturedJobCatalogReader({
+    rootState: ownerRootState,
     controls,
-    readSettings,
-    ...(readDemand === undefined ? {} : { readDemand }),
+    readSettings: readOwnerSettings,
+    ...(readOwnerDemand === undefined ? {} : { readDemand: readOwnerDemand }),
     ...(onSkipped === undefined ? {} : { onSkipped }),
     readJobHistory: () =>
-      historyRoot === rootState.readRoot() ? history : undefined,
+      historyRoot === ownerRootState.readRoot() ? history : undefined,
   });
+  const catalogReader = testObservationEnabled
+    ? () => {
+        testCatalogReadCount += 1;
+        return capturedCatalogReader();
+      }
+    : capturedCatalogReader;
   const invocations: Array<Readonly<Record<string, unknown>>> | undefined =
     typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
@@ -1564,13 +1733,16 @@ export function createCapturedOrdinaryJobsAutomation({
         sessionRef.value = undefined;
         return unavailableInput();
       }
-      const root = rootState.readRoot();
-      const settingsValue = readSettings();
+      const generation = testObservationEnabled
+        ? ++preparationGeneration
+        : undefined;
+      const root = ownerRootState.readRoot();
+      const settingsValue = readOwnerSettings();
       const sampled = readCycle(
         root,
         settingsValue,
         catalogReader,
-        readDemand,
+        readOwnerDemand,
         authorityCap,
       );
       if (sampled === undefined) {
@@ -1578,6 +1750,9 @@ export function createCapturedOrdinaryJobsAutomation({
         return unavailableInput();
       }
       sessionRef.value = Object.freeze({
+        ...(generation === undefined
+          ? {}
+          : { preparationGeneration: generation }),
         root,
         catalog: sampled.catalog,
         input: sampled.input,
@@ -1598,7 +1773,7 @@ export function createCapturedOrdinaryJobsAutomation({
           "ordinary-jobs-session-missing",
           "ordinary jobs session is missing",
         );
-      if (rootState.readRoot() !== session.root) {
+      if (ownerRootState.readRoot() !== session.root) {
         sessionRef.value = undefined;
         return stale(
           "ordinary-jobs-root-changed",
@@ -1632,9 +1807,9 @@ export function createCapturedOrdinaryJobsAutomation({
       const currentCatalog = catalogReader();
       const currentCycle = readCycle(
         session.root,
-        readSettings(),
+        readOwnerSettings(),
         catalogReader,
-        readDemand,
+        readOwnerDemand,
         authorityCap,
       );
       if (
@@ -1660,6 +1835,25 @@ export function createCapturedOrdinaryJobsAutomation({
           "ordinary jobs decision does not match the sampled plan",
         );
       }
+      if (testObservationEnabled)
+        observeTestAllocationDiagnosticRequest(
+          {
+            readTestAllocationDiagnosticRequest,
+            readTestWorkCycleIdentity,
+            readTestControlResolutionCount: () => testControlResolutionCount,
+            readTestSettingsReadCount: () => testSettingsReadCount,
+            readTestCatalogReadCount: () => testCatalogReadCount,
+            readTestDemandReadCount: () => testDemandReadCount,
+            readTestNativeRootReadCount: () => testNativeRootReadCount,
+            nowTestMs,
+            onTestAllocationDiagnosticAdmission,
+          },
+          "ordinary-jobs-only",
+          () => capturedOrdinaryAllocationDiagnosticFacts(session),
+          session.preparationGeneration!,
+          decision,
+          true,
+        );
       const required = requiredOrdinaryMethods(session.commandState, decision);
       const preflightFailure = missingOrdinaryMethod(
         controls,
@@ -1763,7 +1957,7 @@ export function createCapturedOrdinaryJobsAutomation({
         decision,
       );
       if (outcome.status === "succeeded") {
-        const currentRoot = rootState.readRoot();
+        const currentRoot = ownerRootState.readRoot();
         const observed =
           currentRoot === session.root ? catalogReader() : undefined;
         const matches =
@@ -1946,7 +2140,7 @@ export function createCapturedOrdinaryJobsAutomation({
                 })),
               },
             });
-          historyRoot = rootState.readRoot();
+          historyRoot = ownerRootState.readRoot();
           history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
             lastFarmerCount: decision.lastFarmerCount,
@@ -1966,9 +2160,9 @@ export function createCapturedOrdinaryJobsAutomation({
       root: unknown,
       jobIds: readonly string[],
     ): CapturedJobCountSnapshot | undefined {
-      if (root !== rootState.readRoot()) return undefined;
+      if (root !== ownerRootState.readRoot()) return undefined;
       const snapshot = readCapturedJobCountSnapshot(root, jobIds);
-      return root === rootState.readRoot() ? snapshot : undefined;
+      return root === ownerRootState.readRoot() ? snapshot : undefined;
     },
   });
 }
@@ -2001,18 +2195,34 @@ export function createCapturedFullJobsAutomation({
 } {
   let testControlResolutionCount = 0;
   let testSettingsReadCount = 0;
+  let testCatalogReadCount = 0;
+  let testDemandReadCount = 0;
+  let testNativeRootReadCount = 0;
   let controls = capturedControls;
-  if (
+  const testObservationEnabled =
     typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true &&
     readTestAllocationDiagnosticRequest !== undefined &&
-    onTestAllocationDiagnosticAdmission !== undefined
-  ) {
+    onTestAllocationDiagnosticAdmission !== undefined;
+  if (testObservationEnabled) {
     controls = Object.freeze({
       ...capturedControls,
       resolve(elementId: string) {
         testControlResolutionCount += 1;
         return capturedControls.resolve(elementId);
+      },
+    });
+    const capturedRootState = rootState;
+    rootState = Object.freeze({
+      readRoot() {
+        testNativeRootReadCount += 1;
+        return capturedRootState.readRoot();
+      },
+      isReactivitySuppressed() {
+        return capturedRootState.isReactivitySuppressed();
+      },
+      subscribeRootReplaced(listener: () => void) {
+        return capturedRootState.subscribeRootReplaced(listener);
       },
     });
   }
@@ -2053,6 +2263,7 @@ export function createCapturedFullJobsAutomation({
       demandReader: (() => CapturedDemandSample) | undefined,
     ) => {
       tally.count("jobs.full.jobCatalogReads");
+      if (testObservationEnabled) testCatalogReadCount += 1;
       return catalogReader(sampledRoot, sampledSettings, demandReader);
     };
     let demandRead = false;
@@ -2062,6 +2273,7 @@ export function createCapturedFullJobsAutomation({
         : () => {
             if (!demandRead) {
               tally.count("jobs.full.demandReads");
+              if (testObservationEnabled) testDemandReadCount += 1;
               demandRead = true;
             }
             return readDemand();
@@ -2188,10 +2400,14 @@ export function createCapturedFullJobsAutomation({
               readTestWorkCycleIdentity,
               readTestControlResolutionCount: () => testControlResolutionCount,
               readTestSettingsReadCount: () => testSettingsReadCount,
+              readTestCatalogReadCount: () => testCatalogReadCount,
+              readTestDemandReadCount: () => testDemandReadCount,
+              readTestNativeRootReadCount: () => testNativeRootReadCount,
               nowTestMs,
               onTestAllocationDiagnosticAdmission,
             },
-            session,
+            "full-jobs-and-foundry",
+            () => capturedAllocationDiagnosticFacts(session),
             generation,
             decision,
             executionRoot === session.root,

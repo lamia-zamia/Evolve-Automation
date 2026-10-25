@@ -5296,6 +5296,8 @@ export function startCapturedRuntime({
       "observeAllocationDiagnosticAdmission",
     );
     if (typeof observer === "function") {
+      let forwardedAdmissions = 0;
+      const maxForwardedAdmissions = 64;
       const readTestAllocationDiagnosticRequest = () => {
         const candidate = readProperty(hooks, "allocationDiagnosticRequest");
         if (
@@ -5323,6 +5325,8 @@ export function startCapturedRuntime({
         onTestAllocationDiagnosticAdmission: (
           event: Readonly<Record<string, unknown>>,
         ) => {
+          if (forwardedAdmissions >= maxForwardedAdmissions) return;
+          forwardedAdmissions += 1;
           try {
             Reflect.apply(observer, hooks, [event]);
           } catch {
@@ -5342,6 +5346,7 @@ export function startCapturedRuntime({
     ...(capturedJobsTraceSink === undefined
       ? {}
       : { testTrace: capturedJobsTraceSink }),
+    ...allocationDiagnosticAdmissionDependencies,
   });
   const fullJobs = createCapturedFullJobsAutomation({
     rootState: pageCapture.rootState,
