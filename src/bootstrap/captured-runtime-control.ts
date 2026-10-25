@@ -5285,7 +5285,7 @@ export function startCapturedRuntime({
           if (typeof observer === "function") observer(event);
         }
       : undefined;
-  let allocationDiagnosticAdmissionDependencies: object = {};
+  let allocationDiagnosticAdmissionDependencies: object | undefined;
   if (
     typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
@@ -5346,7 +5346,10 @@ export function startCapturedRuntime({
     ...(capturedJobsTraceSink === undefined
       ? {}
       : { testTrace: capturedJobsTraceSink }),
-    ...allocationDiagnosticAdmissionDependencies,
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? (allocationDiagnosticAdmissionDependencies ?? {})
+      : {}),
   });
   const fullJobs = createCapturedFullJobsAutomation({
     rootState: pageCapture.rootState,
@@ -5364,7 +5367,10 @@ export function startCapturedRuntime({
     ...(capturedJobsTraceSink === undefined
       ? {}
       : { testTrace: capturedJobsTraceSink }),
-    ...allocationDiagnosticAdmissionDependencies,
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? (allocationDiagnosticAdmissionDependencies ?? {})
+      : {}),
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,

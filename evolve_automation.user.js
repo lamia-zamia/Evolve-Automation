@@ -13238,48 +13238,6 @@
     return outcome.status === "succeeded" && prepared.decision !== null && onCoherentPlan?.(prepared.decision), outcome;
   }
 
-  // src/domain/civic/allocation-diagnostic-admission.ts
-  var FOOD_STONE_DIAGNOSTIC_OBJECTIVE = "maintain-food-buffer-and-useful-stone-production", FOOD_STONE_DIAGNOSTIC_SCOPE = "food-sustainability-and-useful-stone-replenishment";
-  function admitAllocationDiagnosticObservation(request, evidence) {
-    if (request === void 0)
-      return Object.freeze({
-        status: "inactive",
-        requestId: null,
-        origin: null,
-        executionAuthority: "none",
-        reason: "no explicit diagnostic request"
-      });
-    let base = {
-      requestId: typeof request.requestId == "string" && request.requestId.length > 0 ? request.requestId : null,
-      origin: request.origin === "test-only" ? "test-only" : null,
-      executionAuthority: "none"
-    }, requestIdentity = evidence.requestIdentity, validRequestGeneration = Number.isInteger(request.generation) && request.generation > 0;
-    if (!request.active || !validRequestGeneration || request.origin !== "test-only" || typeof request.requestId != "string" || request.requestId.length === 0 || request.objectiveId !== FOOD_STONE_DIAGNOSTIC_OBJECTIVE || request.requestedScope !== FOOD_STONE_DIAGNOSTIC_SCOPE || request.cancelledAtGeneration !== void 0 && (!Number.isInteger(request.cancelledAtGeneration) || request.cancelledAtGeneration <= 0 || request.cancelledAtGeneration >= request.generation) || request.replacedAtGeneration !== void 0 && (!Number.isInteger(request.replacedAtGeneration) || request.replacedAtGeneration <= 0 || request.replacedAtGeneration >= request.generation) || requestIdentity == null || requestIdentity.requestId !== request.requestId || requestIdentity.origin !== request.origin || requestIdentity.generation !== request.generation || !Number.isInteger(requestIdentity.generation) || requestIdentity.generation <= 0)
-      return Object.freeze({
-        ...base,
-        status: "stale",
-        reason: "request was cancelled, replaced, or no longer matches its identity"
-      });
-    let rootGeneration = evidence.capturedRootIdentity?.preparationGeneration ?? null, progressionWorkCycle = evidence.progressionEvidence?.workCycle;
-    return evidence.ownerSessionFreshness === "stale" || evidence.jobsFoundryFreshness === "stale" || evidence.capturedRootIdentity != null && !evidence.capturedRootIdentity.referenceMatchedAtExecution || evidence.jobsPreparationGeneration !== null && (!Number.isInteger(evidence.jobsPreparationGeneration) || evidence.jobsPreparationGeneration <= 0) || rootGeneration !== null && (!Number.isInteger(rootGeneration) || rootGeneration <= 0) || evidence.jobsPreparationGeneration !== null && rootGeneration !== null && evidence.jobsPreparationGeneration !== rootGeneration || evidence.workCycleIdentity !== null && (!Number.isInteger(evidence.workCycleIdentity) || evidence.workCycleIdentity < 0) || progressionWorkCycle != null && (!Number.isInteger(progressionWorkCycle) || progressionWorkCycle < 0) || evidence.workCycleIdentity !== null && progressionWorkCycle !== null && progressionWorkCycle !== void 0 && evidence.workCycleIdentity !== progressionWorkCycle ? Object.freeze({
-      ...base,
-      status: "stale",
-      reason: "the prepared Jobs owner session is stale"
-    }) : evidence.ownerScope !== "ordinary-jobs-only" && evidence.ownerScope !== "full-jobs-and-foundry" || evidence.ownerSessionFreshness !== "verified-current" || evidence.workCycleIdentity === null || evidence.jobsPreparationGeneration === null || rootGeneration === null || evidence.capturedRootIdentity == null || !evidence.jobsAvailable || evidence.population === null || !Number.isFinite(evidence.population) || evidence.population < 0 || !Array.isArray(evidence.ordinaryJobs) || typeof evidence.plannedDecisionIdentity != "string" || evidence.plannedDecisionIdentity.length === 0 || evidence.ownerScope === "full-jobs-and-foundry" && (evidence.jobsFoundryFreshness !== "verified-current" || !Array.isArray(evidence.foundryJobs) || !Array.isArray(evidence.foundryCrafts) || evidence.foundryWorkerPool === null || !Number.isFinite(evidence.foundryWorkerPool) || evidence.foundryWorkerPool < 0) || evidence.ownerScope === "ordinary-jobs-only" && (evidence.jobsFoundryFreshness !== "unavailable" || evidence.foundryJobs !== null || evidence.foundryCrafts !== null || evidence.foundryWorkerPool !== null) ? Object.freeze({
-      ...base,
-      status: "insufficient-evidence",
-      reason: "current owner-local Jobs facts are incomplete for this owner scope"
-    }) : request.authorityClassification !== "observation-only" ? Object.freeze({
-      ...base,
-      status: "blocked-by-authority",
-      reason: "the request has no allocation execution authority"
-    }) : Object.freeze({
-      ...base,
-      status: "admitted-for-observation",
-      reason: "current owner-local facts may be inspected for this diagnostic request"
-    });
-  }
-
   // src/application/prestige.ts
   function runPrestige({
     reader,
@@ -24857,52 +24815,6 @@
         })
       });
   }
-  function capturedJobsDecisionIdentity(decision) {
-    return JSON.stringify([
-      decision.kind,
-      decision.assignments.map((assignment) => [
-        assignment.jobToken,
-        assignment.workers,
-        assignment.servants
-      ]),
-      decision.selectedDefaultToken,
-      decision.moraleIncomeAdjusted,
-      decision.ironIncomeAdjusted,
-      decision.maximumSpaceMiners,
-      decision.lastPopulationCount,
-      decision.lastFarmerCount,
-      decision.authorityEntertainerCap,
-      decision.clearAuthorityEntertainerCap,
-      decision.craftWinner,
-      decision.craftDebugMessage,
-      decision.authorityDebugMessage
-    ]);
-  }
-  function capturedOrdinaryAllocationDiagnosticFacts(session) {
-    let ordinaryJobs = session.input.jobs.filter((job) => !job.crafting).map(
-      (job) => Object.freeze({
-        id: job.id,
-        kind: job.kind,
-        workers: job.workers,
-        servants: job.servants,
-        managed: job.managed,
-        unlocked: job.unlocked,
-        count: job.count,
-        maximum: job.maximum
-      })
-    );
-    return Object.freeze({
-      jobsAvailable: session.input.available,
-      population: session.input.population,
-      ordinaryJobs: Object.freeze(ordinaryJobs),
-      foundryJobs: null,
-      foundryCrafts: null,
-      foundryWorkerPool: null
-    });
-  }
-  function observeTestAllocationDiagnosticRequest(dependencies, ownerScope, projectFacts, generation, decision, rootReferenceMatchedAtExecution) {
-    let readRequest = dependencies.readTestAllocationDiagnosticRequest, observe = dependencies.onTestAllocationDiagnosticAdmission;
-  }
   function craftJob(job, token, servants) {
     return Object.freeze({
       ...job,
@@ -25208,47 +25120,23 @@
       (job) => job.token === decision.selectedDefaultToken
     )?.id !== session.catalog.defaultJobId;
   }
-  function createCapturedOrdinaryJobsAutomation({
-    rootState,
-    controls: controls2,
-    readSettings,
-    keyState,
-    readDemand,
-    onSkipped,
-    testTrace,
-    readTestAllocationDiagnosticRequest,
-    readTestWorkCycleIdentity,
-    nowTestMs,
-    onTestAllocationDiagnosticAdmission
-  }) {
-    let testControlResolutionCount = 0, testSettingsReadCount = 0, testCatalogReadCount = 0, testDemandReadCount = 0, testNativeRootReadCount = 0, testObservationEnabled = !1;
-    if (testObservationEnabled) {
-      let capturedControls = controls2;
-      controls2 = Object.freeze({
-        ...capturedControls,
-        resolve(elementId) {
-          return testControlResolutionCount += 1, capturedControls.resolve(elementId);
-        }
-      });
-    }
-    let ownerRootState = testObservationEnabled ? Object.freeze({
-      readRoot() {
-        return testNativeRootReadCount += 1, rootState.readRoot();
-      },
-      isReactivitySuppressed() {
-        return rootState.isReactivitySuppressed();
-      },
-      subscribeRootReplaced(listener) {
-        return rootState.subscribeRootReplaced(listener);
-      }
-    }) : rootState, readOwnerSettings = testObservationEnabled ? () => (testSettingsReadCount += 1, readSettings()) : readSettings, readOwnerDemand = readDemand === void 0 ? void 0 : testObservationEnabled ? () => (testDemandReadCount += 1, readDemand()) : readDemand, history, historyRoot, authorityCap = null, preparationGeneration = 0, capturedCatalogReader = createCapturedJobCatalogReader({
+  function createCapturedOrdinaryJobsAutomation(dependencies) {
+    let {
+      rootState,
+      controls: controls2,
+      readSettings,
+      keyState,
+      readDemand,
+      onSkipped,
+      testTrace
+    } = dependencies, ownerRootState = rootState, readOwnerSettings = readSettings, readOwnerDemand = readDemand, testInstrumentation, history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
       rootState: ownerRootState,
       controls: controls2,
       readSettings: readOwnerSettings,
       ...readOwnerDemand === void 0 ? {} : { readDemand: readOwnerDemand },
       ...onSkipped === void 0 ? {} : { onSkipped },
       readJobHistory: () => historyRoot === ownerRootState.readRoot() ? history : void 0
-    }), catalogReader = testObservationEnabled ? () => (testCatalogReadCount += 1, capturedCatalogReader()) : capturedCatalogReader, invocations = void 0, controlsPort = createCapturedJobControls({
+    }), invocations = void 0, controlsPort = createCapturedJobControls({
       controls: controls2
     }), sessionRef = {
       value: void 0
@@ -25256,7 +25144,7 @@
       readCycle(craftOnly) {
         if (craftOnly)
           return sessionRef.value = void 0, unavailableInput();
-        let generation = testObservationEnabled ? ++preparationGeneration : void 0, root = ownerRootState.readRoot(), settingsValue = readOwnerSettings(), sampled3 = readCycle(
+        let generation = void 0, root = ownerRootState.readRoot(), settingsValue = readOwnerSettings(), sampled3 = readCycle(
           root,
           settingsValue,
           catalogReader,
@@ -25315,24 +25203,6 @@
             "invalid-ordinary-jobs-decision",
             "ordinary jobs decision does not match the sampled plan"
           );
-        testObservationEnabled && observeTestAllocationDiagnosticRequest(
-          {
-            readTestAllocationDiagnosticRequest,
-            readTestWorkCycleIdentity,
-            readTestControlResolutionCount: () => testControlResolutionCount,
-            readTestSettingsReadCount: () => testSettingsReadCount,
-            readTestCatalogReadCount: () => testCatalogReadCount,
-            readTestDemandReadCount: () => testDemandReadCount,
-            readTestNativeRootReadCount: () => testNativeRootReadCount,
-            nowTestMs,
-            onTestAllocationDiagnosticAdmission
-          },
-          "ordinary-jobs-only",
-          () => capturedOrdinaryAllocationDiagnosticFacts(session),
-          session.preparationGeneration,
-          decision,
-          !0
-        );
         let required = requiredOrdinaryMethods(session.commandState, decision), preflightFailure = missingOrdinaryMethod(
           controls2,
           session.commandState,
@@ -25381,45 +25251,18 @@
       }
     });
   }
-  function createCapturedFullJobsAutomation({
-    rootState,
-    controls: capturedControls,
-    readSettings,
-    keyState,
-    onSkipped,
-    costs,
-    readDemand,
-    readBuildTargets,
-    buildCosts,
-    diagnostics,
-    testTrace,
-    readTestAllocationDiagnosticRequest,
-    readTestWorkCycleIdentity,
-    nowTestMs,
-    onTestAllocationDiagnosticAdmission
-  }) {
-    let testControlResolutionCount = 0, testSettingsReadCount = 0, testCatalogReadCount = 0, testDemandReadCount = 0, testNativeRootReadCount = 0, controls2 = capturedControls, testObservationEnabled = !1;
-    if (testObservationEnabled) {
-      controls2 = Object.freeze({
-        ...capturedControls,
-        resolve(elementId) {
-          return testControlResolutionCount += 1, capturedControls.resolve(elementId);
-        }
-      });
-      let capturedRootState = rootState;
-      rootState = Object.freeze({
-        readRoot() {
-          return testNativeRootReadCount += 1, capturedRootState.readRoot();
-        },
-        isReactivitySuppressed() {
-          return capturedRootState.isReactivitySuppressed();
-        },
-        subscribeRootReplaced(listener) {
-          return capturedRootState.subscribeRootReplaced(listener);
-        }
-      });
-    }
-    let history, historyRoot, authorityCap = null, prepareGeneration = 0, catalogReader = (root, settingsValue, demandReader) => readCapturedJobCatalog(
+  function createCapturedFullJobsAutomation(dependencies) {
+    let {
+      readSettings,
+      keyState,
+      onSkipped,
+      costs,
+      readDemand,
+      readBuildTargets,
+      buildCosts,
+      diagnostics,
+      testTrace
+    } = dependencies, controls2 = dependencies.controls, rootState = dependencies.rootState, testInstrumentation, history, historyRoot, authorityCap = null, prepareGeneration = 0, catalogReader = (root, settingsValue, demandReader) => readCapturedJobCatalog(
       root,
       controls2,
       settingsValue,
@@ -25431,7 +25274,7 @@
     return Object.freeze({ prepare: () => {
       let generation = ++prepareGeneration, tally = createCountTally(diagnostics), measure = createExclusiveJobsMeasure(diagnostics);
       tally.count("jobs.full.readFullCycleCalls");
-      let root = rootState.readRoot(), settings = readSettings(), countedCatalogReader = (sampledRoot, sampledSettings, demandReader) => (tally.count("jobs.full.jobCatalogReads"), testObservationEnabled && (testCatalogReadCount += 1), catalogReader(sampledRoot, sampledSettings, demandReader)), demandRead = !1, countedDemand = readDemand === void 0 ? void 0 : () => (demandRead || (tally.count("jobs.full.demandReads"), testObservationEnabled && (testDemandReadCount += 1), demandRead = !0), readDemand()), countedCosts = Object.freeze({
+      let root = rootState.readRoot(), settings = readSettings(), countedCatalogReader = (sampledRoot, sampledSettings, demandReader) => (tally.count("jobs.full.jobCatalogReads"), catalogReader(sampledRoot, sampledSettings, demandReader)), demandRead = !1, countedDemand = readDemand === void 0 ? void 0 : () => (demandRead || (tally.count("jobs.full.demandReads"), demandRead = !0), readDemand()), countedCosts = Object.freeze({
         read(id) {
           return tally.count("jobs.full.craftCostReads"), measure("jobs.full.craftCosts", () => costs.read(id));
         }
@@ -61312,15 +61155,14 @@ Only continue if you trust the source. Injected code:
       readDemand: readDemandFor("Jobs"),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts
-    }), capturedJobsTraceSink = void 0, allocationDiagnosticAdmissionDependencies = {}, ordinaryJobs = createCapturedOrdinaryJobsAutomation({
+    }), capturedJobsTraceSink = void 0, allocationDiagnosticAdmissionDependencies, ordinaryJobs = createCapturedOrdinaryJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       readDemand: readDemandFor("Jobs"),
       onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
-      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink },
-      ...allocationDiagnosticAdmissionDependencies
+      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink }
     }), fullJobs = createCapturedFullJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -61332,8 +61174,7 @@ Only continue if you trust the source. Injected code:
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts,
       ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics },
-      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink },
-      ...allocationDiagnosticAdmissionDependencies
+      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink }
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
