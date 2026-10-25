@@ -5,6 +5,7 @@ export function createBuildOptions({
   logLevel = "info",
   plugins = [],
   researchConditionGate = false,
+  testSurface = false,
 }) {
   return {
     absWorkingDir: root,
@@ -19,8 +20,8 @@ export function createBuildOptions({
     platform: "browser",
     target: ["esnext"],
     define: {
-      "globalThis.__EA_TEST_SURFACE_ENABLED__": "false",
-      __EA_TEST_SURFACE_ENABLED__: "false",
+      "globalThis.__EA_TEST_SURFACE_ENABLED__": String(testSurface),
+      __EA_TEST_SURFACE_ENABLED__: String(testSurface),
       __EA_RESEARCH_CONDITION_GATE_ENABLED__: String(researchConditionGate),
     },
     minifySyntax: true,

@@ -25252,7 +25252,7 @@
   }
   function createCapturedFullJobsAutomation({
     rootState,
-    controls: controls2,
+    controls: capturedControls,
     readSettings,
     keyState,
     onSkipped,
@@ -25261,9 +25261,13 @@
     readBuildTargets,
     buildCosts,
     diagnostics,
-    testTrace
+    testTrace,
+    readTestAllocationDiagnosticRequest,
+    readTestWorkCycleIdentity,
+    nowTestMs,
+    onTestAllocationDiagnosticAdmission
   }) {
-    let history, historyRoot, authorityCap = null, prepareGeneration = 0, catalogReader = (root, settingsValue, demandReader) => readCapturedJobCatalog(
+    let testControlResolutionCount = 0, testSettingsReadCount = 0, controls2 = capturedControls, history, historyRoot, authorityCap = null, prepareGeneration = 0, catalogReader = (root, settingsValue, demandReader) => readCapturedJobCatalog(
       root,
       controls2,
       settingsValue,
@@ -61156,7 +61160,7 @@ Only continue if you trust the source. Injected code:
       readDemand: readDemandFor("Jobs"),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts
-    }), capturedJobsTraceSink = void 0, ordinaryJobs = createCapturedOrdinaryJobsAutomation({
+    }), capturedJobsTraceSink = void 0, allocationDiagnosticAdmissionDependencies = {}, ordinaryJobs = createCapturedOrdinaryJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       keyState: pageCapture2.keyState,
@@ -61175,7 +61179,8 @@ Only continue if you trust the source. Injected code:
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts,
       ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics },
-      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink }
+      ...capturedJobsTraceSink === void 0 ? {} : { testTrace: capturedJobsTraceSink },
+      ...allocationDiagnosticAdmissionDependencies
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

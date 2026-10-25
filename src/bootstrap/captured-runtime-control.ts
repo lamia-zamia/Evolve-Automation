@@ -13,6 +13,11 @@ import {
 } from "../application/jobs.ts";
 import type { PreparedJobsExecution } from "../ports/jobs.ts";
 import type { JobsCycleInput } from "../domain/civic/jobs.ts";
+import {
+  FOOD_STONE_DIAGNOSTIC_OBJECTIVE,
+  FOOD_STONE_DIAGNOSTIC_SCOPE,
+  type AllocationDiagnosticRequest,
+} from "../domain/civic/allocation-diagnostic-admission.ts";
 import { createCapturedPrestigeControl } from "./captured-prestige-control.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { readConstructionAllocationAuthority } from "./construction-allocation-authority.ts";
@@ -5280,6 +5285,53 @@ export function startCapturedRuntime({
           if (typeof observer === "function") observer(event);
         }
       : undefined;
+  let allocationDiagnosticAdmissionDependencies: object = {};
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    const observer = readProperty(
+      hooks,
+      "observeAllocationDiagnosticAdmission",
+    );
+    if (typeof observer === "function") {
+      const readTestAllocationDiagnosticRequest = () => {
+        const candidate = readProperty(hooks, "allocationDiagnosticRequest");
+        if (
+          !isRecord(candidate) ||
+          candidate["origin"] !== "test-only" ||
+          candidate["objectiveId"] !== FOOD_STONE_DIAGNOSTIC_OBJECTIVE ||
+          candidate["requestedScope"] !== FOOD_STONE_DIAGNOSTIC_SCOPE ||
+          typeof candidate["requestId"] !== "string" ||
+          !Number.isInteger(candidate["generation"]) ||
+          typeof candidate["active"] !== "boolean" ||
+          (candidate["authorityClassification"] !== "observation-only" &&
+            candidate["authorityClassification"] !== "execution-required") ||
+          (candidate["cancelledAtGeneration"] !== undefined &&
+            !Number.isInteger(candidate["cancelledAtGeneration"])) ||
+          (candidate["replacedAtGeneration"] !== undefined &&
+            !Number.isInteger(candidate["replacedAtGeneration"]))
+        )
+          return undefined;
+        return candidate as unknown as Readonly<AllocationDiagnosticRequest>;
+      };
+      allocationDiagnosticAdmissionDependencies = {
+        readTestAllocationDiagnosticRequest,
+        readTestWorkCycleIdentity: () => automationCycle,
+        nowTestMs: () => phaseDiagnostics?.nowMs() ?? Number.NaN,
+        onTestAllocationDiagnosticAdmission: (
+          event: Readonly<Record<string, unknown>>,
+        ) => {
+          try {
+            Reflect.apply(observer, hooks, [event]);
+          } catch {
+            // A test-only observation cannot change the Jobs owner outcome.
+          }
+        },
+      };
+    }
+  }
   const ordinaryJobs = createCapturedOrdinaryJobsAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -5307,6 +5359,7 @@ export function startCapturedRuntime({
     ...(capturedJobsTraceSink === undefined
       ? {}
       : { testTrace: capturedJobsTraceSink }),
+    ...allocationDiagnosticAdmissionDependencies,
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,

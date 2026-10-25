@@ -14,6 +14,11 @@ import type {
   JobsReader,
   PreparedJobsExecution,
 } from "../../../ports/jobs.ts";
+import {
+  admitAllocationDiagnosticObservation,
+  type AllocationDiagnosticEvidence,
+  type AllocationDiagnosticRequest,
+} from "../../../domain/civic/allocation-diagnostic-admission.ts";
 import type {
   GameControlHandle,
   GameControlRegistry,
@@ -118,6 +123,15 @@ export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDepend
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
   readonly buildCosts?: GameActionCostReader;
   readonly diagnostics?: PhaseTimingSink;
+  readonly readTestAllocationDiagnosticRequest?:
+    (() => Readonly<AllocationDiagnosticRequest> | undefined) | undefined;
+  readonly readTestWorkCycleIdentity?: (() => number | undefined) | undefined;
+  readonly readTestControlResolutionCount?:
+    (() => number | undefined) | undefined;
+  readonly readTestSettingsReadCount?: (() => number | undefined) | undefined;
+  readonly nowTestMs?: (() => number) | undefined;
+  readonly onTestAllocationDiagnosticAdmission?:
+    ((event: Readonly<Record<string, unknown>>) => void) | undefined;
 }
 
 interface OrdinaryJobsSession {
@@ -633,6 +647,225 @@ interface FullJobsSession {
     CapturedJobCommandState["jobs"][number]
   >[];
   readonly settings: Readonly<{ autoJobs: boolean; autoCraftsmen: boolean }>;
+}
+
+function capturedJobsDecisionIdentity(
+  decision: Readonly<JobsDecision>,
+): string {
+  return JSON.stringify([
+    decision.kind,
+    decision.assignments.map((assignment) => [
+      assignment.jobToken,
+      assignment.workers,
+      assignment.servants,
+    ]),
+    decision.selectedDefaultToken,
+    decision.moraleIncomeAdjusted,
+    decision.ironIncomeAdjusted,
+    decision.maximumSpaceMiners,
+    decision.lastPopulationCount,
+    decision.lastFarmerCount,
+    decision.authorityEntertainerCap,
+    decision.clearAuthorityEntertainerCap,
+    decision.craftWinner,
+    decision.craftDebugMessage,
+    decision.authorityDebugMessage,
+  ]);
+}
+
+function capturedAllocationDiagnosticFacts(
+  session: Readonly<FullJobsSession>,
+): Pick<
+  AllocationDiagnosticEvidence,
+  | "jobsAvailable"
+  | "population"
+  | "ordinaryJobs"
+  | "foundryJobs"
+  | "foundryCrafts"
+  | "foundryWorkerPool"
+> {
+  const projectJob = (job: Readonly<JobsJobInput>) =>
+    Object.freeze({
+      id: job.id,
+      kind: job.kind,
+      workers: job.workers,
+      servants: job.servants,
+      managed: job.managed,
+      unlocked: job.unlocked,
+      count: job.count,
+      maximum: job.maximum,
+    });
+  const ordinaryJobs = session.input.jobs
+    .filter((job) => !job.crafting)
+    .map(projectJob);
+  const foundryJobs = session.input.jobs
+    .filter((job) => job.crafting)
+    .map(projectJob);
+  const skilledServants = new Map(
+    session.foundry.skilledSamples.map((sample) => [
+      sample.id,
+      sample.servants,
+    ]),
+  );
+  const foundryCrafts = session.foundry.samples.map((sample) =>
+    Object.freeze({
+      id: sample.id,
+      workers: sample.workers,
+      skilledServants: skilledServants.get(sample.id) ?? 0,
+      buildingCapacity: sample.buildingCapacity,
+    }),
+  );
+  return Object.freeze({
+    jobsAvailable: session.input.available,
+    population: session.input.population,
+    ordinaryJobs: Object.freeze(ordinaryJobs),
+    foundryJobs: Object.freeze(foundryJobs),
+    foundryCrafts: Object.freeze(foundryCrafts),
+    foundryWorkerPool: session.foundry.workerPool,
+  });
+}
+
+function observeTestAllocationDiagnosticRequest(
+  dependencies: Pick<
+    CapturedFullJobsDependencies,
+    | "readTestAllocationDiagnosticRequest"
+    | "readTestWorkCycleIdentity"
+    | "readTestControlResolutionCount"
+    | "readTestSettingsReadCount"
+    | "nowTestMs"
+    | "onTestAllocationDiagnosticAdmission"
+  >,
+  session: Readonly<FullJobsSession>,
+  generation: number,
+  decision: Readonly<JobsDecision>,
+  rootReferenceMatchedAtExecution: boolean,
+): void {
+  const readRequest = dependencies.readTestAllocationDiagnosticRequest;
+  const observe = dependencies.onTestAllocationDiagnosticAdmission;
+  if (
+    readRequest === undefined ||
+    observe === undefined ||
+    typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+    __EA_TEST_SURFACE_ENABLED__ !== true
+  )
+    return;
+
+  const nowMs = dependencies.nowTestMs ?? (() => Number.NaN);
+  const startedAt = nowMs();
+  const controlResolutionCountAtStart =
+    dependencies.readTestControlResolutionCount?.() ?? null;
+  const settingsReadCountAtStart =
+    dependencies.readTestSettingsReadCount?.() ?? null;
+  const requestStartedAt = nowMs();
+  const request = readRequest();
+  const requestPresenceCheckMs = nowMs() - requestStartedAt;
+  if (request === undefined) {
+    const controlResolutionCountAtObservation =
+      dependencies.readTestControlResolutionCount?.() ?? null;
+    const settingsReadCountAtObservation =
+      dependencies.readTestSettingsReadCount?.() ?? null;
+    const event: Record<string, unknown> = {
+      kind: "p48-allocation-diagnostic-observation",
+      admission: {
+        status: "inactive",
+        requestId: null,
+        origin: null,
+        executionAuthority: "none",
+        reason: "no explicit diagnostic request",
+      },
+      requestPresenceChecks: 1,
+      admissionEvaluations: 0,
+      controlResolutionCountAtObservation,
+      controlResolutionReadsDuringObservation:
+        controlResolutionCountAtStart === null ||
+        controlResolutionCountAtObservation === null
+          ? null
+          : controlResolutionCountAtObservation - controlResolutionCountAtStart,
+      settingsReadCountAtObservation,
+      settingsReadsDuringObservation:
+        settingsReadCountAtStart === null ||
+        settingsReadCountAtObservation === null
+          ? null
+          : settingsReadCountAtObservation - settingsReadCountAtStart,
+      requestPresenceCheckMs,
+      inputProjectionMs: 0,
+      envelopeConstructionMs: 0,
+      admissionPredicateMs: 0,
+      additionalSynchronousCallbackMs: 0,
+      nativeRootExposed: false,
+    };
+    observe(event);
+    event.additionalSynchronousCallbackMs = nowMs() - startedAt;
+    return;
+  }
+
+  const inputStartedAt = nowMs();
+  const facts = capturedAllocationDiagnosticFacts(session);
+  const inputProjectionMs = nowMs() - inputStartedAt;
+  const envelopeStartedAt = nowMs();
+  const workCycleIdentity = dependencies.readTestWorkCycleIdentity?.();
+  const evidence: AllocationDiagnosticEvidence = Object.freeze({
+    workCycleIdentity:
+      workCycleIdentity !== undefined && Number.isInteger(workCycleIdentity)
+        ? workCycleIdentity
+        : null,
+    jobsPreparationGeneration: generation,
+    capturedRootIdentity: Object.freeze({
+      preparationGeneration: generation,
+      referenceMatchedAtExecution: rootReferenceMatchedAtExecution,
+    }),
+    jobsFoundryFreshness: "verified-current",
+    ...facts,
+    plannedDecisionIdentity: capturedJobsDecisionIdentity(decision),
+    requestIdentity: Object.freeze({
+      requestId: request.requestId,
+      origin: request.origin,
+      generation: request.generation,
+    }),
+    progressionEvidence: Object.freeze({
+      workCycle: workCycleIdentity ?? null,
+      progressionEpoch: "unavailable",
+      rootGeneration: "unavailable",
+    }),
+    controlGenerationEvidence: "unavailable",
+    crossOwnerCommitments: "unavailable",
+    executionAuthority: "none",
+  });
+  const envelopeConstructionMs = nowMs() - envelopeStartedAt;
+  const admissionStartedAt = nowMs();
+  const admission = admitAllocationDiagnosticObservation(request, evidence);
+  const admissionPredicateMs = nowMs() - admissionStartedAt;
+  const controlResolutionCountAtObservation =
+    dependencies.readTestControlResolutionCount?.() ?? null;
+  const settingsReadCountAtObservation =
+    dependencies.readTestSettingsReadCount?.() ?? null;
+  const event: Record<string, unknown> = {
+    kind: "p48-allocation-diagnostic-observation",
+    admission,
+    evidence,
+    requestPresenceChecks: 1,
+    admissionEvaluations: 1,
+    controlResolutionCountAtObservation,
+    controlResolutionReadsDuringObservation:
+      controlResolutionCountAtStart === null ||
+      controlResolutionCountAtObservation === null
+        ? null
+        : controlResolutionCountAtObservation - controlResolutionCountAtStart,
+    settingsReadCountAtObservation,
+    settingsReadsDuringObservation:
+      settingsReadCountAtStart === null ||
+      settingsReadCountAtObservation === null
+        ? null
+        : settingsReadCountAtObservation - settingsReadCountAtStart,
+    requestPresenceCheckMs,
+    inputProjectionMs,
+    envelopeConstructionMs,
+    admissionPredicateMs,
+    additionalSynchronousCallbackMs: 0,
+    nativeRootExposed: false,
+  };
+  observe(event);
+  event.additionalSynchronousCallbackMs = nowMs() - startedAt;
 }
 
 function craftJob(
@@ -1743,7 +1976,7 @@ export function createCapturedOrdinaryJobsAutomation({
 /** Combines ordinary jobs, foundry craftsmen, and their servant pools in one planner decision. */
 export function createCapturedFullJobsAutomation({
   rootState,
-  controls,
+  controls: capturedControls,
   readSettings,
   keyState,
   onSkipped,
@@ -1753,6 +1986,10 @@ export function createCapturedFullJobsAutomation({
   buildCosts,
   diagnostics,
   testTrace,
+  readTestAllocationDiagnosticRequest,
+  readTestWorkCycleIdentity,
+  nowTestMs,
+  onTestAllocationDiagnosticAdmission,
 }: CapturedFullJobsDependencies): {
   readonly prepare: () =>
     | { readonly status: "unavailable" }
@@ -1762,6 +1999,23 @@ export function createCapturedFullJobsAutomation({
         readonly execution: Readonly<PreparedJobsExecution>;
       };
 } {
+  let testControlResolutionCount = 0;
+  let testSettingsReadCount = 0;
+  let controls = capturedControls;
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    readTestAllocationDiagnosticRequest !== undefined &&
+    onTestAllocationDiagnosticAdmission !== undefined
+  ) {
+    controls = Object.freeze({
+      ...capturedControls,
+      resolve(elementId: string) {
+        testControlResolutionCount += 1;
+        return capturedControls.resolve(elementId);
+      },
+    });
+  }
   let history: CapturedJobHistory | undefined;
   let historyRoot: unknown;
   let authorityCap: number | null = null;
@@ -1785,6 +2039,13 @@ export function createCapturedFullJobsAutomation({
     const measure = createExclusiveJobsMeasure(diagnostics);
     tally.count("jobs.full.readFullCycleCalls");
     const root = rootState.readRoot();
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true &&
+      readTestAllocationDiagnosticRequest !== undefined &&
+      onTestAllocationDiagnosticAdmission !== undefined
+    )
+      testSettingsReadCount += 1;
     const settings = readSettings();
     const countedCatalogReader = (
       sampledRoot: unknown,
@@ -1916,6 +2177,24 @@ export function createCapturedFullJobsAutomation({
           return stale(
             "full-jobs-state-changed",
             `ordinary or foundry state changed: ${staleState}`,
+          );
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        )
+          observeTestAllocationDiagnosticRequest(
+            {
+              readTestAllocationDiagnosticRequest,
+              readTestWorkCycleIdentity,
+              readTestControlResolutionCount: () => testControlResolutionCount,
+              readTestSettingsReadCount: () => testSettingsReadCount,
+              nowTestMs,
+              onTestAllocationDiagnosticAdmission,
+            },
+            session,
+            generation,
+            decision,
+            executionRoot === session.root,
           );
         if (!fullDecisionChangesState(session, decision)) {
           historyRoot = session.root;

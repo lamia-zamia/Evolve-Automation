@@ -9,6 +9,7 @@
   "scripts": {
     "build": "node build.mjs",
     "build:local": "node build.mjs --local",
+    "build:test-surface": "node build.mjs --local --test-surface",
     "typecheck": "tsc -p tsconfig.json && npm run typecheck:architecture",
     "typecheck:architecture": "tsc -p tsconfig.architecture.json",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
