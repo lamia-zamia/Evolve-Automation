@@ -1,0 +1,235 @@
+{
+  "schema": "p47-allocator-entrypoint-feasibility-v1",
+  "pinnedGame": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "decision": {
+    "code": "C",
+    "name": "No defensible trigger",
+    "rationale": "Retained native Standard/Human evidence does not establish a natural Quarry Worker unlock: P38 has no live row at p688 and no native Quarry purchase or assignment through p10000, but it does not retain a cycle-by-cycle Jobs catalog stream. P43 starts with the row already unlocked after a test-only Construction intervention, and the late-game owner publication history is absent. JobsCycleInput also lacks the cross-owner work-cycle and generation envelope needed to qualify a trigger at a synchronous coordinator boundary."
+  },
+  "candidates": [
+    {
+      "id": "newly-unlocked-quarry-worker-row",
+      "status": "not-established",
+      "observation": "Captured Jobs catalog row availability",
+      "proposedCondition": "A Quarry Worker row becomes newly unlocked in the prepared Jobs publication, compared only with the immediately preceding Jobs owner publication.",
+      "standardHuman": {
+        "source": "P38 native Standard/Human replay, matched to P18",
+        "fixturePath": "test-artifacts/benchmark/slice0/saves/p18-standard-human-fixture.txt",
+        "fixtureSha256": "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684",
+        "settingsPath": "experiments/p18-standard-human-settings.json",
+        "periods": 10000,
+        "ordinaryJobsExecutions": {
+          "A": 2500,
+          "B": 2500,
+          "B-repeat": 2500
+        },
+        "quarryWorkerAtCapturedP688Input": "no-live-row",
+        "postP688CheckpointCount": 11,
+        "postP688CheckpointPeriods": [
+          688, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000
+        ],
+        "nativeQuarryPurchaseObserved": false,
+        "assignedQuarryWorkerAtAnyCheckpoint": false,
+        "candidateUnlockTransitionsObserved": null,
+        "candidateUnlockTransitionObservationStatus": "not-recorded-at-cycle-level",
+        "triggerScope": "P38 reports no native Quarry purchase or assignment through p10000 and the captured p688 Jobs input has no Quarry Worker row. It does not retain a cycle-by-cycle Jobs catalog stream, so transition frequency is not measured."
+      },
+      "p43PostInterventionArms": [
+        {
+          "arm": "armA",
+          "provenance": "P43 Jobs trace starts after P42's test-only Construction priority substitution and P38's test-authorized Gather sequence.",
+          "eventCount": 1161,
+          "firstPeriod": 720,
+          "lastPeriod": 10000,
+          "rowAtFirstEvent": {
+            "id": "quarry_worker",
+            "workers": 0,
+            "servants": 0,
+            "minimum": null,
+            "storageBackedMinimum": null,
+            "maximum": -1,
+            "smartMaximum": 9007199254740991,
+            "managed": true,
+            "unlocked": true,
+            "split": true,
+            "breakpoints": [4, 10, 0]
+          },
+          "unlockedEventCount": 1161,
+          "rowEntryTransitions": 0,
+          "newUnlockTransitions": 0
+        },
+        {
+          "arm": "armB",
+          "provenance": "P43 Jobs trace starts after P42's test-only Construction priority substitution and P38's test-authorized Gather sequence.",
+          "eventCount": 1161,
+          "firstPeriod": 720,
+          "lastPeriod": 10000,
+          "rowAtFirstEvent": {
+            "id": "quarry_worker",
+            "workers": 0,
+            "servants": 0,
+            "minimum": null,
+            "storageBackedMinimum": null,
+            "maximum": -1,
+            "smartMaximum": 9007199254740991,
+            "managed": true,
+            "unlocked": true,
+            "split": true,
+            "breakpoints": [4, 10, 0]
+          },
+          "unlockedEventCount": 1161,
+          "rowEntryTransitions": 0,
+          "newUnlockTransitions": 0
+        }
+      ],
+      "lateGame": {
+        "fixturePath": "test-artifacts/benchmark/slice0/saves/mad-tech-offered-blocked.json",
+        "fixturePresent": true,
+        "boundedPeriods": 800,
+        "p45SourceTimeline": "experiments/p43-food-safe-jobs-timeline.json",
+        "p45SourceArm": "P43 B",
+        "p45FoodTimelinePoints": 1229,
+        "p45PointsContainingJobsConstructionGenerationQueueOrResearchFields": 0,
+        "preparedJobsPublicationCount": null,
+        "unlockTransitions": null,
+        "status": "unmeasurable-from-retained-owner-publications"
+      },
+      "qualificationBlockers": [
+        "P38 captured no live Quarry Worker row at p688 and reports no native Quarry purchase or assignment through p10000, but it does not retain a cycle-by-cycle Jobs catalog stream from which to count unlock transitions.",
+        "P43 first observes Quarry Worker already unlocked at p720; the preceding availability change is outside the Jobs trace and follows a test-only Construction priority substitution.",
+        "P43's later job assignment changes are not new unlocks and cannot serve as entry-point triggers.",
+        "P45 retains food-stock points without Jobs, Construction, queue, or owner-generation identities; P46's bounded late-game profile retains no prepared Jobs catalog stream.",
+        "Production JobsCycleInput does not carry a work-cycle ID, root generation, progression generation, or control generations for the captured rows."
+      ]
+    },
+    {
+      "id": "construction-saving-target-change",
+      "status": "rejected-as-coordinator-trigger",
+      "source": "Construction completed intent and ordering",
+      "p40Boundary": {
+        "currentWorkCycleId": 90,
+        "completedPublicationId": 89,
+        "historicalReservationTarget": "city-farm",
+        "currentConstructionTarget": "city-rock_quarry"
+      },
+      "reason": "P40 proves the previous completed Construction intent and current Construction ordering are distinct publications. P43's later target changes are treatment-linked and do not create a same-cycle Jobs request."
+    },
+    {
+      "id": "resource-demand-change",
+      "status": "rejected-as-coordinator-trigger",
+      "source": "Memoized diagnostic demand sample",
+      "reason": "Demand is computed lazily once per demand epoch and invalidated at cycle start or relevant mutation. The sample mixes owner-derived demand and reservations, carries no common owner publication identity, and does not express a player-selected goal or allocation request."
+    },
+    {
+      "id": "native-queue-change",
+      "status": "rejected-as-coordinator-trigger",
+      "source": "Captured native Build and Research queues",
+      "reason": "Queue entries are explicit player commitments and are read when reservation sampling runs, but the queue source emits no independent owner event or shared owner-generation envelope for the Jobs boundary."
+    },
+    {
+      "id": "jobs-owner-request",
+      "status": "not-present",
+      "source": "Jobs onCoherentPlan callback",
+      "reason": "The callback reports an already prepared and successfully executed ordinary Jobs decision. It is not an independent request to coordinate or spend."
+    }
+  ],
+  "retainedDiagnosticBoundaries": {
+    "p37": {
+      "objectivePlayerSelected": false,
+      "executionAuthority": "none"
+    },
+    "p39": {
+      "decision": "B",
+      "authority": "Cross-owner economic coordination remains diagnostic; worker commitments and a Construction-owned spending contract are incomplete."
+    },
+    "p41": {
+      "evidence": "experiments/p41-reservation-correctness.md",
+      "correction": "Unavailable holdings or incomplete reservation evidence fail closed; this P47 audit changes no P41 behavior."
+    },
+    "p42": {
+      "purpose": "test-only one-cycle causal intervention; this is not a production Construction-owner decision",
+      "noExecutionSpendingAuthority": true
+    },
+    "p43": {
+      "addedNativeFoodObservations": 1161,
+      "addedControlGenerationReads": 2322,
+      "addedFoodBreakdownReadsPerJobsCycle": 1,
+      "source": "P43 trace includes additional Food/root/control observations; those observations are excluded from a zero-new-capture P47 proof."
+    },
+    "p44": {
+      "workerCommitments": "unavailable",
+      "authority": "Formula-backed Food projections do not establish the live set of worker commitments."
+    },
+    "p46": {
+      "rendererCpuGate": "unresolved",
+      "detectsCalibratedTwoPercentEffect": false
+    }
+  },
+  "runtimeProof": {
+    "status": "not-run-no-qualified-trigger",
+    "productionBehaviorChanged": false,
+    "coordinatorContractImplemented": false,
+    "baselineCoordinatorEvaluations": null,
+    "triggeredCoordinatorEvaluations": null,
+    "activationCheckTimeMs": null,
+    "pureEvaluationTimeMs": null,
+    "inputPreparationTimeMs": null,
+    "inputCopyBytes": null,
+    "totalSynchronousCallbackIncrementMs": null,
+    "maximumPerCycleIncrementMs": null,
+    "additionalNativeCatalogReads": null,
+    "additionalNativePriceReads": null,
+    "additionalNativeResourceReads": null,
+    "additionalControlResolutionsOrCapabilityProbes": null,
+    "retainedDiagnosticMemoryBytes": null,
+    "reason": "Stage 2 did not establish a genuine qualified trigger. Stages 3–5 were gated off; null values mean not measured, not zero.",
+    "rendererCpuGate": "unresolved; no P47 CPU comparison was run"
+  },
+  "parityCoverage": {
+    "status": "not-run-stage-4-gated-off",
+    "nativeParityFixturePath": "test-artifacts/benchmark/settings/baseline-tuned.json",
+    "nativeParityFixturePresent": false,
+    "priorCoverageLimitation": "P46 recorded the missing baseline-tuned native-parity settings fixture; this report preserves that existing limitation and does not create replacement evidence."
+  },
+  "sourceEvidence": {
+    "experiments/p37-economic-goal-dependencies.json": {
+      "sha256": "96fb108dcc813532888fdd7cd39943413e5241a3ab86926de7b3041c8d5d3f38"
+    },
+    "experiments/p38-quarry-production-validation-evidence.json": {
+      "sha256": "c6d5e0f9e698e36540238db4806573176ffb58c3eac546174bc79e650072542a"
+    },
+    "experiments/p38-quarry-production-validation-jobs.json": {
+      "sha256": "f09b44716fe345961d6665d2f2c108168da0a0d9278e4b24cbb95ff2986f6291"
+    },
+    "experiments/p38-quarry-production-validation-production.json": {
+      "sha256": "3a01314b3cc662227e09c309a803a2bb8375e6fac523a96e411c54559e6c07a9"
+    },
+    "experiments/p39-cross-owner-economic-coordination-evidence.json": {
+      "sha256": "9ed5c58172499f32d52faf2088f5801ea8f7d329b55d6aa68171666364b5abb6"
+    },
+    "experiments/p40-construction-reservation-gate-trace.json": {
+      "sha256": "1ea42eb268103721457fe43ad98e8a429b270a4882a79e62c1bd817bd573dfd2"
+    },
+    "experiments/p41-reservation-correctness-trace.json": {
+      "sha256": "fa5cba5db3f6ce8f0492c156984ba662f1834833ca2390947cf53f9041f64723"
+    },
+    "experiments/p42-construction-priority-counterfactual-evidence.json": {
+      "sha256": "e82bef70d5a51f2a5452ad5286420faa66841c79a2bb43492276973b346c1470"
+    },
+    "experiments/p43-food-safe-jobs-timeline.json": {
+      "sha256": "6a532a6f77753018c50bdc001944e46c99e928c5b4ec196026f7b4854fd88e0f"
+    },
+    "experiments/p43-food-safe-jobs-evidence.json": {
+      "sha256": "c44434ec9ebfb9dbcd8c8bf8abd79204f42e185333bf35e93caaac3c36270482"
+    },
+    "experiments/p44-food-infrastructure-feasibility-matrix.json": {
+      "sha256": "7d4e5ca2539c677a2e3e94efb6e7be2a594a9185aed60f2c61806007d5b684e9"
+    },
+    "experiments/p45-food-stock-timeline.json": {
+      "sha256": "7358eb9ecf3df6fd5be4deef8c4a9194d043e3282bdacb557a374fecd5ccadea"
+    },
+    "experiments/p46-renderer-cpu-readiness-evidence.json": {
+      "sha256": "5091a7259b6d1ea6c947664e95f01e62c7d472674220694dc7ee17466b998284"
+    }
+  }
+}
