@@ -1833,4 +1833,209 @@ assert.equal(
 );
 assert.ok(fullCalls.length > 0);
 
+const previousTestSurfaceFlag = globalThis.__EA_TEST_SURFACE_ENABLED__;
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+let allocationDiagnosticRequest;
+let allocationDiagnosticRequestReads = 0;
+const allocationDiagnosticEvents = [];
+const makeAllocationDiagnosticAutomation = () =>
+  createCapturedFullJobsAutomation({
+    rootState: { readRoot: () => fullRootIdentity ?? fullRoot },
+    controls: fullControls,
+    keyState: { readMultiplierLatch: () => fullMultiplierLatch },
+    readSettings: () => ({
+      ...resetBreakpoints,
+      job_unemployed: true,
+      job_farmer: true,
+      job_lumberjack: false,
+      job_s_farmer: true,
+      jobSetDefault: true,
+      productionCraftsmen: "always",
+      jobManageServants: fullManageServants,
+      craftPlywood: true,
+      job_Plywood: true,
+      foundry_w_Plywood: 1,
+      craftBrick: true,
+      job_Brick: true,
+      foundry_w_Brick: 1,
+      productionFoundryWeighting: "demanded",
+    }),
+    costs: {
+      read: (id) => {
+        fullCraftCostReads++;
+        return id === "Plywood" || id === "Brick"
+          ? new Map([["Iron", 1]])
+          : undefined;
+      },
+    },
+    readDemand: () => {
+      fullDemandReads++;
+      return {
+        isDemanded: () => true,
+        storageRequired: () => 100,
+      };
+    },
+    readBuildTargets: () => {
+      fullBuildTargetReads++;
+      return [{ key: "housing", elementId: "city-housing", weighting: 1 }];
+    },
+    buildCosts: {
+      readCost: () => {
+        fullBuildCostReads++;
+        return { cost: { Plywood: 1 }, pool: undefined };
+      },
+    },
+    diagnostics: fullDiagnostics,
+    readTestAllocationDiagnosticRequest: () => {
+      allocationDiagnosticRequestReads++;
+      return allocationDiagnosticRequest;
+    },
+    readTestWorkCycleIdentity: () => 900,
+    nowTestMs: () => performance.now(),
+    onTestAllocationDiagnosticAdmission: (event) =>
+      allocationDiagnosticEvents.push(event),
+  });
+
+const resetAllocationDiagnosticRoot = () => {
+  fullRootIdentity = undefined;
+  fullMultiplierLatch = false;
+  fullCalls.length = 0;
+  for (const key of Object.keys(fullRoot)) delete fullRoot[key];
+  Object.assign(fullRoot, structuredClone(fullStateBeforePreflight));
+};
+const runAllocationDiagnosticArm = (request) => {
+  resetAllocationDiagnosticRoot();
+  allocationDiagnosticRequest = request;
+  allocationDiagnosticEvents.length = 0;
+  allocationDiagnosticRequestReads = 0;
+  const automation = makeAllocationDiagnosticAutomation();
+  const prepared = automation.prepare();
+  assert.equal(prepared.status, "ready");
+  assert.notEqual(prepared.execution.decision, null);
+  const sourceReadsBeforeExecution = [
+    fullDemandReads,
+    fullCraftCostReads,
+    fullBuildTargetReads,
+    fullBuildCostReads,
+  ];
+  assert.equal(prepared.execution.execute().status, "succeeded");
+  assert.deepEqual(
+    [
+      fullDemandReads,
+      fullCraftCostReads,
+      fullBuildTargetReads,
+      fullBuildCostReads,
+    ],
+    sourceReadsBeforeExecution,
+    "observation does not recapture demand, prices, targets, or costs during execution",
+  );
+  assert.equal(allocationDiagnosticRequestReads, 1);
+  assert.equal(allocationDiagnosticEvents.length, 1);
+  return {
+    calls: structuredClone(fullCalls),
+    state: structuredClone(fullRoot),
+    observation: allocationDiagnosticEvents[0],
+  };
+};
+
+const allocationDiagnosticBaseline = runAllocationDiagnosticArm(undefined);
+const diagnosticOnlyRequest = {
+  requestId: "fixture:p48:food-stone:1",
+  origin: "test-only",
+  objectiveId: "maintain-food-buffer-and-useful-stone-production",
+  requestedScope: "food-sustainability-and-useful-stone-replenishment",
+  generation: 1,
+  active: true,
+  authorityClassification: "observation-only",
+};
+const allocationDiagnosticB = runAllocationDiagnosticArm(diagnosticOnlyRequest);
+const allocationDiagnosticBRepeat = runAllocationDiagnosticArm(
+  diagnosticOnlyRequest,
+);
+assert.deepEqual(
+  allocationDiagnosticBaseline.calls,
+  allocationDiagnosticB.calls,
+);
+assert.deepEqual(
+  allocationDiagnosticB.calls,
+  allocationDiagnosticBRepeat.calls,
+);
+assert.deepEqual(
+  allocationDiagnosticBaseline.state,
+  allocationDiagnosticB.state,
+);
+assert.deepEqual(
+  allocationDiagnosticB.state,
+  allocationDiagnosticBRepeat.state,
+);
+assert.equal(
+  allocationDiagnosticBaseline.observation.admission.status,
+  "inactive",
+);
+assert.equal(allocationDiagnosticBaseline.observation.admissionEvaluations, 0);
+assert.equal(
+  allocationDiagnosticBaseline.observation
+    .controlResolutionReadsDuringObservation,
+  0,
+);
+assert.equal(
+  allocationDiagnosticBaseline.observation.settingsReadsDuringObservation,
+  0,
+);
+assert.equal(
+  allocationDiagnosticB.observation.admission.status,
+  "admitted-for-observation",
+);
+assert.equal(
+  allocationDiagnosticB.observation.controlResolutionReadsDuringObservation,
+  0,
+);
+assert.equal(
+  allocationDiagnosticB.observation.settingsReadsDuringObservation,
+  0,
+);
+assert.equal(
+  allocationDiagnosticB.observation.admission.executionAuthority,
+  "none",
+);
+assert.equal(allocationDiagnosticB.observation.nativeRootExposed, false);
+
+allocationDiagnosticEvents.length = 0;
+const allocationDiagnosticLifecycle = makeAllocationDiagnosticAutomation();
+const supersededAllocationDiagnostic = allocationDiagnosticLifecycle.prepare();
+const currentAllocationDiagnostic = allocationDiagnosticLifecycle.prepare();
+assert.equal(
+  supersededAllocationDiagnostic.execution.execute().failure?.code,
+  "full-jobs-session-superseded",
+);
+assert.equal(allocationDiagnosticEvents.length, 0);
+assert.equal(
+  currentAllocationDiagnostic.execution.execute().status,
+  "succeeded",
+);
+assert.equal(allocationDiagnosticEvents.length, 1);
+
+allocationDiagnosticEvents.length = 0;
+const staleAllocationDiagnosticRoot = allocationDiagnosticLifecycle.prepare();
+fullRootIdentity = structuredClone(fullRoot);
+assert.equal(
+  staleAllocationDiagnosticRoot.execution.execute().failure?.code,
+  "full-jobs-root-changed",
+);
+assert.equal(allocationDiagnosticEvents.length, 0);
+fullRootIdentity = undefined;
+
+const staleAllocationDiagnosticFoundry =
+  allocationDiagnosticLifecycle.prepare();
+fullRoot.city.foundry.Plywood++;
+assert.equal(
+  staleAllocationDiagnosticFoundry.execution.execute().failure?.code,
+  "full-jobs-state-changed",
+);
+assert.equal(allocationDiagnosticEvents.length, 0);
+fullRoot.city.foundry.Plywood--;
+if (previousTestSurfaceFlag === undefined)
+  delete globalThis.__EA_TEST_SURFACE_ENABLED__;
+else globalThis.__EA_TEST_SURFACE_ENABLED__ = previousTestSurfaceFlag;
+
 console.log("captured-ordinary-jobs ok");
