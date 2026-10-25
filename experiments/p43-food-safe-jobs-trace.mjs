@@ -1,0 +1,185 @@
+function replaceOnce(source, before, after, label) {
+  const count = source.split(before).length - 1;
+  if (count !== 1)
+    throw new Error(
+      `P43 Jobs instrumentation anchor changed: ${label} (${count})`,
+    );
+  return source.replace(before, after);
+}
+
+export const P43_TRACE_HOOK_PROPERTIES = [
+  "  p43Mode: false,",
+  "  p43Arm: null,",
+  "  p43Enabled: false,",
+  "  p43CommitmentMode: null,",
+  "  p43Events: [],",
+  "  p43ExecutionFailures: [],",
+  "  p43ExecutionSamples: [],",
+  "  p43EventBytes: 0,",
+  "  p43EventOverflow: 0,",
+  "  p43EventLimit: 2048,",
+  "  p43EventByteLimit: 16777216,",
+  "  p43Boundary: null,",
+  "  p43AuthorizedDecision: null,",
+  "  p43Metrics: { planCalls: 0, foodLedgerReads: 0, controlGenerationReads: 0, foodObservationMs: 0, purePolicyMs: 0, totalBoundaryMs: 0, interventions: 0, overriddenPlans: 0, ordinaryPlanConflicts: 0, unavailableObservations: 0 },",
+  "  p43LastEventKey: null,",
+  "  p43Record(event, force = false) {",
+  "    const key = JSON.stringify([event.status, event.floorStatus, event.minimumFarmers, event.identity, event.population, event.populationCapacity, event.occupiedJobs, event.jobs, event.modifierInputs, event.foodOutput, event.foodConsumption, event.foodStock, event.starved, event.deaths, event.stoneStock, event.stoneProduction, event.buildings, event.ordinaryAssignments, event.assignments, event.defaultJobId, event.applied]);",
+  "    if (!force && key === this.p43LastEventKey) return false;",
+  "    this.p43LastEventKey = key;",
+  "    const bytes = JSON.stringify(event).length * 2;",
+  "    if (this.p43Events.length >= this.p43EventLimit || this.p43EventBytes + bytes > this.p43EventByteLimit) { this.p43EventOverflow++; return false; }",
+  "    this.p43Events.push(event); this.p43EventBytes += bytes; return true;",
+  "  },",
+  "  p43CaptureBoundary(period, root, input, ordinaryDecision, observation, identity) {",
+  "    if (period !== 720 || this.p43Boundary !== null) return;",
+  "    const started = window.eaDiagnosticsNow?.() ?? 0;",
+  "    const diagnostics = window.__EA_RUNNER__?.diagnostics?.() ?? {};",
+  "    const foodLedger = observation?.ledger ? { production: { Food: observation.ledger.production?.Food ?? null }, consumption: { Food: observation.ledger.consumption?.Food ?? null } } : null;",
+  "    const boundary = { captured: Array.isArray(diagnostics.nativeInvocations) && diagnostics.controlUsage !== null && typeof diagnostics.controlUsage === 'object' && Number.isSafeInteger(diagnostics.randomCalls) && diagnostics.rngState !== undefined && identity?.rootMatches === true && identity?.inputIdentityAvailable === true, input, ordinaryDecision, foodLedger, state: { population: observation?.population ?? null, populationCapacity: observation?.populationCapacity ?? null, occupiedJobs: observation?.occupiedJobs ?? null, unassignedWorkers: observation?.unassignedWorkers ?? null, servants: observation?.servants ?? null, food: observation?.food ?? null, stone: observation?.stone ?? null, buildings: observation?.buildings ?? null, research: root?.tech ?? null, race: root?.race ?? null, biome: root?.city?.biome ?? null, calendar: root?.city?.calendar ?? null, planetTraits: root?.city?.ptrait ?? null, starved: root?.stats?.starved ?? null, deaths: root?.stats?.died ?? null }, identity, nativeInvocationCount: diagnostics.nativeInvocations?.length ?? null, controlUsage: diagnostics.controlUsage ?? null, randomCalls: diagnostics.randomCalls ?? null, rngState: diagnostics.rngState ?? null };",
+  "    this.p43Boundary = boundary;",
+  "    this.p43Metrics.totalBoundaryMs += (window.eaDiagnosticsNow?.() ?? started) - started;",
+  "  },",
+].join("\n");
+
+export function applyP43JobsInstrumentation(source) {
+  source = replaceOnce(
+    source,
+    [
+      "  const decision = planJobs(dependencies.reader.readCycle(craftOnly));",
+      "  if (measuring)",
+      "    diagnostics!.recordPerformance(",
+      '      "jobs.full.plan",',
+      "      diagnostics!.nowMs() - startedAt,",
+      "    );",
+      "  if (decision === null) return SUCCEEDED;",
+      "  const outcome = dependencies.executor.execute(decision);",
+    ].join("\n"),
+    [
+      "  const p43Input = dependencies.reader.readCycle(craftOnly);",
+      "  const ordinaryDecision = planJobs(p43Input);",
+      "  let decision = ordinaryDecision;",
+      "  const p43Hooks = window.__EA_TEST_HOOKS__;",
+      "  const p43Api = p43Hooks?.p38JobsApi;",
+      "  const p43Period = p43Hooks?.p43Mode === true ? p43Api?.readPeriod?.() ?? null : null;",
+      '  if (typeof p43Hooks === "object" && p43Hooks !== null && p43Hooks.p43Mode === true && craftOnly !== true && Number.isSafeInteger(p43Period) && p43Period >= 720 && p43Period <= 10000) {',
+      "    const p43Now = () => p43Api?.now?.() ?? 0;",
+      "    const p43Started = p43Now();",
+      "    const p43Metrics = p43Hooks.p43Metrics;",
+      "    p43Metrics.planCalls++;",
+      "    p43Hooks.p43AuthorizedDecision = null;",
+      "    p43Hooks.p43DecisionSequence = Number(p43Hooks.p43DecisionSequence ?? 0) + 1;",
+      "    const p43WorkCycleIdentity = Object.freeze({ sequence: p43Hooks.p43DecisionSequence, period: p43Period, root: p43Api?.readRoot?.() ?? window[Symbol.for('evolve-automation.page-capture')]?.rootState?.readRoot?.() ?? null, input: p43Input });",
+      "    const p43Root = p43WorkCycleIdentity.root;",
+      "    const p43ObservationStarted = p43Now();",
+      "    const p43FoodObservation = p43Root === null ? null : p43Api?.readP43FoodObservation?.(p43Root, p43Input) ?? null;",
+      "    if (p43FoodObservation !== null) p43FoodObservation.workCycleIdentity = p43WorkCycleIdentity;",
+      "    const p43Identity = p43Root === null ? null : p43Api?.readP43DecisionIdentity?.(p43Root, p43Input) ?? null;",
+      "    if (p43FoodObservation !== null) p43Metrics.foodLedgerReads++; else p43Metrics.unavailableObservations++;",
+      "    p43Metrics.foodObservationMs += p43Now() - p43ObservationStarted;",
+      "    p43Metrics.controlGenerationReads += p43Identity?.controlGenerationReads ?? 0;",
+      "    p43Hooks.p43CaptureBoundary(p43Period, p43Root, p43Input, ordinaryDecision, p43FoodObservation, p43Identity);",
+      "    const p43PolicyStarted = p43Now();",
+      "    const p43Result = evaluateP43FoodSafeJobsDecision({ enabled: true, apply: p43Hooks.p43Enabled === true, commitmentMode: p43Hooks.p43CommitmentMode, period: p43Period, workCycleSequence: p43Hooks.p43DecisionSequence, workCycleIdentity: p43WorkCycleIdentity, nativeRevision: p43Hooks.pinnedGameRevision, rootMatches: p43FoodObservation?.rootMatches === true, root: p43Root, rootGeneration: p43Identity?.rootGeneration, progressionGeneration: p43Identity?.progressionGeneration, farmerControlGeneration: p43Identity?.farmerControlGeneration, quarryControlGeneration: p43Identity?.quarryControlGeneration, farmerControlReady: p43Identity?.farmerControlReady === true, quarryControlReady: p43Identity?.quarryControlReady === true, nativeDefaultJobId: p43Identity?.nativeDefaultJobId, rootDefaultJobId: p43Identity?.rootDefaultJobId, jobsInput: p43Input, ordinaryDecision, observation: p43FoodObservation });",
+      "    p43Metrics.purePolicyMs += p43Now() - p43PolicyStarted;",
+      "    if (p43Result.ordinaryPlanFood?.sustainable === false) p43Metrics.ordinaryPlanConflicts++;",
+      "    if (p43Result.applied === true) { decision = p43Result.decision; p43Metrics.interventions++; if (JSON.stringify(p43Result.decision?.assignments) !== JSON.stringify(ordinaryDecision?.assignments)) p43Metrics.overriddenPlans++; p43Hooks.p43AuthorizedDecision = { root: p43Root, input: p43Input, decision, workCycleIdentity: p43WorkCycleIdentity }; }",
+      "    const floor = p43Result.floor;",
+      "    const p43AssignmentMap = (decisionValue) => Object.fromEntries((decisionValue?.assignments ?? []).map((assignment) => { const job = p43Input.jobs.find((entry) => entry.token === assignment.jobToken); return [job?.id ?? String(assignment.jobToken), { workers: assignment.workers, servants: assignment.servants }]; }));",
+      "    const p43Observed = p43FoodObservation;",
+      "    const p43FoodRows = p43Observed?.ledger ? { production: { Food: p43Observed.ledger.production?.Food ?? null }, consumption: { Food: p43Observed.ledger.consumption?.Food ?? null } } : null;",
+      "    p43Hooks.p43Record({ period: p43Period, workCycle: { sequence: p43WorkCycleIdentity.sequence, period: p43WorkCycleIdentity.period }, identity: p43Identity, status: p43Result.status, applied: p43Result.applied === true, reason: p43Result.reason ?? p43Result.alternative?.reason ?? p43Result.floor?.reasons?.[0] ?? null, floorStatus: floor?.status ?? null, minimumFarmers: floor?.minimumFarmers ?? null, foodOutput: p43Observed?.measuredFoodOutput ?? floor?.foodOutput ?? null, foodConsumption: p43Observed?.measuredFoodConsumption ?? floor?.foodConsumption ?? null, foodNet: p43Observed?.food?.diff ?? floor?.foodNet ?? null, foodStock: p43Observed?.food?.amount ?? null, foodStockMaximum: p43Observed?.food?.max ?? null, nativeFoodDiff: p43Observed?.food?.diff ?? null, foodLedger: p43FoodRows, modifier: floor?.productionModifier ?? null, farmerLedgerOutput: floor?.farmerLedgerOutput ?? null, modifierInputs: floor?.modifierFacts ?? null, population: p43Observed?.population ?? p43Input.population ?? null, populationCapacity: p43Observed?.populationCapacity ?? null, occupiedJobs: p43Observed?.occupiedJobs ?? null, unassignedWorkers: p43Observed?.unassignedWorkers ?? null, servants: p43Observed?.servants ?? null, starved: p43Root?.stats?.starved ?? null, deaths: p43Root?.stats?.died ?? null, stoneStock: p43Observed?.stone?.amount ?? null, stoneProduction: p43Observed?.stone?.production ?? null, stoneConsumption: p43Observed?.stone?.consumption ?? null, stoneNet: p43Observed?.stone?.diff ?? null, buildings: p43Observed?.buildings ?? null, defaultJobId: p43Identity?.nativeDefaultJobId ?? null, jobs: p43Input.jobs?.filter((job) => job.id === 'farmer' || job.id === 'quarry_worker' || job.workers > 0 || job.servants > 0).map((job) => ({ id: job.id, workers: job.workers, servants: job.servants, minimum: job.farmerMinimum, storageBackedMinimum: job.storageBackedMinimum, maximum: job.maximum, smartMaximum: job.smartMaximum, managed: job.managed, unlocked: job.unlocked, split: job.split, breakpoints: job.breakpoints })) ?? [], ordinaryAssignments: p43AssignmentMap(ordinaryDecision), assignments: p43AssignmentMap(decision), foodPositive: p43Result.alternative?.foodPositive ?? null, ordinaryPlanFood: p43Result.ordinaryPlanFood ?? null, alternative: p43Result.alternative ?? null, workerCommitments: p43Result.workerCommitments, workerCommitmentsAssumedEmpty: p43Result.workerCommitmentsAssumedEmpty === true });",
+      "    p43Metrics.totalBoundaryMs += p43Now() - p43Started;",
+      "  }",
+      "  if (measuring)",
+      "    diagnostics!.recordPerformance(",
+      '      "jobs.full.plan",',
+      "      diagnostics!.nowMs() - startedAt,",
+      "    );",
+      "  if (decision === null) return SUCCEEDED;",
+      "  const outcome = dependencies.executor.execute(decision);",
+    ].join("\n"),
+    "ordinary Jobs planner/executor boundary",
+  );
+  return `import { evaluateP43FoodSafeJobsDecision } from "../../experiments/p43-food-safe-jobs-policy.mjs";\n${source}`;
+}
+
+export function applyP43ExecutorQualification(source) {
+  return replaceOnce(
+    source,
+    [
+      "      const expected = planJobs(session.input);",
+      "      if (",
+      "        expected === null ||",
+      "        JSON.stringify(expected) !== JSON.stringify(decision)",
+      "      ) {",
+    ].join("\n"),
+    [
+      "      const expected = planJobs(session.input);",
+      "      const p43Hooks = window.__EA_TEST_HOOKS__;",
+      "      const p43Authorization = p43Hooks?.p43AuthorizedDecision;",
+      "      const p43Authorized = isRecord(p43Authorization) && p43Authorization.root === session.root && p43Authorization.input === session.input && p43Authorization.decision === decision;",
+      '      if (p43Authorization !== null && p43Authorization !== undefined) Reflect.set(p43Hooks, "p43AuthorizedDecision", null);',
+      "      if (",
+      "        (expected === null || JSON.stringify(expected) !== JSON.stringify(decision)) && !p43Authorized",
+      "      ) {",
+    ].join("\n"),
+    "single-work-cycle authorized ordinary Jobs decision",
+  );
+}
+
+/** Adds a test-only allocation hook to the combined Jobs/Craftsmen prepared-decision boundary. */
+export function applyP43FullJobsInstrumentation(source) {
+  const before = [
+    '    const decision = measure("jobs.full.plan", () => {',
+    '      tally.count("jobs.full.planCalls");',
+    "      return planJobs(sampled.input);",
+    "    });",
+    "    const session: Readonly<FullJobsSession> = Object.freeze({",
+  ].join("\n");
+  const after = [
+    '    let decision = measure("jobs.full.plan", () => {',
+    '      tally.count("jobs.full.planCalls");',
+    "      return planJobs(sampled.input);",
+    "    });",
+    "    const p43Hooks = window.__EA_TEST_HOOKS__;",
+    "    const p43Api = p43Hooks?.p38JobsApi;",
+    "    const p43Period = p43Hooks?.p43Mode === true ? p43Api?.readPeriod?.() ?? null : null;",
+    '    if (typeof p43Hooks === "object" && p43Hooks !== null && p43Hooks.p43Mode === true && Number.isSafeInteger(p43Period) && p43Period >= 720 && p43Period <= 10000) {',
+    "      const p43Now = () => p43Api?.now?.() ?? 0;",
+    "      const p43Started = p43Now();",
+    "      const p43Metrics = p43Hooks.p43Metrics;",
+    "      p43Metrics.planCalls++;",
+    "      p43Hooks.p43DecisionSequence = Number(p43Hooks.p43DecisionSequence ?? 0) + 1;",
+    "      const p43WorkCycleIdentity = Object.freeze({ sequence: p43Hooks.p43DecisionSequence, period: p43Period, root, input: sampled.input });",
+    "      const p43ObservationStarted = p43Now();",
+    "      const p43FoodObservation = p43Api?.readP43FoodObservation?.(root, sampled.input) ?? null;",
+    "      if (p43FoodObservation !== null) p43FoodObservation.workCycleIdentity = p43WorkCycleIdentity;",
+    "      const p43Identity = p43Api?.readP43DecisionIdentity?.(root, sampled.input) ?? null;",
+    "      if (p43FoodObservation !== null) p43Metrics.foodLedgerReads++; else p43Metrics.unavailableObservations++;",
+    "      p43Metrics.foodObservationMs += p43Now() - p43ObservationStarted;",
+    "      p43Metrics.controlGenerationReads += p43Identity?.controlGenerationReads ?? 0;",
+    "      const p43OrdinaryDecision = decision;",
+    "      p43Hooks.p43CaptureBoundary(p43Period, root, sampled.input, p43OrdinaryDecision, p43FoodObservation, p43Identity);",
+    "      const p43PolicyStarted = p43Now();",
+    "      const p43Result = evaluateP43FoodSafeJobsDecision({ enabled: true, apply: p43Hooks.p43Enabled === true, commitmentMode: p43Hooks.p43CommitmentMode, period: p43Period, workCycleSequence: p43Hooks.p43DecisionSequence, workCycleIdentity: p43WorkCycleIdentity, nativeRevision: p43Hooks.pinnedGameRevision, rootMatches: p43FoodObservation?.rootMatches === true, root, rootGeneration: p43Identity?.rootGeneration, progressionGeneration: p43Identity?.progressionGeneration, farmerControlGeneration: p43Identity?.farmerControlGeneration, quarryControlGeneration: p43Identity?.quarryControlGeneration, farmerControlReady: p43Identity?.farmerControlReady === true, quarryControlReady: p43Identity?.quarryControlReady === true, nativeDefaultJobId: p43Identity?.nativeDefaultJobId, rootDefaultJobId: p43Identity?.rootDefaultJobId, jobsInput: sampled.input, ordinaryDecision: p43OrdinaryDecision, observation: p43FoodObservation });",
+    "      p43Metrics.purePolicyMs += p43Now() - p43PolicyStarted;",
+    "      if (p43Result.ordinaryPlanFood?.sustainable === false) p43Metrics.ordinaryPlanConflicts++;",
+    "      if (p43Result.applied === true) { decision = p43Result.decision; p43Metrics.interventions++; if (JSON.stringify(p43Result.decision?.assignments) !== JSON.stringify(p43OrdinaryDecision?.assignments)) p43Metrics.overriddenPlans++; }",
+    "      const floor = p43Result.floor;",
+    "      const p43AssignmentMap = (decisionValue) => Object.fromEntries((decisionValue?.assignments ?? []).map((assignment) => { const job = sampled.input.jobs.find((entry) => entry.token === assignment.jobToken); return [job?.id ?? String(assignment.jobToken), { workers: assignment.workers, servants: assignment.servants }]; }));",
+    "      const p43Observed = p43FoodObservation;",
+    "      const p43FoodRows = p43Observed?.ledger ? { production: { Food: p43Observed.ledger.production?.Food ?? null }, consumption: { Food: p43Observed.ledger.consumption?.Food ?? null } } : null;",
+    "      p43Hooks.p43Record({ period: p43Period, workCycle: { sequence: p43WorkCycleIdentity.sequence, period: p43WorkCycleIdentity.period }, identity: p43Identity, status: p43Result.status, applied: p43Result.applied === true, reason: p43Result.reason ?? p43Result.alternative?.reason ?? p43Result.floor?.reasons?.[0] ?? null, floorStatus: floor?.status ?? null, minimumFarmers: floor?.minimumFarmers ?? null, foodOutput: p43Observed?.measuredFoodOutput ?? floor?.foodOutput ?? null, foodConsumption: p43Observed?.measuredFoodConsumption ?? floor?.foodConsumption ?? null, foodNet: p43Observed?.food?.diff ?? floor?.foodNet ?? null, foodStock: p43Observed?.food?.amount ?? null, foodStockMaximum: p43Observed?.food?.max ?? null, nativeFoodDiff: p43Observed?.food?.diff ?? null, foodLedger: p43FoodRows, modifier: floor?.productionModifier ?? null, farmerLedgerOutput: floor?.farmerLedgerOutput ?? null, modifierInputs: floor?.modifierFacts ?? null, population: p43Observed?.population ?? sampled.input.population ?? null, populationCapacity: p43Observed?.populationCapacity ?? null, occupiedJobs: p43Observed?.occupiedJobs ?? null, unassignedWorkers: p43Observed?.unassignedWorkers ?? null, servants: p43Observed?.servants ?? null, starved: root?.stats?.starved ?? null, deaths: root?.stats?.died ?? null, stoneStock: p43Observed?.stone?.amount ?? null, stoneProduction: p43Observed?.stone?.production ?? null, stoneConsumption: p43Observed?.stone?.consumption ?? null, stoneNet: p43Observed?.stone?.diff ?? null, buildings: p43Observed?.buildings ?? null, defaultJobId: p43Identity?.nativeDefaultJobId ?? null, jobs: sampled.input.jobs?.filter((job) => job.id === 'farmer' || job.id === 'quarry_worker' || job.workers > 0 || job.servants > 0).map((job) => ({ id: job.id, workers: job.workers, servants: job.servants, minimum: job.farmerMinimum, storageBackedMinimum: job.storageBackedMinimum, maximum: job.maximum, smartMaximum: job.smartMaximum, managed: job.managed, unlocked: job.unlocked, split: job.split, breakpoints: job.breakpoints })) ?? [], ordinaryAssignments: p43AssignmentMap(p43OrdinaryDecision), assignments: p43AssignmentMap(decision), foodPositive: p43Result.alternative?.foodPositive ?? null, ordinaryPlanFood: p43Result.ordinaryPlanFood ?? null, alternative: p43Result.alternative ?? null, workerCommitments: p43Result.workerCommitments, workerCommitmentsAssumedEmpty: p43Result.workerCommitmentsAssumedEmpty === true });",
+    "      p43Metrics.totalBoundaryMs += p43Now() - p43Started;",
+    "    }",
+    "    const session: Readonly<FullJobsSession> = Object.freeze({",
+  ].join("\n");
+  source = replaceOnce(
+    source,
+    before,
+    after,
+    "combined Jobs/Craftsmen planning and execution boundary",
+  );
+  return `import { evaluateP43FoodSafeJobsDecision } from "../../../../experiments/p43-food-safe-jobs-policy.mjs";\n${source}`;
+}

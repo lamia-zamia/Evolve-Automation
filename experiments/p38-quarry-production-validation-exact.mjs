@@ -29,10 +29,17 @@ import {
   P42_TRACE_HOOK_PROPERTIES,
 } from "./p42-construction-priority-counterfactual-trace.mjs";
 import {
+  applyP43ExecutorQualification,
+  applyP43JobsInstrumentation,
+  P43_TRACE_HOOK_PROPERTIES,
+} from "./p43-food-safe-jobs-trace.mjs";
+import { P43_PINNED_GAME } from "./p43-food-safe-jobs-policy.mjs";
+import {
   P42_EXPECTED,
   P42_INTERVENTION_IDENTITY,
 } from "./p42-construction-priority-counterfactual-policy.mjs";
 import { createP42ConstructionPriorityEvidence } from "./p42-construction-priority-counterfactual-evidence.mjs";
+import { createP43FoodSafeJobsEvidence } from "./p43-food-safe-jobs-evidence.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
@@ -40,6 +47,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const p42Mode = process.argv.includes(
   "--p42-construction-priority-counterfactual",
 );
+const p43Mode = process.argv.includes("--p43-food-safe-jobs");
+if (p43Mode && !p42Mode)
+  throw new Error("P43 requires the retained P42 Construction intervention");
+if (p43Mode && process.argv.includes("--reuse"))
+  throw new Error("P43 exact replay must use fresh isolated arms");
 const p40TraceEnabled =
   p42Mode || process.argv.includes("--p40-construction-trace");
 const fixturePath = path.join(
@@ -54,9 +66,11 @@ const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
 const metadataPath = path.join(root, "src/userscript.meta.js");
 const bundlePath = path.join(
   root,
-  p42Mode
-    ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
-    : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
+  p43Mode
+    ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs.user.js"
+    : p42Mode
+      ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
+      : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
 );
 const evidencePath = path.join(
   root,
@@ -78,6 +92,14 @@ const p42EvidencePath = path.join(
   root,
   "experiments/p42-construction-priority-counterfactual-evidence.json",
 );
+const p43EvidencePath = path.join(
+  root,
+  "experiments/p43-food-safe-jobs-evidence.json",
+);
+const p43TimelinePath = path.join(
+  root,
+  "experiments/p43-food-safe-jobs-timeline.json",
+);
 const p42PluginPath = path.join(
   root,
   "experiments/p42-construction-priority-counterfactual-trace.mjs",
@@ -96,9 +118,11 @@ const jobsEvidencePath = path.join(
 );
 const interimPath = path.join(
   root,
-  p42Mode
-    ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
-    : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+  p43Mode
+    ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
+    : p42Mode
+      ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+      : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -115,6 +139,11 @@ const checkpoints = [
 const p42Checkpoints = [
   719,
   ...Array.from({ length: 36 }, (_, index) => 720 + index * 8),
+];
+const p43ExtraCheckpoints = [
+  ...Array.from({ length: 17 }, (_, index) => 1_584 + index),
+  ...Array.from({ length: 33 }, (_, index) => 1_984 + index),
+  ...Array.from({ length: 17 }, (_, index) => 5_624 + index),
 ];
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => JSON.stringify(value);
@@ -247,6 +276,18 @@ const metricPlugin = {
       readCycle() {
         return ordinaryJobs.reader.readCycle(false);
       },
+      readRoot() {
+        return pageCapture.rootState.readRoot();
+      },
+      readPeriod() {
+        const runner = readProperty(settingsHostWindow, "__EA_RUNNER__");
+        const periods = readProperty(runner, "periods");
+        return typeof periods === "function" ? Reflect.apply(periods, runner, []) : null;
+      },
+      now() {
+        const clock = readProperty(settingsHostWindow, "eaDiagnosticsNow");
+        return typeof clock === "function" ? Reflect.apply(clock, settingsHostWindow, []) : 0;
+      },
       snapshot() {
         const input = ordinaryJobs.reader.readCycle(false);
         const rawSettings = settingsStore.readRaw();
@@ -269,6 +310,72 @@ const metricPlugin = {
             farmerBreakpoints: [readProperty(rawSettings, "job_b1_farmer"), readProperty(rawSettings, "job_b2_farmer"), readProperty(rawSettings, "job_b3_farmer")],
             quarryWorkerBreakpoints: [readProperty(rawSettings, "job_b1_quarry_worker"), readProperty(rawSettings, "job_b2_quarry_worker"), readProperty(rawSettings, "job_b3_quarry_worker")],
           },
+        };
+      },
+      readP43FoodObservation(expectedRoot, input) {
+        const currentRoot = pageCapture.rootState.readRoot();
+        if (currentRoot !== expectedRoot) return null;
+        const ledger = pageCapture.mechanics.readProductionBreakdown();
+        if (ledger === undefined) return null;
+        const sumRates = (values) => Object.values(values ?? {}).reduce((sum, value) => {
+          if (typeof value === "number" && Number.isFinite(value)) return sum + value;
+          if (typeof value === "string" && value.endsWith("v")) {
+            const amount = Number.parseFloat(value);
+            return Number.isFinite(amount) ? sum + amount : sum;
+          }
+          return sum;
+        }, 0);
+        const race = readProperty(currentRoot, "race");
+        const resource = readProperty(currentRoot, "resource");
+        const species = readProperty(race, "species");
+        const zones = ["city", "underground", "space", "tauceti", "galaxy", "interstellar", "eden"];
+        const buildings = Object.fromEntries(zones.map((zone) => {
+          const values = readProperty(currentRoot, zone);
+          return [zone, Object.fromEntries(Object.entries(isRecord(values) ? values : {}).filter(([, value]) => Number(readProperty(value, "count") ?? 0) > 0).map(([id, value]) => [id, readProperty(value, "count")]))];
+        }));
+        const civic = readProperty(currentRoot, "civic");
+        const servants = readProperty(readProperty(race, "servants"), "jobs");
+        const food = readProperty(resource, "Food");
+        const foodConsumption = Math.abs(sumRates(ledger.consumption?.Food));
+        const foodDiff = readProperty(food, "diff");
+        const rootAfterRead = pageCapture.rootState.readRoot();
+        return {
+          rootMatches: rootAfterRead === expectedRoot,
+          root: expectedRoot,
+          jobsSnapshot: input,
+          ledger,
+          measuredFoodOutput: Number(foodDiff) + foodConsumption,
+          measuredFoodConsumption: foodConsumption,
+          population: readProperty(readProperty(resource, species), "amount"),
+          populationCapacity: readProperty(readProperty(resource, species), "max"),
+          occupiedJobs: Object.fromEntries(Object.entries(isRecord(civic) ? civic : {}).filter(([, value]) => Number(readProperty(value, "workers") ?? 0) > 0).map(([id, value]) => [id, { workers: readProperty(value, "workers"), servants: readProperty(servants, id) ?? 0 }])),
+          unassignedWorkers: readProperty(readProperty(civic, "unemployed"), "workers") ?? 0,
+          servants: isRecord(servants) ? servants : {},
+          food: { amount: readProperty(food, "amount"), max: readProperty(food, "max"), diff: foodDiff },
+          stone: { amount: readProperty(readProperty(resource, "Stone"), "amount"), max: readProperty(readProperty(resource, "Stone"), "max"), diff: readProperty(readProperty(resource, "Stone"), "diff"), production: sumRates(ledger.production?.Stone), consumption: Math.abs(sumRates(ledger.consumption?.Stone)) },
+          buildings,
+          undergroundFarmCount: Number(readProperty(readProperty(currentRoot, "underground"), "mushroom_farm")?.count ?? 0),
+          surfaceFarmCount: Number(readProperty(readProperty(currentRoot, "space"), "surface_farm")?.count ?? 0),
+          underTransmitterCount: Number(readProperty(readProperty(currentRoot, "underground"), "under_transmitter")?.count ?? 0),
+        };
+      },
+      readP43DecisionIdentity(expectedRoot, input) {
+        const currentRoot = pageCapture.rootState.readRoot();
+        const civic = readProperty(currentRoot, "civic");
+        const farmerControl = pageCapture.controls.resolve("civ-farmer");
+        const quarryControl = pageCapture.controls.resolve("civ-quarry_worker");
+        return {
+          rootMatches: currentRoot === expectedRoot,
+          inputIdentityAvailable: input?.available === true,
+          rootGeneration: progression.readRootGeneration(),
+          progressionGeneration: progression.readProgressionEpoch(),
+          nativeDefaultJobId: readProperty(civic, "d_job") ?? null,
+          rootDefaultJobId: readProperty(civic, "d_job") ?? null,
+          farmerControlGeneration: farmerControl?.generation ?? null,
+          quarryControlGeneration: quarryControl?.generation ?? null,
+          farmerControlReady: farmerControl?.methods.includes("add") === true && farmerControl?.methods.includes("sub") === true,
+          quarryControlReady: quarryControl?.methods.includes("add") === true && quarryControl?.methods.includes("sub") === true,
+          controlGenerationReads: 2,
         };
       },
       readOwnerAuthority(actionId) {
@@ -341,6 +448,20 @@ const metricPlugin = {
       source = `import { createCapturedJobControls, executeCapturedJobDecision } from "../adapters/evolve/civic/captured-job-controls.ts";\n${source}`;
       return { contents: source, loader: "ts" };
     });
+    build.onLoad({ filter: /application\\jobs\.ts$/ }, async (args) => {
+      if (!p43Mode) return null;
+      const source = applyP43JobsInstrumentation(
+        await readFile(args.path, "utf8"),
+      );
+      return { contents: source, loader: "ts" };
+    });
+    build.onLoad({ filter: /captured-ordinary-jobs\.ts$/ }, async (args) => {
+      if (!p43Mode) return null;
+      const source = applyP43ExecutorQualification(
+        await readFile(args.path, "utf8"),
+      );
+      return { contents: source, loader: "ts" };
+    });
   },
 };
 
@@ -362,6 +483,7 @@ window.__EA_TEST_HOOKS__ = {
   p38JobTrace: [],
   ${p40TraceEnabled ? P40_TRACE_HOOK_PROPERTIES : ""}
   ${p42Mode ? P42_TRACE_HOOK_PROPERTIES : ""}
+  ${p43Mode ? P43_TRACE_HOOK_PROPERTIES : ""}
   observeJobsTrace(event) { this.p38JobTrace.push(event); },
   captureConstructionSavingTargetForTest(target, authority) {
     const period = window.__EA_RUNNER__?.periods?.() ?? null;
@@ -508,14 +630,17 @@ async function capture(session, period) {
     session.readState(),
     session.diagnostics(),
     session.evaluate(
-      (period, p42Mode) => {
+      (period, p42Mode, p43Mode) => {
         const hooks = window.__EA_TEST_HOOKS__;
         const pageCapture =
           window[Symbol.for("evolve-automation.page-capture")];
         const global = pageCapture?.rootState.readRoot();
         const jobsSnapshot = hooks?.p38JobsApi?.snapshot?.() ?? null;
         const species = global?.race?.species;
-        const ledger = pageCapture?.mechanics?.readProductionBreakdown?.();
+        const ledger =
+          p43Mode && period < 720
+            ? undefined
+            : pageCapture?.mechanics?.readProductionBreakdown?.();
         const sumUnits = (values) =>
           Object.values(values ?? {}).reduce((sum, value) => {
             if (typeof value === "number" && Number.isFinite(value))
@@ -526,6 +651,10 @@ async function capture(session, period) {
             }
             return sum;
           }, 0);
+        const capturedFoodConsumption = ledger
+          ? Math.abs(sumUnits(ledger.consumption?.Food))
+          : null;
+        const capturedFoodDiff = global?.resource?.Food?.diff ?? null;
         return {
           population: global?.resource?.[species]?.amount ?? null,
           populationCapacity: global?.resource?.[species]?.max ?? null,
@@ -554,10 +683,20 @@ async function capture(session, period) {
               ];
             }),
           ),
-          foodProduction: ledger ? sumUnits(ledger.production?.Food) : null,
-          foodConsumption: ledger
-            ? Math.abs(sumUnits(ledger.consumption?.Food))
-            : null,
+          foodProduction:
+            p43Mode && capturedFoodConsumption !== null
+              ? Number(capturedFoodDiff) + capturedFoodConsumption
+              : ledger
+                ? sumUnits(ledger.production?.Food)
+                : null,
+          foodConsumption: capturedFoodConsumption,
+          foodLedger: p43Mode ? (ledger ?? null) : undefined,
+          unassignedWorkers: p43Mode
+            ? (global?.civic?.unemployed?.workers ?? null)
+            : undefined,
+          servantJobs: p43Mode
+            ? (global?.race?.servants?.jobs ?? {})
+            : undefined,
           lumberProduction: sumUnits(ledger?.production?.Lumber),
           stoneProduction: sumUnits(ledger?.production?.Stone),
           days: global?.stats?.days ?? null,
@@ -595,6 +734,7 @@ async function capture(session, period) {
       },
       period,
       p42Mode,
+      p43Mode,
     ),
   ]);
   const species = state.race?.species;
@@ -654,7 +794,9 @@ async function capture(session, period) {
       stoneOutput: native.stoneProduction,
     },
     controlUsage: diagnostics.controlUsage ?? {},
-    nativeCalls: relevantNativeCalls,
+    nativeCallsSha256: hash(JSON.stringify(relevantNativeCalls)),
+    nativeCallsCount: relevantNativeCalls.length,
+    ...(p43Mode ? {} : { nativeCalls: relevantNativeCalls }),
     randomCalls: diagnostics.randomCalls,
     rngState: diagnostics.rngState,
     native: {
@@ -662,6 +804,13 @@ async function capture(session, period) {
       foodConsumption: native.foodConsumption,
       lumberProduction: native.lumberProduction,
       stoneProduction: native.stoneProduction,
+      ...(p43Mode
+        ? {
+            foodLedger: native.foodLedger ?? null,
+            unassignedWorkers: native.unassignedWorkers ?? null,
+            servantJobs: native.servantJobs ?? {},
+          }
+        : {}),
       p36: {
         policyEventCount: native.p36.policyEvents.length,
         eligibilityCount: native.p36.eligibility.length,
@@ -735,7 +884,7 @@ async function replay(
         if (configuration.p42Mode) {
           hooks.p42Mode = true;
           hooks.p42Enabled = configuration.p42Enabled;
-          hooks.p42Arm = configuration.arm;
+          hooks.p42Arm = configuration.p42Arm ?? configuration.arm;
           hooks.p42Identity = configuration.p42Identity;
           hooks.p42P38Authorization = configuration.p42P38Authorization;
           hooks.p42ExpectedAuthorizationHistory =
@@ -798,13 +947,89 @@ async function replay(
             );
           };
         }
-        hooks.observeJobsTrace = (event) =>
+        if (configuration.p43Mode) {
+          hooks.p43Mode = false;
+          hooks.p43Arm = configuration.arm;
+          hooks.p43Enabled = configuration.p43Enabled === true;
+          hooks.p43CommitmentMode = configuration.p43CommitmentMode;
+          hooks.pinnedGameRevision = configuration.pinnedGameRevision;
+          hooks.p43Events = [];
+          hooks.p43ExecutionFailures = [];
+          hooks.p43ExecutionSamples = [];
+          hooks.p43EventBytes = 0;
+          hooks.p43EventOverflow = 0;
+          hooks.p43Boundary = null;
+          hooks.p43AuthorizedDecision = null;
+          hooks.p43DecisionSequence = 0;
+          hooks.p43LastEventKey = null;
+          hooks.p43Metrics = {
+            planCalls: 0,
+            foodLedgerReads: 0,
+            controlGenerationReads: 0,
+            foodObservationMs: 0,
+            purePolicyMs: 0,
+            totalBoundaryMs: 0,
+            interventions: 0,
+            overriddenPlans: 0,
+            ordinaryPlanConflicts: 0,
+            unavailableObservations: 0,
+          };
+        }
+        hooks.observeJobsTrace = (event) => {
           hooks.p38JobTrace.push(
             configuration.p42Mode
               ? { period: window.__EA_RUNNER__?.periods?.() ?? null, ...event }
               : event,
           );
+        };
         hooks.observeJobsAutomation = (phase, outcome, details) => {
+          if (configuration.p43Mode) {
+            const period = currentPeriod();
+            if (
+              hooks.p43Mode === true &&
+              period >= 720 &&
+              hooks.p43ExecutionSamples.length < 48
+            ) {
+              const pageCapture =
+                window[Symbol.for("evolve-automation.page-capture")];
+              const root = pageCapture?.rootState.readRoot();
+              hooks.p43ExecutionSamples.push({
+                period,
+                phase,
+                status: outcome?.status ?? null,
+                failure: outcome?.failure ?? null,
+                reason: outcome?.reason ?? null,
+                p43Mode: hooks.p43Mode === true,
+                apiAvailable:
+                  typeof hooks.p38JobsApi?.readPeriod === "function",
+                jobs: Object.fromEntries(
+                  Object.entries(root?.civic ?? {})
+                    .filter(([, value]) => Number(value?.workers ?? 0) > 0)
+                    .map(([id, value]) => [id, value.workers]),
+                ),
+                food: {
+                  amount: root?.resource?.Food?.amount ?? null,
+                  diff: root?.resource?.Food?.diff ?? null,
+                },
+                starved: root?.stats?.starved ?? null,
+                deaths: root?.stats?.died ?? null,
+              });
+            }
+            if (
+              outcome?.status !== "succeeded" &&
+              outcome?.status !== "deferred" &&
+              hooks.p43ExecutionFailures.length < 64
+            )
+              hooks.p43ExecutionFailures.push({
+                period: currentPeriod(),
+                phase,
+                outcome: {
+                  status: outcome?.status ?? null,
+                  reason: outcome?.reason ?? null,
+                  failure: outcome?.failure ?? null,
+                },
+              });
+          }
           hooks.p38JobTrace.push({
             period: currentPeriod(),
             phase,
@@ -1197,7 +1422,12 @@ async function replay(
         p38Enabled: p42Mode || arm !== "A",
         p38PolicyArm: p42Mode && arm === "A" ? "B" : arm,
         p42Mode,
-        p42Enabled: p42Mode && (arm === "B" || arm === "B-repeat"),
+        p42Arm: p43Mode ? "B" : arm,
+        p42Enabled: p42Mode && (p43Mode || arm === "B" || arm === "B-repeat"),
+        p43Mode,
+        p43Enabled: p43Mode && (arm === "B" || arm === "B-repeat"),
+        p43CommitmentMode: p43Mode ? "test-only-assume-empty" : null,
+        pinnedGameRevision: P43_PINNED_GAME,
         p42Identity: P42_INTERVENTION_IDENTITY,
         p42P38Authorization: P38_DIAGNOSTIC_AUTHORIZATION,
         p42ExpectedAuthorizationHistory,
@@ -1224,6 +1454,38 @@ async function replay(
       elapsed = targetPeriod;
       const checkpoint = await capture(session, targetPeriod);
       captured.push(checkpoint);
+      if (p43Mode && targetPeriod === 719) {
+        await session.evaluate(
+          (configuration) => {
+            const hooks = window.__EA_TEST_HOOKS__;
+            hooks.p43Mode = true;
+            hooks.p43Arm = configuration.arm;
+            hooks.p43Enabled = configuration.p43Enabled === true;
+            hooks.p43Events = [];
+            hooks.p43ExecutionFailures = [];
+            hooks.p43ExecutionSamples = [];
+            hooks.p43EventBytes = 0;
+            hooks.p43EventOverflow = 0;
+            hooks.p43Boundary = null;
+            hooks.p43AuthorizedDecision = null;
+            hooks.p43DecisionSequence = 0;
+            hooks.p43LastEventKey = null;
+            hooks.p43Metrics = {
+              planCalls: 0,
+              foodLedgerReads: 0,
+              controlGenerationReads: 0,
+              foodObservationMs: 0,
+              purePolicyMs: 0,
+              totalBoundaryMs: 0,
+              interventions: 0,
+              overriddenPlans: 0,
+              ordinaryPlanConflicts: 0,
+              unavailableObservations: 0,
+            };
+          },
+          { arm, p43Enabled: p43Mode && (arm === "B" || arm === "B-repeat") },
+        );
+      }
       if (manualTransferPeriod === targetPeriod) {
         const productionIsSafe =
           Number(checkpoint.production.foodOutput ?? 0) >=
@@ -1322,6 +1584,24 @@ async function replay(
                   traceBytes: value.p42TraceBytes ?? 0,
                 }
               : null,
+          p43:
+            value.p43Mode === true
+              ? {
+                  arm: value.p43Arm ?? null,
+                  enabled: value.p43Enabled === true,
+                  mode: value.p43Mode === true,
+                  apiAvailable:
+                    typeof value.p38JobsApi?.readPeriod === "function",
+                  commitmentMode: value.p43CommitmentMode ?? null,
+                  events: value.p43Events ?? [],
+                  executionFailures: value.p43ExecutionFailures ?? [],
+                  executionSamples: value.p43ExecutionSamples ?? [],
+                  eventBytes: value.p43EventBytes ?? 0,
+                  eventOverflow: value.p43EventOverflow ?? 0,
+                  boundary: value.p43Boundary ?? null,
+                  metrics: value.p43Metrics ?? null,
+                }
+              : null,
         };
       }),
     ]);
@@ -1378,6 +1658,7 @@ async function replay(
       },
       p40: hooks.p40,
       p42: hooks.p42,
+      p43: hooks.p43,
       controlUsage: diagnostics.controlUsage ?? {},
       nativeCalls: (diagnostics.nativeInvocations ?? [])
         .filter(
@@ -1626,7 +1907,11 @@ try {
       interim.arms[key].replayHarnessSha256 ??= interim.replayHarnessSha256;
       return interim.arms[key];
     }
-    const result = await replay(arm, [], options);
+    const result = await replay(
+      arm,
+      p43Mode ? p43ExtraCheckpoints : [],
+      options,
+    );
     result.manualTransferPeriod = expectedManual;
     result.replayHarnessSha256 = replayHarnessSha256;
     interim = {
@@ -1652,6 +1937,65 @@ try {
       entry.jobsInput ??= entry.native?.jobsInput ?? null;
       entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
     }
+  }
+  if (p43Mode) {
+    const p43Result = createP43FoodSafeJobsEvidence({
+      A,
+      B,
+      BRepeat,
+      hash,
+      canonicalJson: canonical,
+      runtimeBundleSha256,
+      policyBundleSha256,
+      p38PolicyBundleSha256,
+      replayHarnessSha256,
+      p43PolicySha256: hash(
+        await readFile(
+          path.join(root, "experiments/p43-food-safe-jobs-policy.mjs"),
+        ),
+      ),
+      p43TraceSha256: hash(
+        await readFile(
+          path.join(root, "experiments/p43-food-safe-jobs-trace.mjs"),
+        ),
+      ),
+      pinnedGame: P43_PINNED_GAME,
+      pinnedGameSha256,
+      p42BaseCommit: "62e9d353",
+      p42HarnessCommit: "3b10fe0e",
+      p42TestsCommit: "bb848c55",
+    });
+    await writeFile(
+      p43EvidencePath,
+      await prettier.format(JSON.stringify(p43Result.evidence), {
+        parser: "json",
+      }),
+    );
+    await writeFile(
+      p43TimelinePath,
+      await prettier.format(JSON.stringify(p43Result.timeline), {
+        parser: "json",
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        experiment: p43Result.evidence.experiment,
+        outcome: p43Result.evidence.outcome,
+        p43EvidencePath,
+        p43TimelinePath,
+        firstDivergencePeriod:
+          p43Result.evidence.comparison.firstDivergencePeriod,
+        interventions: p43Result.evidence.outcomes.interventionCount,
+        traceOverflows: p43Result.evidence.replay.traceOverflows,
+        replayHashes: {
+          runtimeBundleSha256,
+          replayHarnessSha256,
+          p43PolicySha256: p43Result.evidence.replay.p43PolicySha256,
+          p43TraceSha256: p43Result.evidence.replay.p43TraceSha256,
+        },
+      }),
+    );
+    process.exit(0);
   }
   if (p42Mode) {
     const p39EvidenceText = await readFile(
