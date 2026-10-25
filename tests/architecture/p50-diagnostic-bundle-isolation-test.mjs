@@ -3,6 +3,7 @@ import * as esbuild from "esbuild";
 import ts from "typescript";
 
 import { createBuildOptions } from "../../build-config.mjs";
+import { createP51ConstructionJobsHandoffPlugin } from "../../experiments/p51-construction-jobs-handoff-trace.mjs";
 
 const repositoryRoot = process.cwd();
 const admissionFunction = "admitAllocationDiagnosticObservation";
@@ -31,6 +32,16 @@ const productionOnlyNames = [
   "testCatalogReadCount",
   "testDemandReadCount",
   "testNativeRootReadCount",
+  "publishP51ConstructionReceiptForTest",
+  "consumeP51ConstructionReceiptForTest",
+  "recordP51NativePostconditionForTest",
+  "stageP51VerifiedPurchaseForTest",
+  "completeP51ConstructionCycleForTest",
+  "invalidateP51ConstructionReceiptForTest",
+  "p51ConstructionRequest",
+  "p51HandoffState",
+  "p51AdmissionEnabled",
+  "p51Mode",
 ];
 const productionOnlyStrings = [
   "p48-allocation-diagnostic-observation",
@@ -38,9 +49,19 @@ const productionOnlyStrings = [
   "food-sustainability-and-useful-stone-replenishment",
   "allocationDiagnosticRequest",
   "observeAllocationDiagnosticAdmission",
+  "p51-test-only-quarry-priority-request-v1",
+  "verified-purchase",
+  "handoff-authority-incomplete",
+  "p51-test-only-verified-construction-jobs-handoff",
+  "native-root-replaced",
 ];
 
-async function bundle(testSurface) {
+async function bundle(testSurface, p51Surface = false) {
+  assert.equal(
+    p51Surface && !testSurface,
+    false,
+    "P51 instrumentation can only be compiled into the test surface",
+  );
   const result = await esbuild.build({
     ...createBuildOptions({
       root: repositoryRoot,
@@ -48,6 +69,9 @@ async function bundle(testSurface) {
       banner: { js: "" },
       testSurface,
     }),
+    ...(p51Surface
+      ? { plugins: [createP51ConstructionJobsHandoffPlugin()] }
+      : {}),
     write: false,
     metafile: true,
     logLevel: "silent",
@@ -175,6 +199,52 @@ for (const marker of [
 }
 assert.ok(testSurface.diagnosticModuleBytes > 0);
 
+for (const name of [
+  "publishP51ConstructionReceiptForTest",
+  "consumeP51ConstructionReceiptForTest",
+  "recordP51NativePostconditionForTest",
+  "stageP51VerifiedPurchaseForTest",
+  "completeP51ConstructionCycleForTest",
+  "invalidateP51ConstructionReceiptForTest",
+]) {
+  assert.equal(
+    testSurface.identifiers.has(name),
+    false,
+    `ordinary test surface unexpectedly includes P51 hook ${name}`,
+  );
+}
+
+const p51Surface = await bundle(true, true);
+for (const name of [
+  "publishP51ConstructionReceiptForTest",
+  "consumeP51ConstructionReceiptForTest",
+  "recordP51NativePostconditionForTest",
+  "stageP51VerifiedPurchaseForTest",
+  "completeP51ConstructionCycleForTest",
+  "invalidateP51ConstructionReceiptForTest",
+  "p51AdmissionEnabled",
+  "p51Mode",
+]) {
+  assert.equal(
+    p51Surface.identifiers.has(name) || p51Surface.strings.has(name),
+    true,
+    `P51 exact test surface omits ${name}`,
+  );
+}
+for (const marker of [
+  "p51-test-only-quarry-priority-request-v1",
+  "verified-purchase",
+  "handoff-authority-incomplete",
+  "captured-build-count-postcondition",
+  "Construction",
+]) {
+  assert.equal(
+    p51Surface.strings.has(marker),
+    true,
+    `P51 exact test surface omits contract marker ${marker}`,
+  );
+}
+
 console.log(
-  "P50 production diagnostic isolation and test-surface retention tests passed",
+  "P50 production diagnostic isolation and P51 test-only handoff retention tests passed",
 );
