@@ -38,8 +38,17 @@ import {
   P42_EXPECTED,
   P42_INTERVENTION_IDENTITY,
 } from "./p42-construction-priority-counterfactual-policy.mjs";
+import {
+  P51_QUARRY_REQUEST,
+  qualifyP51QuarryRequest,
+} from "./p51-construction-jobs-handoff-contract.mjs";
+import {
+  applyP51RuntimeAdmissionInstrumentation,
+  createP51ConstructionJobsHandoffPlugin,
+} from "./p51-construction-jobs-handoff-trace.mjs";
 import { createP42ConstructionPriorityEvidence } from "./p42-construction-priority-counterfactual-evidence.mjs";
 import { createP43FoodSafeJobsEvidence } from "./p43-food-safe-jobs-evidence.mjs";
+import { createP51ConstructionJobsHandoffEvidence } from "./p51-construction-jobs-handoff-evidence.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
@@ -47,7 +56,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const p42Mode = process.argv.includes(
   "--p42-construction-priority-counterfactual",
 );
+const p51Mode = process.argv.includes("--p51-construction-jobs-handoff");
 const p43Mode = process.argv.includes("--p43-food-safe-jobs");
+if (p51Mode && !p42Mode)
+  throw new Error("P51 reuses the retained P42 Construction intervention");
 if (p43Mode && !p42Mode)
   throw new Error("P43 requires the retained P42 Construction intervention");
 if (p43Mode && process.argv.includes("--reuse"))
@@ -68,9 +80,11 @@ const bundlePath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs.user.js"
-    : p42Mode
-      ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
-      : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
+    : p51Mode
+      ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
+      : p42Mode
+        ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
+        : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
 );
 const evidencePath = path.join(
   root,
@@ -100,6 +114,10 @@ const p43TimelinePath = path.join(
   root,
   "experiments/p43-food-safe-jobs-timeline.json",
 );
+const p51EvidencePath = path.join(
+  root,
+  "experiments/p51-construction-jobs-handoff-evidence.json",
+);
 const p42PluginPath = path.join(
   root,
   "experiments/p42-construction-priority-counterfactual-trace.mjs",
@@ -120,9 +138,11 @@ const interimPath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
-    : p42Mode
-      ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
-      : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+    : p51Mode
+      ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
+      : p42Mode
+        ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+        : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -132,6 +152,20 @@ const pinnedGameSha256 =
   "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7";
 const seed = 44;
 const epoch = "2026-09-21T00:00:00.000Z";
+const p51JobsRequest = Object.freeze({
+  requestId: "p51-jobs-owner-observation-v1",
+  origin: "test-only",
+  objectiveId: "maintain-food-buffer-and-useful-stone-production",
+  requestedScope: "food-sustainability-and-useful-stone-replenishment",
+  generation: 1,
+  active: true,
+  authorityClassification: "observation-only",
+});
+const p51InitialJobsRequest = Object.freeze({
+  ...p51JobsRequest,
+  active: false,
+});
+const p51Checkpoints = [719, 720];
 const checkpoints = [
   8, 48, 56, 64, 72, 80, 96, 112, 272, 448, 688, 1_000, 2_000, 3_000, 4_000,
   5_000, 6_000, 7_000, 8_000, 9_000, 10_000,
@@ -446,6 +480,7 @@ const metricPlugin = {
         "measure native ordinary Jobs phase execution",
       );
       source = `import { createCapturedJobControls, executeCapturedJobDecision } from "../adapters/evolve/civic/captured-job-controls.ts";\n${source}`;
+      if (p51Mode) source = applyP51RuntimeAdmissionInstrumentation(source);
       return { contents: source, loader: "ts" };
     });
     build.onLoad({ filter: /application\\jobs\.ts$/ }, async (args) => {
@@ -556,10 +591,14 @@ window.__EA_TEST_HOOKS__ = {
   plugins: p40TraceEnabled
     ? [
         metricPlugin,
+        ...(p51Mode ? [createP51ConstructionJobsHandoffPlugin()] : []),
         ...(p42Mode ? [createP42ConstructionPriorityTracePlugin()] : []),
         createP40ConstructionTracePlugin(),
       ]
-    : [metricPlugin],
+    : [
+        metricPlugin,
+        ...(p51Mode ? [createP51ConstructionJobsHandoffPlugin()] : []),
+      ],
   platform: "browser",
   target: ["esnext"],
   define: {
@@ -630,12 +669,14 @@ async function capture(session, period) {
     session.readState(),
     session.diagnostics(),
     session.evaluate(
-      (period, p42Mode, p43Mode) => {
+      (period, p42Mode, p43Mode, p51Mode, quarryTarget) => {
         const hooks = window.__EA_TEST_HOOKS__;
         const pageCapture =
           window[Symbol.for("evolve-automation.page-capture")];
         const global = pageCapture?.rootState.readRoot();
-        const jobsSnapshot = hooks?.p38JobsApi?.snapshot?.() ?? null;
+        const jobsSnapshot = p51Mode
+          ? null
+          : (hooks?.p38JobsApi?.snapshot?.() ?? null);
         const species = global?.race?.species;
         const ledger =
           p43Mode && period < 720
@@ -725,6 +766,53 @@ async function capture(session, period) {
             policySnapshot: hooks?.p38Policy?.snapshot?.() ?? null,
             metrics: hooks?.p38Metrics ?? null,
           },
+          p51: p51Mode
+            ? {
+                state: hooks?.p51HandoffState ?? null,
+                request: hooks?.p51ConstructionRequest ?? null,
+                requestQualification: hooks?.p51RequestQualification ?? null,
+                jobsAdmissions: hooks?.allocationDiagnosticAdmissions ?? [],
+                constructionPublicationAuthority:
+                  hooks?.constructionPublicationAuthority ?? null,
+                constructionPublicationTarget:
+                  hooks?.constructionPublicationTarget ?? null,
+                constructionOwnerContext: hooks?.p40OwnerContext ?? null,
+                quarryOrder: hooks?.p42QuarryOrder ?? null,
+                p42OwnerCycleApplied: hooks?.p42OwnerCycleApplied === true,
+                p42Released: hooks?.p42Released === true,
+                p36GatherActions: (hooks?.p36PolicyEvents ?? []).filter(
+                  (event) => event.type === "gather-click",
+                ).length,
+                p38GatherActions: (hooks?.p38PolicyEvents ?? []).filter(
+                  (event) => event.type === "gather-click",
+                ).length,
+                p38Authorization: hooks?.p42P38Authorization ?? null,
+                p40QuarryPurchase:
+                  (hooks?.p40TraceEvents ?? []).findLast(
+                    (event) =>
+                      event.period === period &&
+                      event.type === "purchase-postcondition" &&
+                      event.input?.candidateKey === quarryTarget,
+                  ) ?? null,
+                p40ConstructionEvents: (hooks?.p40TraceEvents ?? []).filter(
+                  (event) =>
+                    event.period === period &&
+                    /rock_quarry|basic_housing/.test(
+                      String(event.input?.candidateKey ?? ""),
+                    ),
+                ),
+                p42Events: hooks?.p42Trace ?? [],
+                instrumentationMetrics: {
+                  p40ResourceReadCount: hooks?.p40ResourceReadCount ?? 0,
+                  p40DiagnosticClockReads: hooks?.p40DiagnosticClockReads ?? 0,
+                  p42ResourceAmountReads: hooks?.p42ResourceAmountReads ?? 0,
+                  p42OwnerAuthorityReads: hooks?.p42OwnerAuthorityReads ?? 0,
+                  p42AppliedReservationReads:
+                    hooks?.p42AppliedReservationReads ?? 0,
+                  p42DiagnosticClockReads: hooks?.p42DiagnosticClockReads ?? 0,
+                },
+              }
+            : undefined,
           savingTargetObservation: p42Mode
             ? ((hooks?.constructionSavingTargetObservations ?? [])
                 .filter((entry) => entry.period === period)
@@ -735,6 +823,8 @@ async function capture(session, period) {
       period,
       p42Mode,
       p43Mode,
+      p51Mode,
+      P42_EXPECTED.quarryTarget,
     ),
   ]);
   const species = state.race?.species;
@@ -826,6 +916,7 @@ async function capture(session, period) {
       jobsTraceCount: native.jobsTraceCount,
       p38: native.p38,
       jobsInput: native.jobsInput,
+      ...(p51Mode ? { p51: native.p51 } : {}),
       ...(p42Mode
         ? { savingTargetObservation: native.savingTargetObservation ?? null }
         : {}),
@@ -847,6 +938,14 @@ async function replay(
     perf: true,
     forwardPerfSummary: true,
     nativeTrace: true,
+    ...(p51Mode
+      ? {
+          captureAllocationDiagnosticAdmission: true,
+          initialTestInterventions: {
+            allocationDiagnosticRequest: p51InitialJobsRequest,
+          },
+        }
+      : {}),
   });
   try {
     await session.evaluate(
@@ -861,6 +960,14 @@ async function replay(
         hooks.p36PreGatherBoundaryCaptures = [];
         hooks.p38PolicyEvents = [];
         hooks.p38JobTrace = [];
+        if (configuration.p51Mode) {
+          hooks.p51Mode = true;
+          hooks.p51Arm = configuration.arm;
+          hooks.p51AdmissionEnabled = false;
+          hooks.p51ConstructionRequest = null;
+          hooks.p51RequestQualification = null;
+          hooks.p51HandoffState = null;
+        }
         if (configuration.p40Trace) {
           hooks.p40TraceEnabled = true;
           hooks.p40TraceEvents = [];
@@ -1423,8 +1530,11 @@ async function replay(
         p38PolicyArm: p42Mode && arm === "A" ? "B" : arm,
         p42Mode,
         p42Arm: p43Mode ? "B" : arm,
-        p42Enabled: p42Mode && (p43Mode || arm === "B" || arm === "B-repeat"),
+        p42Enabled: p51Mode
+          ? false
+          : p42Mode && (p43Mode || arm === "B" || arm === "B-repeat"),
         p43Mode,
+        p51Mode,
         p43Enabled: p43Mode && (arm === "B" || arm === "B-repeat"),
         p43CommitmentMode: p43Mode ? "test-only-assume-empty" : null,
         pinnedGameRevision: P43_PINNED_GAME,
@@ -1439,13 +1549,15 @@ async function replay(
       },
     );
 
-    const requested = [
-      ...new Set([
-        ...checkpoints,
-        ...extraCheckpoints,
-        ...(p42Mode ? p42Checkpoints : []),
-      ]),
-    ].sort((left, right) => left - right);
+    const requested = p51Mode
+      ? p51Checkpoints
+      : [
+          ...new Set([
+            ...checkpoints,
+            ...extraCheckpoints,
+            ...(p42Mode ? p42Checkpoints : []),
+          ]),
+        ].sort((left, right) => left - right);
     const captured = [];
     let elapsed = 0;
     let workerTransfer = null;
@@ -1484,6 +1596,33 @@ async function replay(
             };
           },
           { arm, p43Enabled: p43Mode && (arm === "B" || arm === "B-repeat") },
+        );
+      }
+      if (p51Mode && targetPeriod === 719) {
+        await session.evaluate(
+          (configuration) => {
+            const hooks = window.__EA_TEST_HOOKS__;
+            hooks.p51Arm = configuration.arm;
+            hooks.p51ConstructionRequest = configuration.p51Request;
+            hooks.p51RequestQualification =
+              configuration.p51RequestQualification;
+            hooks.p51AdmissionEnabled = true;
+            hooks.allocationDiagnosticRequest = configuration.jobsRequest;
+            hooks.p42Enabled = configuration.p42Enabled;
+          },
+          {
+            arm,
+            p51Request:
+              arm === "B" || arm === "B-repeat" ? P51_QUARRY_REQUEST : null,
+            p51RequestQualification: qualifyP51QuarryRequest(
+              arm === "B" || arm === "B-repeat" ? P51_QUARRY_REQUEST : null,
+              arm,
+            ),
+            p42Enabled:
+              (arm === "B" || arm === "B-repeat") &&
+              qualifyP51QuarryRequest(P51_QUARRY_REQUEST, arm).qualified,
+            jobsRequest: p51JobsRequest,
+          },
         );
       }
       if (manualTransferPeriod === targetPeriod) {
@@ -1937,6 +2076,92 @@ try {
       entry.jobsInput ??= entry.native?.jobsInput ?? null;
       entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
     }
+  }
+  if (p51Mode) {
+    const sourcePaths = [
+      "src/application/build.ts",
+      "src/ports/build.ts",
+      "src/adapters/evolve/progression/build/captured-build.ts",
+      "src/adapters/evolve/progression/construction/captured-construction.ts",
+      "src/bootstrap/captured-progression-control.ts",
+      "src/bootstrap/captured-runtime-control.ts",
+      "src/adapters/evolve/civic/captured-ordinary-jobs.ts",
+      "src/domain/civic/allocation-diagnostic-admission.ts",
+      "experiments/p42-construction-priority-counterfactual-policy.mjs",
+      "experiments/p42-construction-priority-counterfactual-trace.mjs",
+      "experiments/p49-jobs-admission-evidence.mjs",
+      "experiments/p51-construction-jobs-handoff-contract.mjs",
+      "experiments/p51-construction-jobs-handoff-trace.mjs",
+      "experiments/p51-construction-jobs-handoff-evidence.mjs",
+      "experiments/p51-construction-jobs-handoff-exact.mjs",
+      "experiments/p38-quarry-production-validation-exact.mjs",
+      "tests/experiments/p51-construction-jobs-handoff-test.mjs",
+      "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs",
+      "tools/chromium-evolve-runner.mjs",
+      "tools/chromium/bridge.js",
+    ];
+    const sourceHashes = Object.fromEntries(
+      await Promise.all(
+        sourcePaths.map(async (relativePath) => [
+          relativePath,
+          hash(await readFile(path.join(root, relativePath))),
+        ]),
+      ),
+    );
+    const p51PortAuditText = await Promise.all(
+      [
+        "experiments/p51-construction-jobs-handoff-contract.mjs",
+        "experiments/p51-construction-jobs-handoff-trace.mjs",
+      ].map(async (relativePath) =>
+        (await readFile(path.join(root, relativePath), "utf8")).toString(),
+      ),
+    );
+    const countMatches = (source, expression) =>
+      p51PortAuditText.reduce(
+        (total, contents) => total + (contents.match(expression) ?? []).length,
+        0,
+      );
+    const nativePortAudit = {
+      method:
+        "static callsite audit of the P51 receipt contract and injected handoff adapter; P49 observation deltas are recorded separately",
+      sourceFiles: [
+        "experiments/p51-construction-jobs-handoff-contract.mjs",
+        "experiments/p51-construction-jobs-handoff-trace.mjs",
+      ],
+      readCallsites: countMatches(
+        p51PortAuditText,
+        /(?:rootState|resources|costs|buildCosts|native)\.(?:readRoot|readResources|readCost|readBuildTargets|readQueue|resolve)\s*\(/g,
+      ),
+      controlCallsites: countMatches(
+        p51PortAuditText,
+        /(?:controls|pageCapture\.controls)\.(?:resolve|invoke|click|action)\s*\(/g,
+      ),
+    };
+    const evidence = createP51ConstructionJobsHandoffEvidence({
+      A,
+      B,
+      BRepeat,
+      gameSnapshotSha256: pinnedGameSha256,
+      bundleSha256,
+      replayHarnessSha256,
+      sourceHashes,
+      nativePortAudit,
+    });
+    await writeFile(
+      p51EvidencePath,
+      await prettier.format(JSON.stringify(evidence), { parser: "json" }),
+    );
+    console.log(
+      JSON.stringify({
+        experiment: evidence.schema,
+        outcome: evidence.decision.outcome,
+        p51EvidencePath,
+        receiptSizeBytes: evidence.receipt.exactSizeBytes,
+        jobsOwnerScope: evidence.receipt.jobsConsumption.ownerScope,
+        replayHashes: { bundleSha256, replayHarnessSha256 },
+      }),
+    );
+    process.exit(0);
   }
   if (p43Mode) {
     const p43Result = createP43FoodSafeJobsEvidence({
