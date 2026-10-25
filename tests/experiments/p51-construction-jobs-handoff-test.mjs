@@ -19,24 +19,36 @@ import {
   qualifyP42ConstructionReservation,
 } from "../../experiments/p42-construction-priority-counterfactual-policy.mjs";
 
-const p51PortSource = (
-  await Promise.all([
-    readFile(
-      new URL(
-        "../../experiments/p51-construction-jobs-handoff-contract.mjs",
-        import.meta.url,
-      ),
-      "utf8",
+const [contractSource, traceSource] = await Promise.all([
+  readFile(
+    new URL(
+      "../../experiments/p51-construction-jobs-handoff-contract.mjs",
+      import.meta.url,
     ),
-    readFile(
-      new URL(
-        "../../experiments/p51-construction-jobs-handoff-trace.mjs",
-        import.meta.url,
-      ),
-      "utf8",
+    "utf8",
+  ),
+  readFile(
+    new URL(
+      "../../experiments/p51-construction-jobs-handoff-trace.mjs",
+      import.meta.url,
     ),
-  ])
-).join("\n");
+    "utf8",
+  ),
+]);
+const p51TransformStart = traceSource.indexOf(
+  "export function applyP51RuntimeAdmissionInstrumentation",
+);
+const p52TransformStart = traceSource.indexOf(
+  "export function applyP52ProgressionSampleInstrumentation",
+);
+const pluginStart = traceSource.indexOf(
+  "export function createP51ConstructionJobsHandoffPlugin",
+);
+const p51PortSource = [
+  contractSource,
+  traceSource.slice(p51TransformStart, p52TransformStart),
+  traceSource.slice(pluginStart),
+].join("\n");
 assert.equal(
   p51PortSource.match(
     /(?:rootState|resources|costs|buildCosts|native)\.(?:readRoot|readResources|readCost|readBuildTargets|readQueue|resolve)\s*\(/g,

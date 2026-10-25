@@ -42,6 +42,13 @@ const productionOnlyNames = [
   "p51HandoffState",
   "p51AdmissionEnabled",
   "p51Mode",
+  "consumeP52ConstructionReceiptForTest",
+  "finalizeP52ConstructionReceiptForTest",
+  "p52IdentitySampleActive",
+  "p52JobsIdentitySampleActive",
+  "p52HandoffClassification",
+  "p52ConstructionIdentitySample",
+  "p52JobsIdentitySample",
 ];
 const productionOnlyStrings = [
   "p48-allocation-diagnostic-observation",
@@ -54,13 +61,23 @@ const productionOnlyStrings = [
   "handoff-authority-incomplete",
   "p51-test-only-verified-construction-jobs-handoff",
   "native-root-replaced",
+  "p52-independent-construction-jobs-identity",
+  "captured-runtime-shared-progression-reader",
+  "post-construction-success",
+  "jobs-owner-admission",
+  "source-backed-known-mutation",
 ];
 
-async function bundle(testSurface, p51Surface = false) {
+async function bundle(testSurface, p51Surface = false, p52Surface = false) {
   assert.equal(
-    p51Surface && !testSurface,
+    (p51Surface || p52Surface) && !testSurface,
     false,
-    "P51 instrumentation can only be compiled into the test surface",
+    "P51/P52 instrumentation can only be compiled into the test surface",
+  );
+  assert.equal(
+    p52Surface && !p51Surface,
+    false,
+    "P52 instrumentation extends the P51 test surface",
   );
   const result = await esbuild.build({
     ...createBuildOptions({
@@ -70,7 +87,7 @@ async function bundle(testSurface, p51Surface = false) {
       testSurface,
     }),
     ...(p51Surface
-      ? { plugins: [createP51ConstructionJobsHandoffPlugin()] }
+      ? { plugins: [createP51ConstructionJobsHandoffPlugin(p52Surface)] }
       : {}),
     write: false,
     metafile: true,
@@ -197,6 +214,20 @@ for (const marker of [
     `test-surface bundle omits diagnostic contract marker ${marker}`,
   );
 }
+
+for (const name of [
+  "consumeP52ConstructionReceiptForTest",
+  "finalizeP52ConstructionReceiptForTest",
+  "p52JobsIdentitySampleActive",
+  "p52HandoffClassification",
+]) {
+  assert.equal(
+    testSurface.identifiers.has(name) || testSurface.strings.has(name),
+    false,
+    `ordinary test surface unexpectedly includes P52 instrumentation ${name}`,
+  );
+}
+
 assert.ok(testSurface.diagnosticModuleBytes > 0);
 
 for (const name of [
@@ -245,6 +276,36 @@ for (const marker of [
   );
 }
 
+for (const name of [
+  "consumeP52ConstructionReceiptForTest",
+  "finalizeP52ConstructionReceiptForTest",
+  "p52JobsIdentitySampleActive",
+  "p52HandoffClassification",
+]) {
+  assert.equal(
+    p51Surface.identifiers.has(name) || p51Surface.strings.has(name),
+    false,
+    `P51-only test surface unexpectedly includes the P52 observer ${name}`,
+  );
+}
+
+const p52Surface = await bundle(true, true, true);
+for (const marker of [
+  "consumeP52ConstructionReceiptForTest",
+  "finalizeP52ConstructionReceiptForTest",
+  "p52JobsIdentitySampleActive",
+  "p52IdentityNativeRootReads",
+  "captured-runtime-shared-progression-reader",
+  "post-construction-success",
+  "jobs-owner-admission",
+]) {
+  assert.equal(
+    p52Surface.identifiers.has(marker) || p52Surface.strings.has(marker),
+    true,
+    `P52 exact test surface omits identity provenance marker ${marker}`,
+  );
+}
+
 console.log(
-  "P50 production diagnostic isolation and P51 test-only handoff retention tests passed",
+  "P50 production diagnostic isolation and P51/P52 test-only handoff retention tests passed",
 );
