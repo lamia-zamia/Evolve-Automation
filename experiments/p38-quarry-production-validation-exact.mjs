@@ -44,11 +44,13 @@ import {
 } from "./p51-construction-jobs-handoff-contract.mjs";
 import {
   applyP51RuntimeAdmissionInstrumentation,
+  applyP52RuntimeAdmissionInstrumentation,
   createP51ConstructionJobsHandoffPlugin,
 } from "./p51-construction-jobs-handoff-trace.mjs";
 import { createP42ConstructionPriorityEvidence } from "./p42-construction-priority-counterfactual-evidence.mjs";
 import { createP43FoodSafeJobsEvidence } from "./p43-food-safe-jobs-evidence.mjs";
 import { createP51ConstructionJobsHandoffEvidence } from "./p51-construction-jobs-handoff-evidence.mjs";
+import { createP52IndependentConstructionJobsIdentityEvidence } from "./p52-independent-construction-jobs-identity-evidence.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
@@ -56,7 +58,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const p42Mode = process.argv.includes(
   "--p42-construction-priority-counterfactual",
 );
-const p51Mode = process.argv.includes("--p51-construction-jobs-handoff");
+const p52Mode = process.argv.includes(
+  "--p52-independent-construction-jobs-identity",
+);
+const p51Mode =
+  process.argv.includes("--p51-construction-jobs-handoff") || p52Mode;
 const p43Mode = process.argv.includes("--p43-food-safe-jobs");
 if (p51Mode && !p42Mode)
   throw new Error("P51 reuses the retained P42 Construction intervention");
@@ -80,11 +86,13 @@ const bundlePath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs.user.js"
-    : p51Mode
-      ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
-      : p42Mode
-        ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
-        : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
+    : p52Mode
+      ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity.user.js"
+      : p51Mode
+        ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
+        : p42Mode
+          ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
+          : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
 );
 const evidencePath = path.join(
   root,
@@ -118,6 +126,10 @@ const p51EvidencePath = path.join(
   root,
   "experiments/p51-construction-jobs-handoff-evidence.json",
 );
+const p52EvidencePath = path.join(
+  root,
+  "experiments/p52-independent-construction-jobs-identity-evidence.json",
+);
 const p42PluginPath = path.join(
   root,
   "experiments/p42-construction-priority-counterfactual-trace.mjs",
@@ -138,11 +150,13 @@ const interimPath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
-    : p51Mode
-      ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
-      : p42Mode
-        ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
-        : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+    : p52Mode
+      ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
+      : p51Mode
+        ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
+        : p42Mode
+          ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+          : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -480,7 +494,10 @@ const metricPlugin = {
         "measure native ordinary Jobs phase execution",
       );
       source = `import { createCapturedJobControls, executeCapturedJobDecision } from "../adapters/evolve/civic/captured-job-controls.ts";\n${source}`;
-      if (p51Mode) source = applyP51RuntimeAdmissionInstrumentation(source);
+      if (p51Mode)
+        source = p52Mode
+          ? applyP52RuntimeAdmissionInstrumentation(source)
+          : applyP51RuntimeAdmissionInstrumentation(source);
       return { contents: source, loader: "ts" };
     });
     build.onLoad({ filter: /application\\jobs\.ts$/ }, async (args) => {
@@ -591,13 +608,13 @@ window.__EA_TEST_HOOKS__ = {
   plugins: p40TraceEnabled
     ? [
         metricPlugin,
-        ...(p51Mode ? [createP51ConstructionJobsHandoffPlugin()] : []),
+        ...(p51Mode ? [createP51ConstructionJobsHandoffPlugin(p52Mode)] : []),
         ...(p42Mode ? [createP42ConstructionPriorityTracePlugin()] : []),
         createP40ConstructionTracePlugin(),
       ]
     : [
         metricPlugin,
-        ...(p51Mode ? [createP51ConstructionJobsHandoffPlugin()] : []),
+        ...(p51Mode ? [createP51ConstructionJobsHandoffPlugin(p52Mode)] : []),
       ],
   platform: "browser",
   target: ["esnext"],
@@ -669,8 +686,42 @@ async function capture(session, period) {
     session.readState(),
     session.diagnostics(),
     session.evaluate(
-      (period, p42Mode, p43Mode, p51Mode, quarryTarget) => {
+      (period, p42Mode, p43Mode, p51Mode, p52Mode, quarryTarget) => {
         const hooks = window.__EA_TEST_HOOKS__;
+        const p51State = hooks?.p51HandoffState ?? null;
+        const publishedReceipt = p51State?.events?.find(
+          (event) => event.kind === "receipt-published",
+        )?.receipt;
+        const sourceMatches =
+          publishedReceipt?.origin?.identityProvenance?.sourceIdentity !==
+            undefined &&
+          publishedReceipt.origin.identityProvenance.sourceIdentity ===
+            hooks?.p52JobsIdentitySample?.jobsIdentity?.sourceIdentity;
+        const sanitizedP51State =
+          p52Mode && p51State
+            ? {
+                ...p51State,
+                events: p51State.events.map((event) => {
+                  if (
+                    event.kind !== "receipt-published" ||
+                    !event.receipt?.origin?.identityProvenance
+                  )
+                    return event;
+                  const { sourceIdentity: _sourceIdentity, ...provenance } =
+                    event.receipt.origin.identityProvenance;
+                  return {
+                    ...event,
+                    receipt: {
+                      ...event.receipt,
+                      origin: {
+                        ...event.receipt.origin,
+                        identityProvenance: provenance,
+                      },
+                    },
+                  };
+                }),
+              }
+            : p51State;
         const pageCapture =
           window[Symbol.for("evolve-automation.page-capture")];
         const global = pageCapture?.rootState.readRoot();
@@ -768,12 +819,53 @@ async function capture(session, period) {
           },
           p51: p51Mode
             ? {
-                state: hooks?.p51HandoffState ?? null,
+                state: sanitizedP51State,
                 request: hooks?.p51ConstructionRequest ?? null,
                 requestQualification: hooks?.p51RequestQualification ?? null,
                 jobsAdmissions: hooks?.allocationDiagnosticAdmissions ?? [],
                 constructionPublicationAuthority:
-                  hooks?.constructionPublicationAuthority ?? null,
+                  p52Mode && hooks?.constructionPublicationAuthority
+                    ? (({ identitySource: _identitySource, ...authority }) =>
+                        authority)(hooks.constructionPublicationAuthority)
+                    : (hooks?.constructionPublicationAuthority ?? null),
+                ...(p52Mode
+                  ? {
+                      p52: {
+                        constructionIdentitySample:
+                          hooks?.p52ConstructionIdentitySample
+                            ? (({
+                                identitySource: _identitySource,
+                                ...sample
+                              }) => ({
+                                ...sample,
+                                sourceInstance:
+                                  "shared-runtime-progression-reader",
+                              }))(hooks.p52ConstructionIdentitySample)
+                            : null,
+                        jobsIdentitySample: hooks?.p52JobsIdentitySample
+                          ? {
+                              ...hooks.p52JobsIdentitySample,
+                              jobsIdentity: hooks.p52JobsIdentitySample
+                                .jobsIdentity
+                                ? (({
+                                    sourceIdentity: _sourceIdentity,
+                                    ...identity
+                                  }) => identity)(
+                                    hooks.p52JobsIdentitySample.jobsIdentity,
+                                  )
+                                : null,
+                              sameRuntimeProgressionSource: sourceMatches,
+                            }
+                          : null,
+                        classification: hooks?.p52HandoffClassification ?? null,
+                        dormantAdmissionCallbacks:
+                          hooks?.p52DormantAdmissionCallbacks ?? 0,
+                        constructionIdentityError:
+                          hooks?.p52ConstructionIdentityError ?? null,
+                        jobsIdentityError: hooks?.p52JobsIdentityError ?? null,
+                      },
+                    }
+                  : {}),
                 constructionPublicationTarget:
                   hooks?.constructionPublicationTarget ?? null,
                 constructionOwnerContext: hooks?.p40OwnerContext ?? null,
@@ -824,6 +916,7 @@ async function capture(session, period) {
       p42Mode,
       p43Mode,
       p51Mode,
+      p52Mode,
       P42_EXPECTED.quarryTarget,
     ),
   ]);
@@ -962,11 +1055,23 @@ async function replay(
         hooks.p38JobTrace = [];
         if (configuration.p51Mode) {
           hooks.p51Mode = true;
+          hooks.p52Mode = configuration.p52Mode === true;
           hooks.p51Arm = configuration.arm;
           hooks.p51AdmissionEnabled = false;
           hooks.p51ConstructionRequest = null;
           hooks.p51RequestQualification = null;
           hooks.p51HandoffState = null;
+          hooks.p52ConstructionIdentitySampleActive = false;
+          hooks.p52ConstructionIdentityNativeRootReads = 0;
+          hooks.p52JobsIdentitySampleActive = false;
+          hooks.p52IdentityNativeRootReads = 0;
+          hooks.p52ConstructionIdentitySample = null;
+          hooks.p52JobsIdentitySample = null;
+          hooks.p52HandoffClassification = null;
+          hooks.p52DormantAdmissionCallbacks = 0;
+          hooks.p52NativeInvocationStartIndex = null;
+          hooks.p52ConstructionIdentityError = null;
+          hooks.p52JobsIdentityError = null;
         }
         if (configuration.p40Trace) {
           hooks.p40TraceEnabled = true;
@@ -1535,6 +1640,7 @@ async function replay(
           : p42Mode && (p43Mode || arm === "B" || arm === "B-repeat"),
         p43Mode,
         p51Mode,
+        p52Mode,
         p43Enabled: p43Mode && (arm === "B" || arm === "B-repeat"),
         p43CommitmentMode: p43Mode ? "test-only-assume-empty" : null,
         pinnedGameRevision: P43_PINNED_GAME,
@@ -2077,7 +2183,7 @@ try {
       entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
     }
   }
-  if (p51Mode) {
+  if (p51Mode && !p52Mode) {
     const sourcePaths = [
       "src/application/build.ts",
       "src/ports/build.ts",
@@ -2158,6 +2264,102 @@ try {
         p51EvidencePath,
         receiptSizeBytes: evidence.receipt.exactSizeBytes,
         jobsOwnerScope: evidence.receipt.jobsConsumption.ownerScope,
+        replayHashes: { bundleSha256, replayHarnessSha256 },
+      }),
+    );
+    process.exit(0);
+  }
+  if (p52Mode) {
+    const sourcePaths = [
+      "src/adapters/evolve/progression-epoch.ts",
+      "src/bootstrap/captured-runtime-control.ts",
+      "src/adapters/evolve/civic/captured-ordinary-jobs.ts",
+      "src/domain/civic/allocation-diagnostic-admission.ts",
+      "experiments/p42-construction-priority-counterfactual-policy.mjs",
+      "experiments/p42-construction-priority-counterfactual-trace.mjs",
+      "experiments/p49-jobs-admission-evidence.mjs",
+      "experiments/p51-construction-jobs-handoff-contract.mjs",
+      "experiments/p51-construction-jobs-handoff-trace.mjs",
+      "experiments/p52-independent-construction-jobs-identity-evidence.mjs",
+      "experiments/p52-independent-construction-jobs-identity-exact.mjs",
+      "experiments/p38-quarry-production-validation-exact.mjs",
+      "tests/experiments/p52-independent-construction-jobs-identity-test.mjs",
+      "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs",
+      "tools/chromium-evolve-runner.mjs",
+      "tools/chromium/bridge.js",
+    ];
+    const sourceHashes = Object.fromEntries(
+      await Promise.all(
+        sourcePaths.map(async (relativePath) => [
+          relativePath,
+          hash(await readFile(path.join(root, relativePath))),
+        ]),
+      ),
+    );
+    const p52TraceSource = await readFile(
+      path.join(root, "experiments/p51-construction-jobs-handoff-trace.mjs"),
+      "utf8",
+    );
+    const jobsSampleStart = p52TraceSource.indexOf(
+      'const readsBefore = Number(readProperty(p51Hooks, "p52IdentityNativeRootReads")',
+    );
+    const jobsSampleEnd = p52TraceSource.indexOf(
+      "const identitySample = Object.freeze",
+      jobsSampleStart,
+    );
+    const jobsSampleSource = p52TraceSource.slice(
+      jobsSampleStart,
+      jobsSampleEnd,
+    );
+    const count = (source, expression) =>
+      (source.match(expression) ?? []).length;
+    const epochSource = await readFile(
+      path.join(root, "src/adapters/evolve/progression-epoch.ts"),
+      "utf8",
+    );
+    const staticPortAudit = {
+      method:
+        "bounded P52 Jobs callback source audit plus exact shared-reader root observation counter",
+      jobsIdentitySampleSites: count(
+        p52TraceSource,
+        /const readsBefore = Number\(readProperty\(p51Hooks, "p52IdentityNativeRootReads"/g,
+      ),
+      jobsIdentityAccessorCalls: count(
+        jobsSampleSource,
+        /progression\.read(?:RootGeneration|ProgressionEpoch)\s*\(/g,
+      ),
+      jobsIdentityRootReadCallsites: count(
+        jobsSampleSource,
+        /progression\.readProgressionEpoch\s*\(/g,
+      ),
+      sharedReaderRootReadCallsites: count(
+        epochSource,
+        /const root = rootState\.readRoot\(\);/g,
+      ),
+      perJobsSampleRootObservations: 1,
+    };
+    const evidence = createP52IndependentConstructionJobsIdentityEvidence({
+      A,
+      B,
+      BRepeat,
+      gameSnapshotSha256: pinnedGameSha256,
+      bundleSha256,
+      replayHarnessSha256,
+      sourceHashes,
+      staticPortAudit,
+    });
+    await writeFile(
+      p52EvidencePath,
+      await prettier.format(JSON.stringify(evidence), { parser: "json" }),
+    );
+    console.log(
+      JSON.stringify({
+        experiment: evidence.schema,
+        outcome: evidence.decision.outcome,
+        p52EvidencePath,
+        handoffStatus: evidence.receipt.handoffStatus,
+        additionalNativeRootObservations:
+          evidence.measurements.additionalNativeRootObservations,
         replayHashes: { bundleSha256, replayHarnessSha256 },
       }),
     );

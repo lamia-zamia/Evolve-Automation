@@ -49,6 +49,12 @@ function ensureState(hooks) {
         consumeMs: 0,
         maxReceiptBytes: 0,
         eventOverflow: 0,
+        p52IdentitySamples: 0,
+        p52IdentityNativeRootReads: 0,
+        p52IdentitySampleMs: 0,
+        p52CorrelationMs: 0,
+        p52ReceiptConsumptionMs: 0,
+        p52DormantCallbacks: 0,
       },
     };
   }
@@ -150,18 +156,43 @@ export function completeP51ConstructionCycleForTest(hooks, completed) {
   const state = ensureState(hooks);
   state.constructionCycleCompleted = completed === true;
   const staged = state.stagedPurchase;
-  state.stagedPurchase = null;
   if (staged === null)
     return Object.freeze({
       published: false,
       reason: "no-staged-target-purchase",
     });
   if (completed !== true) {
+    state.stagedPurchase = null;
     state.latestNativePostcondition = null;
     return rejectPublication(state, "construction-cycle-incomplete", {
       targetBuildingId: staged.candidate.key,
     });
   }
+  if (hooks.p52Mode === true)
+    return Object.freeze({
+      published: false,
+      deferred: true,
+      reason: "awaiting-post-construction-shared-identity",
+    });
+  state.stagedPurchase = null;
+  return publishP51ConstructionReceiptForTest(hooks, staged);
+}
+
+export function finalizeP52ConstructionReceiptForTest(hooks) {
+  const state = ensureState(hooks);
+  const staged = state.stagedPurchase;
+  if (hooks.p52Mode !== true || staged === null)
+    return Object.freeze({
+      published: false,
+      reason: "no-p52-staged-purchase",
+    });
+  if (state.constructionCycleCompleted !== true) {
+    state.stagedPurchase = null;
+    return rejectPublication(state, "construction-cycle-incomplete", {
+      targetBuildingId: staged.candidate.key,
+    });
+  }
+  state.stagedPurchase = null;
   return publishP51ConstructionReceiptForTest(hooks, staged);
 }
 
@@ -222,6 +253,16 @@ export function publishP51ConstructionReceiptForTest(
   const state = ensureState(hooks);
   const request = hooks.p51ConstructionRequest;
   const owner = hooks.p40OwnerContext;
+  const authority =
+    hooks.p52Mode === true ? hooks.constructionPublicationAuthority : undefined;
+  const rootGeneration =
+    hooks.p52Mode === true ? authority?.rootGeneration : owner?.rootGeneration;
+  const progressionGeneration =
+    hooks.p52Mode === true
+      ? authority?.progressionGeneration
+      : owner?.progressionGeneration;
+  const workCycleId =
+    hooks.p52Mode === true ? authority?.workCycleId : owner?.workCycleId;
   const proof = state.latestNativePostcondition;
   const details = {
     targetBuildingId: candidate?.key ?? null,
@@ -238,11 +279,22 @@ export function publishP51ConstructionReceiptForTest(
     !isRecord(owner) ||
     !finiteIdentity(owner.workCycleId) ||
     !finiteIdentity(owner.orderingGeneration) ||
-    !finiteIdentity(owner.rootGeneration) ||
-    typeof owner.progressionGeneration !== "string" ||
-    owner.progressionGeneration.length === 0
+    !finiteIdentity(rootGeneration) ||
+    typeof progressionGeneration !== "string" ||
+    progressionGeneration.length === 0 ||
+    !finiteIdentity(workCycleId)
   )
     reason = "construction-owner-identity-unavailable";
+  else if (
+    hooks.p52Mode === true &&
+    (workCycleId !== owner.workCycleId ||
+      authority?.sourceProvenance !==
+        "captured-runtime-shared-progression-reader" ||
+      !isRecord(authority?.identitySource) ||
+      typeof authority.identitySource.readRootGeneration !== "function" ||
+      typeof authority.identitySource.readProgressionEpoch !== "function")
+  )
+    reason = "construction-shared-identity-provenance-unavailable";
   else if (owner.period !== request.period)
     reason = "construction-period-mismatch";
   else if (owner.workCycleId !== request.workCycleId)
@@ -289,11 +341,20 @@ export function publishP51ConstructionReceiptForTest(
     receiptId: `construction:${actionIdentity}`,
     origin: Object.freeze({
       owner: "Construction",
-      workCycleId: owner.workCycleId,
+      workCycleId,
       orderingGeneration: owner.orderingGeneration,
       period: owner.period,
-      rootGeneration: owner.rootGeneration,
-      progressionGeneration: owner.progressionGeneration,
+      rootGeneration,
+      progressionGeneration,
+      ...(hooks.p52Mode === true
+        ? {
+            identityProvenance: Object.freeze({
+              source: authority.sourceProvenance,
+              samplePoint: "post-construction-success",
+              sourceIdentity: authority.identitySource,
+            }),
+          }
+        : {}),
     }),
     targetBuildingId: candidate.key,
     result: "verified-purchase",
@@ -370,6 +431,10 @@ function finishConsumption(state, receipt, status, reason, observation) {
     workCycleIdentity: observation.evidence?.workCycleIdentity ?? null,
     capturedRootIdentity: observation.evidence?.capturedRootIdentity ?? null,
     progressionEvidence: observation.evidence?.progressionEvidence ?? null,
+    identityEvidence: observation.identityEvidence ?? null,
+    progressionRelationship: observation.progressionRelationship ?? null,
+    nativeMutationsAfterPublication:
+      observation.nativeMutationsAfterPublication ?? [],
     quarryWorker: observation.quarryWorker ?? null,
     plannedDecisionIdentity:
       observation.evidence?.plannedDecisionIdentity ?? null,
@@ -544,6 +609,230 @@ export function consumeP51ConstructionReceiptForTest(
     ...observation,
     crossOwnerIdentity,
   });
+  const end = diagnosticNow();
+  if (start !== undefined && end !== undefined)
+    state.metrics.consumeMs += Math.max(0, end - start);
+  return consumed;
+}
+
+export function consumeP52ConstructionReceiptForTest(
+  hooks,
+  jobsObservation,
+  current = {},
+) {
+  const start = diagnosticNow();
+  const state = ensureState(hooks);
+  const receipt = state.pendingReceipt;
+  if (receipt === null) {
+    const result = Object.freeze({
+      status: "no-receipt",
+      reason:
+        state.lastConsumedReceiptId !== null
+          ? "receipt-consumed-already"
+          : "no-published-receipt",
+      executionAuthority: "none",
+    });
+    const end = diagnosticNow();
+    if (start !== undefined && end !== undefined)
+      state.metrics.consumeMs += Math.max(0, end - start);
+    return result;
+  }
+
+  const evidence = jobsObservation?.evidence;
+  const jobs = Array.isArray(evidence?.ordinaryJobs)
+    ? evidence.ordinaryJobs
+    : [];
+  const quarryWorker = jobs.find((job) => job.id === "quarry_worker");
+  const identity = current.jobsIdentity;
+  let status = "rejected";
+  let reason = "invalid-or-contradictory-handoff-evidence";
+  let progressionRelationship = "unavailable";
+  const sourceMatches =
+    identity?.sourceIdentity !== undefined &&
+    identity.sourceIdentity ===
+      receipt.origin.identityProvenance?.sourceIdentity;
+  const identityEvidence = Object.freeze({
+    constructionSource:
+      receipt.origin.identityProvenance?.source ===
+      "captured-runtime-shared-progression-reader"
+        ? "verified"
+        : "missing",
+    jobsSource:
+      identity?.sourceProvenance ===
+      "captured-runtime-shared-progression-reader"
+        ? "verified"
+        : "missing",
+    sameRuntimeSource: sourceMatches,
+    constructionSamplePoint:
+      receipt.origin.identityProvenance?.samplePoint ?? "unavailable",
+    jobsSamplePoint: identity?.samplePoint ?? "unavailable",
+    constructionRootGeneration: receipt.origin.rootGeneration ?? null,
+    jobsRootGeneration: identity?.rootGeneration ?? null,
+    constructionProgressionFingerprint:
+      receipt.origin.progressionGeneration ?? null,
+    jobsProgressionFingerprint: identity?.progressionFingerprint ?? null,
+    jobsPreparationGeneration: evidence?.jobsPreparationGeneration ?? null,
+  });
+
+  const request = hooks.p51ConstructionRequest;
+  const requestMatches =
+    qualifyP51QuarryRequest(request, hooks.p51Arm).qualified &&
+    receipt.requestIdentity?.requestId === request?.requestId &&
+    receipt.requestIdentity?.generation === request?.generation;
+  const currentPeriod = current.period;
+  const workCycleMatches =
+    current.workCycleId === receipt.origin.workCycleId &&
+    evidence?.workCycleIdentity === receipt.origin.workCycleId &&
+    evidence?.progressionEvidence?.workCycle === receipt.origin.workCycleId;
+  const ownerFresh =
+    jobsObservation?.admission?.status === "admitted-for-observation" &&
+    evidence?.ownerSessionFreshness === "verified-current" &&
+    evidence?.capturedRootIdentity?.referenceMatchedAtExecution === true &&
+    evidence?.jobsAvailable === true;
+  const constructionSourceValid =
+    identityEvidence.constructionSource === "verified" &&
+    identityEvidence.constructionSamplePoint === "post-construction-success";
+  const jobsSourceValid =
+    identityEvidence.jobsSource === "verified" &&
+    identity?.samplePoint === "jobs-owner-admission" &&
+    Number.isSafeInteger(identity?.rootGeneration) &&
+    identity.rootGeneration >= 0 &&
+    typeof identity?.progressionFingerprint === "string" &&
+    identity.progressionFingerprint.length > 0;
+  const purchaseVerified =
+    receipt.origin.owner === "Construction" &&
+    receipt.targetBuildingId === P51_QUARRY_REQUEST.targetBuildingId &&
+    receipt.result === "verified-purchase" &&
+    receipt.nativePostcondition?.source ===
+      "captured-build-count-postcondition" &&
+    receipt.nativePostcondition?.targetBuildingId ===
+      receipt.targetBuildingId &&
+    receipt.nativePostcondition?.actionReportedSuccess === true &&
+    receipt.nativePostcondition?.constructionCycleCompleted === true &&
+    Number.isFinite(receipt.nativePostcondition?.beforeCount) &&
+    Number.isFinite(receipt.nativePostcondition?.afterCount) &&
+    receipt.nativePostcondition.afterCount >
+      receipt.nativePostcondition.beforeCount;
+  const nativeMutations = Array.isArray(current.nativeMutationsAfterPublication)
+    ? current.nativeMutationsAfterPublication
+    : [];
+
+  if (!requestMatches) {
+    status = "rejected";
+    reason = "test-request-cancelled-or-replaced";
+  } else if (!purchaseVerified) {
+    status = "rejected";
+    reason = "construction-purchase-proof-invalid";
+  } else if (
+    !Number.isSafeInteger(currentPeriod) ||
+    currentPeriod !== receipt.origin.period ||
+    !workCycleMatches ||
+    current.superseded === true ||
+    nativeMutations.length > 0
+  ) {
+    status = "stale";
+    reason =
+      nativeMutations.length > 0
+        ? "native-mutation-after-publication"
+        : "receipt-or-jobs-observation-expired";
+  } else if (!ownerFresh) {
+    status = "stale";
+    reason = "jobs-owner-session-not-current";
+  } else if (
+    !["ordinary-jobs-only", "full-jobs-and-foundry"].includes(
+      jobsObservation?.ownerScope,
+    )
+  ) {
+    status = "rejected";
+    reason = "jobs-owner-scope-unavailable-or-forged";
+  } else if (!constructionSourceValid || !jobsSourceValid) {
+    status = "handoff-authority-incomplete";
+    reason = !constructionSourceValid
+      ? "construction-shared-source-provenance-unavailable"
+      : "jobs-shared-identity-unavailable";
+  } else if (!sourceMatches) {
+    status = "rejected";
+    reason = "runtime-progression-source-mismatch";
+  } else if (
+    !Number.isSafeInteger(evidence?.jobsPreparationGeneration) ||
+    evidence.jobsPreparationGeneration < 1
+  ) {
+    status = "handoff-authority-incomplete";
+    reason = "jobs-preparation-generation-unavailable";
+  } else if (identity.rootGeneration !== receipt.origin.rootGeneration) {
+    status = "rejected";
+    reason = "root-replacement-generation-mismatch";
+  } else if (quarryWorker === undefined || quarryWorker.unlocked !== true) {
+    status = "rejected";
+    reason = "verified-quarry-purchase-not-reflected-in-jobs-catalog";
+  } else if (
+    identity.progressionFingerprint === receipt.origin.progressionGeneration
+  ) {
+    status = "correlated-owner-event";
+    reason = "same-runtime-identities-and-current-jobs-observation";
+    progressionRelationship = "same-fingerprint";
+  } else {
+    const mutation = current.progressionMutationBetweenBoundaries;
+    const knownMutation =
+      isRecord(mutation) &&
+      mutation.kind === "source-backed-known-mutation" &&
+      mutation.source === "native-invocation-trace" &&
+      mutation.betweenBoundaries === true &&
+      mutation.beforeFingerprint === receipt.origin.progressionGeneration &&
+      mutation.afterFingerprint === identity.progressionFingerprint &&
+      Array.isArray(mutation.nativeMutationIds) &&
+      mutation.nativeMutationIds.length > 0;
+    if (knownMutation) {
+      status = "correlated-owner-event";
+      reason =
+        "same-runtime-event-sequence-has-source-backed-progression-change";
+      progressionRelationship = "source-backed-known-mutation";
+    } else {
+      status = "rejected";
+      reason = "unexplained-progression-fingerprint-change";
+      progressionRelationship = "unexplained-change";
+    }
+  }
+
+  const crossOwnerIdentity = Object.freeze({
+    workCycle: workCycleMatches ? "matched-current" : "mismatched-or-stale",
+    rootGeneration:
+      identityEvidence.jobsRootGeneration ===
+      identityEvidence.constructionRootGeneration
+        ? "matched-current"
+        : "mismatched-or-unavailable",
+    progression: progressionRelationship,
+    runtimeSource: sourceMatches
+      ? "same-runtime-reader"
+      : "mismatched-or-unavailable",
+  });
+  const correlationEnd = diagnosticNow();
+  if (start !== undefined && correlationEnd !== undefined)
+    state.metrics.p52CorrelationMs += Math.max(0, correlationEnd - start);
+  const receiptConsumptionStart = diagnosticNow();
+  const consumed = finishConsumption(state, receipt, status, reason, {
+    period: currentPeriod,
+    workCycleId: current.workCycleId,
+    ownerScope: jobsObservation?.ownerScope,
+    evidence,
+    quarryWorker:
+      quarryWorker === undefined
+        ? { status: "row-unavailable" }
+        : { status: "observed", unlocked: quarryWorker.unlocked === true },
+    identityEvidence,
+    progressionRelationship,
+    nativeMutationsAfterPublication: nativeMutations,
+    crossOwnerIdentity,
+  });
+  const receiptConsumptionEnd = diagnosticNow();
+  if (
+    receiptConsumptionStart !== undefined &&
+    receiptConsumptionEnd !== undefined
+  )
+    state.metrics.p52ReceiptConsumptionMs += Math.max(
+      0,
+      receiptConsumptionEnd - receiptConsumptionStart,
+    );
   const end = diagnosticNow();
   if (start !== undefined && end !== undefined)
     state.metrics.consumeMs += Math.max(0, end - start);
