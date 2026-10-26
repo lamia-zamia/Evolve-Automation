@@ -30,7 +30,13 @@ export const P53_QUARRY_REQUEST = Object.freeze({
 });
 
 export const P53_CONTROLLED_ARMS = Object.freeze(["C", "C-repeat"]);
-export const P54_CONTROLLED_ARMS = Object.freeze(["D", "D-repeat"]);
+export const P54_CONTROLLED_ARMS = Object.freeze([
+  "D",
+  "D-repeat",
+  "D-early",
+  "D-early-repeat",
+  "D-late",
+]);
 
 export function qualifyP53QuarryRequest(request, arm) {
   if (!P53_CONTROLLED_ARMS.includes(arm) && !P54_CONTROLLED_ARMS.includes(arm))

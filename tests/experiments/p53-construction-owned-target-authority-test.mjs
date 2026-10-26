@@ -84,6 +84,11 @@ assert.equal(
   qualifyP53QuarryRequest(P53_QUARRY_REQUEST, "D-repeat").qualified,
   true,
 );
+for (const arm of ["D-early", "D-early-repeat", "D-late"])
+  assert.equal(
+    qualifyP53QuarryRequest(P53_QUARRY_REQUEST, arm).qualified,
+    true,
+  );
 assert.equal(
   qualifyP53QuarryRequest(P53_QUARRY_REQUEST, "C-repeat").qualified,
   true,
@@ -315,6 +320,7 @@ function makeOwnerCycle({
   onBeforeCurrentCycle = () => {},
   initialNativePrice = { Lumber: 50, Stone: 10 },
   eventFed = false,
+  eventFedDelivery = "before-cycle-89-finish",
 } = {}) {
   const root = {
     tech: {},
@@ -326,8 +332,9 @@ function makeOwnerCycle({
     },
   };
   let period = 719;
-  let liveRequest = request;
-  let localPendingRequest = request;
+  let eventFedMode = false;
+  let liveRequest = eventFed ? undefined : request;
+  let localPendingRequest;
   let liveNativePrice = initialNativePrice;
   let liveProgressionGeneration = "standard-human|progression-4";
   let ownerAdapter;
@@ -335,6 +342,8 @@ function makeOwnerCycle({
   const decisions = [];
   const operationSamples = [];
   const requestLifecycle = [];
+  const activationSamples = [];
+  const deliveryEvents = [];
   const reservationReads = [];
   const purchases = [];
   const nativeInvocations = [];
@@ -501,8 +510,9 @@ function makeOwnerCycle({
       saveWhiteholeGems: false,
     }),
     targetAdmissionForTest: {
-      readRequest: () => (eventFed ? localPendingRequest : liveRequest),
-      eventFed,
+      readRequest: (eventFedSample) =>
+        eventFedSample ? localPendingRequest : liveRequest,
+      readEventFedMode: () => eventFedMode,
       readRootObservationCountForTest: () => 0,
       readContext: () => ({
         period,
@@ -512,6 +522,22 @@ function makeOwnerCycle({
       onDecision: (decision, candidateKey) =>
         decisions.push({ decision, candidateKey }),
       onOperation: (operation) => operationSamples.push(operation),
+      onActivationModeSample: (
+        enabled,
+        boundary,
+        workCycleId,
+        sampledRequest,
+      ) =>
+        activationSamples.push({
+          enabled,
+          boundary,
+          workCycleId,
+          requestId: sampledRequest?.requestId ?? null,
+          requestGeneration: sampledRequest?.generation ?? null,
+          requestSource: enabled ? "event-fed-pending" : "p53-hook",
+          requestIdentityMatches:
+            sampledRequest === (enabled ? localPendingRequest : liveRequest),
+        }),
       onRequestConsumed: (request) => {
         if (localPendingRequest === request) localPendingRequest = undefined;
         requestLifecycle.push("consumed");
@@ -527,10 +553,28 @@ function makeOwnerCycle({
     },
   });
 
+  const deliverEventFedRequest = () => {
+    eventFedMode = true;
+    localPendingRequest = request;
+    liveRequest = request;
+    deliveryEvents.push({
+      boundary: "event-configured-and-request-installed",
+      requestId: request?.requestId ?? null,
+      requestGeneration: request?.generation ?? null,
+    });
+  };
   for (let cycle = 1; cycle <= 89; cycle++) {
+    if (
+      eventFed &&
+      eventFedDelivery === "before-cycle-89-finish" &&
+      cycle === 89
+    )
+      deliverEventFedRequest();
     ownerAdapter.reader.beginCycle();
     ownerAdapter.reader.finishCycle(true);
   }
+  if (eventFed && eventFedDelivery === "after-cycle-89-finish")
+    deliverEventFedRequest();
   assert.equal(ownerAdapter.observations.readSavingTarget().name, "city-farm");
   period = 720;
   onBeforeCurrentCycle();
@@ -548,6 +592,8 @@ function makeOwnerCycle({
     adapter: ownerAdapter,
     conflict,
     decisions,
+    activationSamples,
+    deliveryEvents,
     liveRequest: () => liveRequest,
     replaceRequest(next) {
       liveRequest = next;
@@ -613,8 +659,8 @@ function makeOwnerCycle({
   assert.equal(cycle.adapter.observations.readSavingTarget().name, "city-farm");
 }
 
-// Event-fed Construction reads the exact pending request locally and releases it only after the
-// same native action and verified postcondition succeed.
+// An event-fed request installed before cycle 89 finishes leaves its ordinary Farm intent intact,
+// captures that publication's authority, and releases only after the verified native action.
 {
   const cycle = makeOwnerCycle({ eventFed: true });
   assert.equal(
@@ -623,6 +669,23 @@ function makeOwnerCycle({
   );
   assert.ok(cycle.operationSamples.includes("local-pending-request-check"));
   assert.equal(cycle.pendingRequest(), P53_QUARRY_REQUEST);
+  assert.deepEqual(cycle.purchases, []);
+  assert.equal(cycle.adapter.observations.readSavingTarget().name, "city-farm");
+  const sample = (boundary, workCycleId) =>
+    cycle.activationSamples.find(
+      (entry) =>
+        entry.boundary === boundary && entry.workCycleId === workCycleId,
+    );
+  assert.equal(sample("adapter-created", 0).enabled, false);
+  assert.equal(sample("cycle-begin", 89).enabled, true);
+  assert.equal(sample("cycle-begin", 89).requestIdentityMatches, true);
+  assert.equal(sample("publication-finish", 89).enabled, true);
+  assert.equal(
+    sample("publication-finish", 89).requestId,
+    P53_QUARRY_REQUEST.requestId,
+  );
+  assert.equal(sample("cycle-begin", 90).requestIdentityMatches, true);
+  assert.equal(sample("admission", 90).requestIdentityMatches, true);
   const result = cycle.adapter.executor.executeClick({
     index: 0,
     key: "city-rock_quarry",
@@ -639,6 +702,38 @@ function makeOwnerCycle({
     "candidate-rejected",
   );
   assert.deepEqual(cycle.nativeInvocations, ["city-rock_quarry"]);
+}
+
+// A late event is delivered through the live event latch, but cycle 89 did not publish authority
+// for it. The cycle-90 owner therefore rejects without a Quarry action or a fabricated identity.
+{
+  const cycle = makeOwnerCycle({
+    eventFed: true,
+    eventFedDelivery: "after-cycle-89-finish",
+  });
+  const decision = cycle.decisions.at(-1).decision;
+  const sample = (boundary, workCycleId) =>
+    cycle.activationSamples.find(
+      (entry) =>
+        entry.boundary === boundary && entry.workCycleId === workCycleId,
+    );
+  assert.equal(cycle.deliveryEvents.length, 1);
+  assert.equal(sample("adapter-created", 0).enabled, false);
+  assert.equal(sample("publication-finish", 89).enabled, false);
+  assert.equal(sample("publication-finish", 89).requestId, null);
+  assert.equal(sample("cycle-begin", 90).enabled, true);
+  assert.equal(
+    sample("cycle-begin", 90).requestId,
+    P53_QUARRY_REQUEST.requestId,
+  );
+  assert.equal(sample("cycle-begin", 90).requestIdentityMatches, true);
+  assert.equal(sample("admission", 90).requestIdentityMatches, true);
+  assert.equal(decision.status, "stale");
+  assert.equal(decision.reason, "construction-publication-identity-mismatch");
+  assert.equal(cycle.pendingRequest(), P53_QUARRY_REQUEST);
+  assert.deepEqual(cycle.purchases, []);
+  assert.deepEqual(cycle.nativeInvocations, []);
+  assert.equal(cycle.adapter.observations.readSavingTarget().name, "city-farm");
 }
 
 // A denied replacement leaves the old saving priority active and lets an unrelated native action proceed.

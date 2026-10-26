@@ -52,11 +52,16 @@ import { createP42ConstructionPriorityEvidence } from "./p42-construction-priori
 import { createP43FoodSafeJobsEvidence } from "./p43-food-safe-jobs-evidence.mjs";
 import { createP51ConstructionJobsHandoffEvidence } from "./p51-construction-jobs-handoff-evidence.mjs";
 import { createP52IndependentConstructionJobsIdentityEvidence } from "./p52-independent-construction-jobs-identity-evidence.mjs";
+import { createP541ActivationLifecycleEvidence } from "./p54-1-activation-lifecycle-correction-evidence.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const p54Mode = process.argv.includes("--p54-construction-authority-cost");
+const p541Mode = process.argv.includes(
+  "--p54-1-activation-lifecycle-correction",
+);
+const p54Mode =
+  p541Mode || process.argv.includes("--p54-construction-authority-cost");
 const p42Mode = process.argv.includes(
   "--p42-construction-priority-counterfactual",
 );
@@ -90,19 +95,21 @@ const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
 const metadataPath = path.join(root, "src/userscript.meta.js");
 const bundlePath = path.join(
   root,
-  p43Mode
-    ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs.user.js"
-    : p54Mode
-      ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost.user.js"
-      : p53Mode
-        ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority.user.js"
-        : p52Mode
-          ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity.user.js"
-          : p51Mode
-            ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
-            : p42Mode
-              ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
-              : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
+  p541Mode
+    ? "test-artifacts/benchmark/tmp/p54-1-activation-lifecycle-correction.user.js"
+    : p43Mode
+      ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs.user.js"
+      : p54Mode
+        ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost.user.js"
+        : p53Mode
+          ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority.user.js"
+          : p52Mode
+            ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity.user.js"
+            : p51Mode
+              ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
+              : p42Mode
+                ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
+                : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
 );
 const evidencePath = path.join(
   root,
@@ -148,6 +155,10 @@ const p54EvidencePath = path.join(
   root,
   "experiments/p54-construction-authority-cost-evidence.json",
 );
+const p541EvidencePath = path.join(
+  root,
+  "experiments/p54-1-activation-lifecycle-correction-evidence.json",
+);
 const p42PluginPath = path.join(
   root,
   "experiments/p42-construction-priority-counterfactual-trace.mjs",
@@ -166,19 +177,21 @@ const jobsEvidencePath = path.join(
 );
 const interimPath = path.join(
   root,
-  p43Mode
-    ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
-    : p54Mode
-      ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost-interim.json"
-      : p53Mode
-        ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority-interim.json"
-        : p52Mode
-          ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
-          : p51Mode
-            ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
-            : p42Mode
-              ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
-              : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+  p541Mode
+    ? "test-artifacts/benchmark/tmp/p54-1-activation-lifecycle-correction-interim.json"
+    : p43Mode
+      ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
+      : p54Mode
+        ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost-interim.json"
+        : p53Mode
+          ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority-interim.json"
+          : p52Mode
+            ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
+            : p51Mode
+              ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
+              : p42Mode
+                ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+                : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -1267,6 +1280,8 @@ async function replay(
           };
         }
         if (configuration.p54Mode) {
+          hooks.p54ReadPeriodForTest = () =>
+            window.__EA_RUNNER__?.periods?.() ?? null;
           hooks.p54EventFedActivation = configuration.p54EventFed === true;
           hooks.p54Metrics = {
             eventFedActivation: configuration.p54EventFed === true,
@@ -1277,9 +1292,12 @@ async function replay(
             requestConsumedEvents: 0,
             requestExpiredEvents: 0,
             requestInvalidatedEvents: 0,
+            requestLifecycleSamples: [],
+            publicationAuthoritySamples: [],
             requestPresenceChecks: 0,
             localPendingRequestChecks: 0,
             constructionAdapterEventFedAtInitialization: null,
+            activationModeSamples: [],
             localPendingRequestCheckTotalMs: 0,
             localPendingRequestCheckMaximumMs: 0,
             contextIdentitySamples: 0,
@@ -1899,7 +1917,7 @@ async function replay(
         p40Trace: p40TraceEnabled,
         p38Enabled: p42Mode || arm !== "A",
         p38PolicyArm:
-          p54Mode && ["A", "D", "D-repeat"].includes(arm)
+          p541Mode || (p54Mode && ["A", "D", "D-repeat"].includes(arm))
             ? "B"
             : p42Mode && arm === "A"
               ? "B"
@@ -1915,7 +1933,11 @@ async function replay(
         p53Mode,
         p54Mode,
         p54EventFed:
-          p54Mode && (arm === "A" || arm === "D" || arm === "D-repeat"),
+          p54Mode &&
+          (arm === "A" ||
+            (p541Mode
+              ? ["D-early", "D-early-repeat", "D-late"].includes(arm)
+              : arm === "D" || arm === "D-repeat")),
         p53Request:
           p53Mode && (arm === "C" || arm === "C-repeat")
             ? P53_QUARRY_REQUEST
@@ -1935,7 +1957,9 @@ async function replay(
     );
 
     const requested = p51Mode
-      ? p51Checkpoints
+      ? p541Mode
+        ? [700, ...p51Checkpoints]
+        : p51Checkpoints
       : [
           ...new Set([
             ...checkpoints,
@@ -2004,7 +2028,10 @@ async function replay(
                     (arm === "C" ||
                       arm === "C-repeat" ||
                       arm === "D" ||
-                      arm === "D-repeat")
+                      arm === "D-repeat" ||
+                      arm === "D-early" ||
+                      arm === "D-early-repeat" ||
+                      arm === "D-late")
                   ? P53_QUARRY_REQUEST
                   : null,
             p51RequestQualification: qualifyP51QuarryRequest(
@@ -2014,7 +2041,10 @@ async function replay(
                     (arm === "C" ||
                       arm === "C-repeat" ||
                       arm === "D" ||
-                      arm === "D-repeat")
+                      arm === "D-repeat" ||
+                      arm === "D-early" ||
+                      arm === "D-early-repeat" ||
+                      arm === "D-late")
                   ? P53_QUARRY_REQUEST
                   : null,
               arm,
@@ -2024,18 +2054,33 @@ async function replay(
               qualifyP51QuarryRequest(P51_QUARRY_REQUEST, arm).qualified,
             jobsRequest: p51JobsRequest,
             p54PublishRequest:
-              p54Mode && (arm === "D" || arm === "D-repeat")
+              p54Mode &&
+              (p541Mode ? arm === "D-late" : arm === "D" || arm === "D-repeat")
                 ? P53_QUARRY_REQUEST
                 : null,
           },
         );
-        if (p54Mode && (arm === "D" || arm === "D-repeat")) {
+        if (
+          p54Mode &&
+          (p541Mode ? arm === "D-late" : arm === "D" || arm === "D-repeat")
+        ) {
           await session.evaluate((request) => {
             const publisher =
               window.__EA_TEST_HOOKS__?.p54PublishConstructionRequestForTest;
             if (typeof publisher === "function") publisher(request);
           }, P53_QUARRY_REQUEST);
         }
+      }
+      if (
+        p541Mode &&
+        targetPeriod === 700 &&
+        (arm === "D-early" || arm === "D-early-repeat")
+      ) {
+        await session.evaluate((request) => {
+          const publisher =
+            window.__EA_TEST_HOOKS__?.p54PublishConstructionRequestForTest;
+          if (typeof publisher === "function") publisher(request);
+        }, P53_QUARRY_REQUEST);
       }
       if (manualTransferPeriod === targetPeriod) {
         const productionIsSafe =
@@ -2480,9 +2525,13 @@ try {
   };
 
   const A = await replayOrReuse("A");
-  const B = await replayOrReuse("B");
+  const B = p541Mode ? null : await replayOrReuse("B");
   const BRepeat = p53Mode ? null : await replayOrReuse("B-repeat");
-  for (const arm of [A, B, ...(BRepeat === null ? [] : [BRepeat])]) {
+  for (const arm of [
+    A,
+    ...(B === null ? [] : [B]),
+    ...(BRepeat === null ? [] : [BRepeat]),
+  ]) {
     for (const entry of arm.checkpoints) {
       entry.jobsSnapshot ??= entry.native?.jobsSnapshot ?? null;
       entry.jobsInput ??= entry.native?.jobsInput ?? null;
@@ -2490,6 +2539,98 @@ try {
     }
   }
   if (p54Mode) {
+    if (p541Mode) {
+      const C = await replayOrReuse("C");
+      const DEarly = await replayOrReuse("D-early");
+      const DEarlyRepeat = await replayOrReuse("D-early-repeat");
+      const DLate = await replayOrReuse("D-late");
+      for (const arm of [C, DEarly, DEarlyRepeat, DLate]) {
+        for (const entry of arm.checkpoints) {
+          entry.jobsSnapshot ??= entry.native?.jobsSnapshot ?? null;
+          entry.jobsInput ??= entry.native?.jobsInput ?? null;
+          entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
+        }
+      }
+      const sourcePaths = [
+        "build-config.mjs",
+        "src/application/build.ts",
+        "src/ports/build.ts",
+        "src/ports/game-root-state.ts",
+        "src/adapters/evolve/vue-capture.ts",
+        "src/adapters/evolve/progression-epoch.ts",
+        "src/adapters/evolve/progression/construction/captured-construction.ts",
+        "src/adapters/evolve/progression/build/captured-build.ts",
+        "src/adapters/evolve/captured-cost-conflict.ts",
+        "src/adapters/evolve/captured-action-costs.ts",
+        "src/adapters/evolve/captured-queue-reservations.ts",
+        "src/bootstrap/captured-construction-control.ts",
+        "src/bootstrap/captured-progression-control.ts",
+        "src/bootstrap/captured-runtime-control.ts",
+        "src/domain/progression/build/construction-target-admission.ts",
+        "experiments/p42-construction-priority-counterfactual-policy.mjs",
+        "experiments/p42-construction-priority-counterfactual-trace.mjs",
+        "experiments/p51-construction-jobs-handoff-contract.mjs",
+        "experiments/p51-construction-jobs-handoff-trace.mjs",
+        "experiments/p52-independent-construction-jobs-identity-evidence.mjs",
+        "experiments/p53-construction-owned-target-authority-contract.mjs",
+        "experiments/p54-1-activation-lifecycle-correction-exact.mjs",
+        "experiments/p54-1-activation-lifecycle-correction-evidence.mjs",
+        "experiments/p38-quarry-production-validation-exact.mjs",
+        "tests/experiments/p53-construction-owned-target-authority-test.mjs",
+        "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs",
+        "tools/chromium-evolve-runner.mjs",
+        "tools/chromium/bridge.js",
+      ];
+      const sourceHashes = Object.fromEntries(
+        await Promise.all(
+          sourcePaths.map(async (relativePath) => [
+            relativePath,
+            hash(await readFile(path.join(root, relativePath))),
+          ]),
+        ),
+      );
+      const priorP42Evidence = await readFile(p42EvidencePath);
+      const evidence = createP541ActivationLifecycleEvidence({
+        A,
+        C,
+        DEarly,
+        DEarlyRepeat,
+        DLate,
+        gameSnapshotSha256: pinnedGameSha256,
+        bundleSha256,
+        replayHarnessSha256,
+        sourceHashes,
+        priorP42EvidenceSha256: hash(priorP42Evidence),
+        baselineTunedFixturePresent: await readFile(
+          path.join(
+            root,
+            "test-artifacts/benchmark/settings/baseline-tuned.json",
+          ),
+          { flag: "r" },
+        )
+          .then(() => true)
+          .catch(() => false),
+      });
+      await writeFile(
+        p541EvidencePath,
+        await prettier.format(JSON.stringify(evidence), { parser: "json" }),
+      );
+      console.log(
+        JSON.stringify({
+          experiment: evidence.schema,
+          outcome: evidence.decision.outcome,
+          p541EvidencePath,
+          preInterventionExact: evidence.preIntervention.exact,
+          CEqualsDEarly: evidence.nativeTrace.fullNativeTraceCEqualsDEarly,
+          DEarlyRepeatExact: evidence.repeat.exact,
+          DLateFailClosed: evidence.acceptance.lateRequestFailClosed,
+          rendererCpuGate:
+            evidence.acceptance.independentRendererCpuGate.status,
+          replayHashes: { bundleSha256, replayHarnessSha256 },
+        }),
+      );
+      process.exit(0);
+    }
     const C = await replayOrReuse("C");
     const D = await replayOrReuse("D");
     const DRepeat = await replayOrReuse("D-repeat");
