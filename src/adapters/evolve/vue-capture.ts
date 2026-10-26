@@ -42,6 +42,9 @@ import type {
 import { isRecord, readProperty } from "../validation.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+declare global {
+  var __EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__: boolean | undefined;
+}
 
 type AnyFunction = (this: unknown, ...args: unknown[]) => unknown;
 
@@ -703,16 +706,35 @@ export function installVueCapture(
     }
   }
 
-  const rootState: GameRootStateSource = Object.freeze({
-    readRoot: () => root,
-    isReactivitySuppressed: () => suppressed,
-    subscribeRootReplaced: (listener: () => void) => {
-      rootListeners.add(listener);
-      return () => {
-        rootListeners.delete(listener);
-      };
-    },
-  });
+  const rootState: GameRootStateSource =
+    globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+      ? (() => {
+          let rootObservationCountForTest = 0;
+          return Object.freeze({
+            readRoot: () => {
+              rootObservationCountForTest += 1;
+              return root;
+            },
+            readRootObservationCountForTest: () => rootObservationCountForTest,
+            isReactivitySuppressed: () => suppressed,
+            subscribeRootReplaced: (listener: () => void) => {
+              rootListeners.add(listener);
+              return () => {
+                rootListeners.delete(listener);
+              };
+            },
+          });
+        })()
+      : Object.freeze({
+          readRoot: () => root,
+          isReactivitySuppressed: () => suppressed,
+          subscribeRootReplaced: (listener: () => void) => {
+            rootListeners.add(listener);
+            return () => {
+              rootListeners.delete(listener);
+            };
+          },
+        });
 
   const registry: GameControlRegistry = Object.freeze({
     isCurrent(elementId: string, generation: number): boolean {

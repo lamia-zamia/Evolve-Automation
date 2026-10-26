@@ -13,7 +13,10 @@ import {
 } from "../application/jobs.ts";
 import type { PreparedJobsExecution } from "../ports/jobs.ts";
 import type { JobsCycleInput } from "../domain/civic/jobs.ts";
-import type { ConstructionTargetAdmissionRequest } from "../domain/progression/build/construction-target-admission.ts";
+import type {
+  ConstructionTargetAdmissionDecision,
+  ConstructionTargetAdmissionRequest,
+} from "../domain/progression/build/construction-target-admission.ts";
 import {
   FOOD_STONE_DIAGNOSTIC_OBJECTIVE,
   FOOD_STONE_DIAGNOSTIC_SCOPE,
@@ -327,6 +330,7 @@ import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 declare global {
   var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+  var __EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__: boolean | undefined;
 }
 declare const __EA_RESEARCH_CONDITION_GATE_ENABLED__: boolean;
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
@@ -378,6 +382,269 @@ export interface CapturedRuntimeControlDependencies {
 
 function isEnabled(settings: Record<string, unknown>, key: string): boolean {
   return settings[key] === true;
+}
+
+type P54ActivationOperation =
+  | "request-source-read"
+  | "local-pending-request-check"
+  | "context-identity-sample"
+  | "reservation-evidence-read"
+  | "native-control-authority-read"
+  | "native-action-execution"
+  | "construction-cycle";
+
+function createP54ConstructionActivationForTest(
+  settingsHostWindow: unknown,
+  readRootObservationCount: () => number | undefined,
+) {
+  const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+  let experimentEnabled = isRecord(readProperty(hooks, "p54Metrics"));
+  let eventFedActivation =
+    readProperty(hooks, "p54EventFedActivation") === true;
+  const metricsValue = readProperty(hooks, "p54Metrics");
+  let metrics: Record<string, unknown> | undefined = isRecord(metricsValue)
+    ? metricsValue
+    : undefined;
+  const pendingRequestValue = readProperty(hooks, "p53ConstructionRequest");
+  let pendingRequest: Readonly<ConstructionTargetAdmissionRequest> | undefined =
+    isRecord(pendingRequestValue)
+      ? (pendingRequestValue as unknown as ConstructionTargetAdmissionRequest)
+      : undefined;
+  let currentPhase: "dormant" | "pending" | "active" | "consumed" =
+    pendingRequest === undefined ? "dormant" : "pending";
+  if (metrics !== undefined)
+    Reflect.set(metrics, "runtimeEventFedActivation", eventFedActivation);
+  const addMetric = (key: string, amount = 1): void => {
+    if (metrics === undefined) return;
+    Reflect.set(metrics, key, Number(readProperty(metrics, key) ?? 0) + amount);
+  };
+  const recordMeasuredCost = (operation: string, elapsedMs: number): void => {
+    if (metrics === undefined || !Number.isFinite(elapsedMs)) return;
+    const costs = readProperty(metrics, "synchronousCostByOperation");
+    if (isRecord(costs))
+      Reflect.set(
+        costs,
+        operation,
+        Number(readProperty(costs, operation) ?? 0) + elapsedMs,
+      );
+    const phaseCosts = readProperty(metrics, "synchronousCostByPhase");
+    if (isRecord(phaseCosts))
+      Reflect.set(
+        phaseCosts,
+        currentPhase,
+        Number(readProperty(phaseCosts, currentPhase) ?? 0) + elapsedMs,
+      );
+    addMetric("cumulativeSynchronousCostMs", elapsedMs);
+    Reflect.set(
+      metrics,
+      "maximumMeasuredOperationMs",
+      Math.max(
+        Number(readProperty(metrics, "maximumMeasuredOperationMs") ?? 0),
+        elapsedMs,
+      ),
+    );
+  };
+  const recordCallbackCost = (elapsedMs: number): void => {
+    if (metrics === undefined || !Number.isFinite(elapsedMs)) return;
+    Reflect.set(
+      metrics,
+      "maximumEvidenceCallbackMs",
+      Math.max(
+        Number(readProperty(metrics, "maximumEvidenceCallbackMs") ?? 0),
+        elapsedMs,
+      ),
+    );
+  };
+  if (isRecord(hooks))
+    Reflect.set(
+      hooks,
+      "p54ConstructionRequestEventSinkForTest",
+      (event: unknown) => {
+        if (isRecord(event) && readProperty(event, "type") === "configure") {
+          experimentEnabled = readProperty(event, "experiment") === true;
+          eventFedActivation = readProperty(event, "eventFed") === true;
+          const suppliedMetrics = readProperty(hooks, "p54Metrics");
+          metrics = isRecord(suppliedMetrics) ? suppliedMetrics : undefined;
+          if (metrics !== undefined)
+            Reflect.set(
+              metrics,
+              "runtimeEventFedActivation",
+              eventFedActivation,
+            );
+          const request = readProperty(event, "request");
+          pendingRequest = isRecord(request)
+            ? (request as unknown as ConstructionTargetAdmissionRequest)
+            : undefined;
+          currentPhase = pendingRequest === undefined ? "dormant" : "pending";
+          if (pendingRequest !== undefined) {
+            addMetric("initialPendingRequestCount");
+            if (metrics !== undefined) {
+              Reflect.set(metrics, "pendingRequestReferences", 1);
+              Reflect.set(metrics, "maximumPendingRequestReferences", 1);
+            }
+          }
+          return;
+        }
+        pendingRequest = isRecord(event)
+          ? (event as unknown as ConstructionTargetAdmissionRequest)
+          : undefined;
+        currentPhase = pendingRequest === undefined ? "dormant" : "pending";
+        addMetric("requestLifecycleEvents");
+        addMetric(
+          pendingRequest === undefined
+            ? "requestCancellationEvents"
+            : "requestReplacementOrInstallEvents",
+        );
+        if (metrics !== undefined) {
+          Reflect.set(
+            metrics,
+            "pendingRequestReferences",
+            pendingRequest === undefined ? 0 : 1,
+          );
+          if (pendingRequest !== undefined)
+            Reflect.set(metrics, "maximumPendingRequestReferences", 1);
+        }
+      },
+    );
+  const clearPendingRequest = (
+    request: Readonly<ConstructionTargetAdmissionRequest>,
+    reason: "consumed" | "expired" | "invalidated",
+  ): void => {
+    if (!eventFedActivation || pendingRequest !== request) return;
+    pendingRequest = undefined;
+    currentPhase = reason === "consumed" ? "consumed" : "dormant";
+    addMetric(`request${reason[0]!.toUpperCase()}${reason.slice(1)}Events`);
+    if (metrics !== undefined)
+      Reflect.set(metrics, "pendingRequestReferences", 0);
+    if (
+      isRecord(hooks) &&
+      readProperty(hooks, "p53ConstructionRequest") === request
+    )
+      Reflect.set(hooks, "p53ConstructionRequest", null);
+  };
+  return Object.freeze({
+    get eventFed() {
+      return eventFedActivation;
+    },
+    recordAdapterActivationMode(enabled: boolean): void {
+      if (metrics !== undefined)
+        Reflect.set(
+          metrics,
+          "constructionAdapterEventFedAtInitialization",
+          enabled,
+        );
+    },
+    readPendingRequest: () => pendingRequest,
+    readRootObservationCountForTest: readRootObservationCount,
+    recordContextRootObservations(rootReads: number): void {
+      if (!experimentEnabled) return;
+      addMetric("contextIdentitySamples");
+      addMetric("contextRootObservations", rootReads);
+    },
+    recordDecision(
+      decision: Readonly<ConstructionTargetAdmissionDecision>,
+      evaluationMs: number | undefined,
+      callbackMs: number | undefined,
+    ): void {
+      if (!experimentEnabled) return;
+      if (Number.isFinite(evaluationMs))
+        recordMeasuredCost("owner-admission-predicate", evaluationMs!);
+      if (decision.status === "accepted-for-owner-decision") {
+        currentPhase = "active";
+        addMetric("acceptedOwnerDecisions");
+        if (metrics !== undefined) {
+          Reflect.set(metrics, "ownerCycleRequestReferences", 1);
+          Reflect.set(
+            metrics,
+            "maximumOwnerCycleRequestReferences",
+            Math.max(
+              Number(
+                readProperty(metrics, "maximumOwnerCycleRequestReferences") ??
+                  0,
+              ),
+              1,
+            ),
+          );
+        }
+      }
+      if (callbackMs !== undefined) recordCallbackCost(callbackMs);
+    },
+    recordOperation(
+      operation: P54ActivationOperation,
+      elapsedMs: number | undefined,
+      callbackMs: number | undefined,
+    ): void {
+      if (!experimentEnabled) return;
+      if (Number.isFinite(elapsedMs)) recordMeasuredCost(operation, elapsedMs!);
+      const countsByPhase = readProperty(metrics, "operationCountByPhase");
+      if (isRecord(countsByPhase)) {
+        const phaseCounts = readProperty(countsByPhase, currentPhase);
+        const nextCounts = isRecord(phaseCounts) ? phaseCounts : {};
+        Reflect.set(
+          nextCounts,
+          operation,
+          Number(readProperty(nextCounts, operation) ?? 0) + 1,
+        );
+        Reflect.set(countsByPhase, currentPhase, nextCounts);
+      }
+      if (operation === "construction-cycle")
+        addMetric("constructionWorkCycles");
+      if (
+        operation === "local-pending-request-check" ||
+        operation === "request-source-read"
+      )
+        addMetric("requestPresenceChecks");
+      if (eventFedActivation && operation === "local-pending-request-check") {
+        addMetric("localPendingRequestChecks");
+        if (Number.isFinite(elapsedMs) && metrics !== undefined) {
+          addMetric("localPendingRequestCheckTotalMs", elapsedMs!);
+          Reflect.set(
+            metrics,
+            "localPendingRequestCheckMaximumMs",
+            Math.max(
+              Number(
+                readProperty(metrics, "localPendingRequestCheckMaximumMs") ?? 0,
+              ),
+              elapsedMs!,
+            ),
+          );
+        }
+      } else {
+        if (operation === "reservation-evidence-read")
+          addMetric("reservationEvidenceSamples");
+        if (operation === "native-control-authority-read") {
+          addMetric("nativeControlAuthorityReads");
+          addMetric("nativePriceProbeCalls");
+        }
+      }
+      if (callbackMs !== undefined) recordCallbackCost(callbackMs);
+    },
+    onRootObservationSample(
+      operation: "reservation-evidence-read" | "native-control-authority-read",
+      rootReads: number,
+    ): void {
+      addMetric(
+        operation === "reservation-evidence-read"
+          ? "reservationRootObservations"
+          : "nativeControlAuthorityRootObservations",
+        rootReads,
+      );
+    },
+    onRequestConsumed: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => clearPendingRequest(request, "consumed"),
+    onRequestExpired: (request: Readonly<ConstructionTargetAdmissionRequest>) =>
+      clearPendingRequest(request, "expired"),
+    onRequestInvalidated: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => clearPendingRequest(request, "invalidated"),
+    onRequestCycleReleased: (
+      _request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => {
+      if (metrics !== undefined)
+        Reflect.set(metrics, "ownerCycleRequestReferences", 0);
+    },
+  });
 }
 
 /** Starts the captured runtime from completed game periods, without a debug clone or game object. */
@@ -1208,63 +1475,194 @@ export function startCapturedRuntime({
     nowMs: () => Date.now(),
     diagnostics: phaseDiagnostics,
     ...(globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true
-      ? {
-          constructionTargetAdmissionForTest: {
-            readRequest: () => {
-              const hooks = readProperty(
-                settingsHostWindow,
-                "__EA_TEST_HOOKS__",
-              );
-              if (readProperty(hooks, "p53Mode") !== true) return undefined;
-              const request = readProperty(hooks, "p53ConstructionRequest");
-              return isRecord(request)
-                ? (request as unknown as ConstructionTargetAdmissionRequest)
-                : undefined;
+      ? (() => {
+          const constructionRequestLatchForTest =
+            globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+              ? createP54ConstructionActivationForTest(settingsHostWindow, () =>
+                  pageCapture.rootState.readRootObservationCountForTest?.(),
+                )
+              : undefined;
+          return {
+            constructionTargetAdmissionForTest: {
+              readRequest: () => {
+                if (
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
+                    true &&
+                  constructionRequestLatchForTest?.eventFed === true
+                )
+                  return constructionRequestLatchForTest.readPendingRequest();
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                if (readProperty(hooks, "p53Mode") !== true) return undefined;
+                const request = readProperty(hooks, "p53ConstructionRequest");
+                return isRecord(request)
+                  ? (request as unknown as ConstructionTargetAdmissionRequest)
+                  : undefined;
+              },
+              readContext: () => {
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                const period = readProperty(hooks, "p40CurrentPeriod");
+                if (
+                  readProperty(hooks, "p53Mode") !== true ||
+                  !Number.isSafeInteger(period)
+                )
+                  return undefined;
+                const rootReadsBefore =
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+                    ? pageCapture.rootState.readRootObservationCountForTest?.()
+                    : undefined;
+                const rootGeneration = progression.readRootGeneration();
+                const progressionGeneration =
+                  progression.readProgressionEpoch();
+                const rootReadsAfter =
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+                    ? pageCapture.rootState.readRootObservationCountForTest?.()
+                    : undefined;
+                if (
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
+                    true &&
+                  rootReadsBefore !== undefined &&
+                  rootReadsAfter !== undefined
+                )
+                  constructionRequestLatchForTest?.recordContextRootObservations(
+                    rootReadsAfter - rootReadsBefore,
+                  );
+                return Object.freeze({
+                  period: period as number,
+                  rootGeneration,
+                  progressionGeneration,
+                });
+              },
+              onDecision: (decision, candidateKey, evaluationMs) => {
+                const callbackStartedAt =
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
+                    true &&
+                  constructionRequestLatchForTest !== undefined &&
+                  typeof performance !== "undefined"
+                    ? performance.now()
+                    : undefined;
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                const record = readProperty(
+                  hooks,
+                  "p53RecordOwnerDecisionForTest",
+                );
+                if (typeof record === "function")
+                  Reflect.apply(record, hooks, [
+                    decision,
+                    candidateKey,
+                    evaluationMs,
+                  ]);
+                const callbackMs =
+                  callbackStartedAt !== undefined &&
+                  typeof performance !== "undefined"
+                    ? Math.max(0, performance.now() - callbackStartedAt)
+                    : undefined;
+                if (
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+                )
+                  constructionRequestLatchForTest?.recordDecision(
+                    decision,
+                    evaluationMs,
+                    callbackMs,
+                  );
+              },
+              onOperation: (operation, elapsedMs) => {
+                const callbackStartedAt =
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
+                    true &&
+                  constructionRequestLatchForTest !== undefined &&
+                  typeof performance !== "undefined"
+                    ? performance.now()
+                    : undefined;
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                const record = readProperty(hooks, "p53RecordOperationForTest");
+                if (typeof record === "function") {
+                  if (
+                    globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
+                    true
+                  ) {
+                    if (
+                      operation !== "construction-cycle" &&
+                      operation !== "local-pending-request-check"
+                    )
+                      Reflect.apply(record, hooks, [operation]);
+                  } else Reflect.apply(record, hooks, [operation]);
+                }
+                const callbackMs =
+                  callbackStartedAt !== undefined &&
+                  typeof performance !== "undefined"
+                    ? Math.max(0, performance.now() - callbackStartedAt)
+                    : undefined;
+                if (
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+                )
+                  constructionRequestLatchForTest?.recordOperation(
+                    operation,
+                    elapsedMs,
+                    callbackMs,
+                  );
+              },
+              ...(globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+                ? {
+                    get eventFed() {
+                      return constructionRequestLatchForTest?.eventFed === true;
+                    },
+                    onActivationModeSample: (enabled: boolean) =>
+                      constructionRequestLatchForTest?.recordAdapterActivationMode(
+                        enabled,
+                      ),
+                    readRootObservationCountForTest: () =>
+                      constructionRequestLatchForTest?.readRootObservationCountForTest(),
+                    onRootObservationSample: (
+                      operation:
+                        | "reservation-evidence-read"
+                        | "native-control-authority-read",
+                      rootReads: number,
+                    ) =>
+                      constructionRequestLatchForTest?.onRootObservationSample(
+                        operation,
+                        rootReads,
+                      ),
+                    onRequestConsumed: (
+                      request: Readonly<ConstructionTargetAdmissionRequest>,
+                    ) =>
+                      constructionRequestLatchForTest?.onRequestConsumed(
+                        request,
+                      ),
+                    onRequestExpired: (
+                      request: Readonly<ConstructionTargetAdmissionRequest>,
+                    ) =>
+                      constructionRequestLatchForTest?.onRequestExpired(
+                        request,
+                      ),
+                    onRequestInvalidated: (
+                      request: Readonly<ConstructionTargetAdmissionRequest>,
+                    ) =>
+                      constructionRequestLatchForTest?.onRequestInvalidated(
+                        request,
+                      ),
+                    onRequestCycleReleased: (
+                      request: Readonly<ConstructionTargetAdmissionRequest>,
+                    ) =>
+                      constructionRequestLatchForTest?.onRequestCycleReleased(
+                        request,
+                      ),
+                  }
+                : {}),
             },
-            readContext: () => {
-              const hooks = readProperty(
-                settingsHostWindow,
-                "__EA_TEST_HOOKS__",
-              );
-              const period = readProperty(hooks, "p40CurrentPeriod");
-              if (
-                readProperty(hooks, "p53Mode") !== true ||
-                !Number.isSafeInteger(period)
-              )
-                return undefined;
-              return Object.freeze({
-                period: period as number,
-                rootGeneration: progression.readRootGeneration(),
-                progressionGeneration: progression.readProgressionEpoch(),
-              });
-            },
-            onDecision: (decision, candidateKey, evaluationMs) => {
-              const hooks = readProperty(
-                settingsHostWindow,
-                "__EA_TEST_HOOKS__",
-              );
-              const record = readProperty(
-                hooks,
-                "p53RecordOwnerDecisionForTest",
-              );
-              if (typeof record === "function")
-                Reflect.apply(record, hooks, [
-                  decision,
-                  candidateKey,
-                  evaluationMs,
-                ]);
-            },
-            onOperation: (operation) => {
-              const hooks = readProperty(
-                settingsHostWindow,
-                "__EA_TEST_HOOKS__",
-              );
-              const record = readProperty(hooks, "p53RecordOperationForTest");
-              if (typeof record === "function")
-                Reflect.apply(record, hooks, [operation]);
-            },
-          },
-        }
+          };
+        })()
       : {}),
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true

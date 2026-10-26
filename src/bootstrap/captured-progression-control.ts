@@ -186,6 +186,7 @@ export interface CapturedProgressionControlDependencies {
   /** Test-surface-only Construction target admission request and owner identity. */
   readonly constructionTargetAdmissionForTest?: Readonly<{
     readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readRootObservationCountForTest?: () => number | undefined;
     readContext: () =>
       | Readonly<{
           period: number;
@@ -201,9 +202,31 @@ export interface CapturedProgressionControlDependencies {
     onOperation?: (
       operation:
         | "request-source-read"
+        | "local-pending-request-check"
         | "context-identity-sample"
         | "reservation-evidence-read"
-        | "native-control-authority-read",
+        | "native-control-authority-read"
+        | "native-action-execution"
+        | "construction-cycle",
+      elapsedMs?: number,
+    ) => void;
+    readonly eventFed?: boolean;
+    readonly onActivationModeSample?: (enabled: boolean) => void;
+    onRequestConsumed?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestExpired?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestInvalidated?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestCycleReleased?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRootObservationSample?: (
+      operation: "reservation-evidence-read" | "native-control-authority-read",
+      rootReads: number,
     ) => void;
   }>;
 }

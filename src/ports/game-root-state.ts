@@ -7,6 +7,8 @@
 export interface GameRootStateSource {
   /** The captured root, or `undefined` before the game has created it. */
   readRoot(): unknown;
+  /** Test-only count of actual root observations made through this captured source. */
+  readRootObservationCountForTest?(): number;
   /**
    * True while the game has dropped its reactive wrapper for a bulk simulation (offline
    * catch-up). Reads stay correct — the captured proxy wraps the same object — but the game loop

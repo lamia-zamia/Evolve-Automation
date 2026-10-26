@@ -65,6 +65,7 @@ import {
 
 declare global {
   var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+  var __EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__: boolean | undefined;
 }
 
 export interface CapturedConstructionDependencies {
@@ -91,6 +92,7 @@ export interface CapturedConstructionDependencies {
   /** Prospective test-only authority; erased from ordinary bundles at build time. */
   readonly targetAdmissionForTest?: Readonly<{
     readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readRootObservationCountForTest?: () => number | undefined;
     readContext: () =>
       | Readonly<{
           period: number;
@@ -106,9 +108,31 @@ export interface CapturedConstructionDependencies {
     onOperation?: (
       operation:
         | "request-source-read"
+        | "local-pending-request-check"
         | "context-identity-sample"
         | "reservation-evidence-read"
-        | "native-control-authority-read",
+        | "native-control-authority-read"
+        | "native-action-execution"
+        | "construction-cycle",
+      elapsedMs?: number,
+    ) => void;
+    eventFed?: boolean;
+    onActivationModeSample?: (enabled: boolean) => void;
+    onRequestConsumed?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestExpired?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestInvalidated?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestCycleReleased?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRootObservationSample?: (
+      operation: "reservation-evidence-read" | "native-control-authority-read",
+      rootReads: number,
     ) => void;
   }>;
 }
@@ -309,6 +333,13 @@ export function createCapturedConstructionAdapter(
       completedWorkCycleId = undefined;
       completedAuthorityForTest = undefined;
       savingPriorityRevision = undefined;
+      if (
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+        admissionRequestForCycle !== undefined
+      )
+        targetAdmissionForTest?.onRequestInvalidated?.(
+          admissionRequestForCycle,
+        );
     }
   });
 
@@ -476,8 +507,12 @@ export function createCapturedConstructionAdapter(
         operation:
           | "context-identity-sample"
           | "request-source-read"
+          | "local-pending-request-check"
           | "reservation-evidence-read"
-          | "native-control-authority-read",
+          | "native-control-authority-read"
+          | "native-action-execution"
+          | "construction-cycle",
+        elapsedMs?: number,
       ) => void)
     | undefined;
   let decideTargetAdmission:
@@ -513,11 +548,39 @@ export function createCapturedConstructionAdapter(
     readTargetAdmissionRequest = ():
       Readonly<ConstructionTargetAdmissionRequest> | undefined => {
       if (targetAdmissionForTest === undefined) return undefined;
-      reportTargetAdmissionOperation?.("request-source-read");
+      const eventFed =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+        targetAdmissionForTest.eventFed === true;
+      if (globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true) {
+        targetAdmissionForTest.onActivationModeSample?.(eventFed);
+      }
+      const startedAt =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+        typeof performance !== "undefined"
+          ? performance.now()
+          : undefined;
       try {
-        return targetAdmissionForTest.readRequest();
+        const request = targetAdmissionForTest.readRequest();
+        const finishedAt =
+          startedAt === undefined ? undefined : performance.now();
+        reportTargetAdmissionOperation?.(
+          globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+            eventFed
+            ? "local-pending-request-check"
+            : "request-source-read",
+          startedAt === undefined || finishedAt === undefined
+            ? undefined
+            : Math.max(0, finishedAt - startedAt),
+        );
+        return request;
       } catch {
         admissionRequestReadFailed = true;
+        reportTargetAdmissionOperation?.(
+          globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+            eventFed
+            ? "local-pending-request-check"
+            : "request-source-read",
+        );
         return undefined;
       }
     };
@@ -536,9 +599,9 @@ export function createCapturedConstructionAdapter(
         // Test evidence cannot affect Construction.
       }
     };
-    reportTargetAdmissionOperation = (operation): void => {
+    reportTargetAdmissionOperation = (operation, elapsedMs): void => {
       try {
-        targetAdmissionForTest?.onOperation?.(operation);
+        targetAdmissionForTest?.onOperation?.(operation, elapsedMs);
       } catch {
         // Test evidence cannot affect Construction.
       }
@@ -623,17 +686,69 @@ export function createCapturedConstructionAdapter(
         );
         return;
       }
-      reportTargetAdmissionOperation?.("reservation-evidence-read");
+      const reservationStartedAt =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+        typeof performance !== "undefined"
+          ? performance.now()
+          : undefined;
+      const reservationRootReadsBefore =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+          ? targetAdmissionForTest.readRootObservationCountForTest?.()
+          : undefined;
       const evidence =
         conflicts.readReservationEvidence?.() ??
         Object.freeze({
           nativeQueue: undefined,
           scriptReservations: undefined,
         });
+      const reservationRootReadsAfter =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+          ? targetAdmissionForTest.readRootObservationCountForTest?.()
+          : undefined;
+      reportTargetAdmissionOperation?.(
+        "reservation-evidence-read",
+        reservationStartedAt === undefined
+          ? undefined
+          : Math.max(0, performance.now() - reservationStartedAt),
+      );
+      if (
+        reservationRootReadsBefore !== undefined &&
+        reservationRootReadsAfter !== undefined
+      )
+        targetAdmissionForTest.onRootObservationSample?.(
+          "reservation-evidence-read",
+          reservationRootReadsAfter - reservationRootReadsBefore,
+        );
       const scriptTargets = evidence.scriptReservations?.targets;
       const saving = scriptTargets?.find((target) => target.cause === "Saving");
-      reportTargetAdmissionOperation?.("native-control-authority-read");
+      const authorityStartedAt =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+        typeof performance !== "undefined"
+          ? performance.now()
+          : undefined;
+      const authorityRootReadsBefore =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+          ? targetAdmissionForTest.readRootObservationCountForTest?.()
+          : undefined;
       const control = entry.source.readActionAuthority?.(entry.candidate.key);
+      const authorityRootReadsAfter =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+          ? targetAdmissionForTest.readRootObservationCountForTest?.()
+          : undefined;
+      reportTargetAdmissionOperation?.(
+        "native-control-authority-read",
+        authorityStartedAt === undefined
+          ? undefined
+          : Math.max(0, performance.now() - authorityStartedAt),
+      );
+      if (
+        authorityRootReadsBefore !== undefined &&
+        authorityRootReadsAfter !== undefined
+      )
+        targetAdmissionForTest.onRootObservationSample?.(
+          "native-control-authority-read",
+          authorityRootReadsAfter - authorityRootReadsBefore,
+        );
       const context = admissionContextForCycle;
       const { decision, evaluationMs } = evaluateTargetAdmission!({
         request: currentRequest,
@@ -699,6 +814,8 @@ export function createCapturedConstructionAdapter(
 
   const reader: BuildReader = Object.freeze({
     beginCycle(): BuildCycleSetup {
+      if (globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true)
+        reportTargetAdmissionOperation?.("construction-cycle");
       cycleReadyToPublish = false;
       const options = readOptions();
       if (!orderingOnly) constructionCycleId++;
@@ -709,6 +826,13 @@ export function createCapturedConstructionAdapter(
         admissionExecutionAttempted = false;
         verifiedPurchaseCount = 0;
         verifiedResourceDebits = {};
+        if (
+          globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+          admissionRequestForCycle !== undefined
+        )
+          targetAdmissionForTest?.onRequestCycleReleased?.(
+            admissionRequestForCycle,
+          );
         admissionRequestForCycle = undefined;
         admissionContextForCycle = undefined;
         savingPriorityRevision = undefined;
@@ -723,15 +847,36 @@ export function createCapturedConstructionAdapter(
       ) {
         admissionRequestForCycle = readTargetAdmissionRequest?.();
         if (
+          globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+          admissionRequestForCycle?.active === true &&
+          Number.isSafeInteger(
+            admissionRequestForCycle.expiresAt?.workCycleId,
+          ) &&
+          admissionRequestForCycle.expiresAt.workCycleId < constructionCycleId
+        ) {
+          targetAdmissionForTest.onRequestExpired?.(admissionRequestForCycle);
+          admissionRequestForCycle = undefined;
+        }
+        if (
           admissionRequestForCycle?.active === true &&
           admissionRequestForCycle.scope?.workCycleId === constructionCycleId
         ) {
+          const contextStartedAt =
+            globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+            typeof performance !== "undefined"
+              ? performance.now()
+              : undefined;
           try {
-            reportTargetAdmissionOperation?.("context-identity-sample");
             admissionContextForCycle = targetAdmissionForTest.readContext();
           } catch {
             admissionContextForCycle = undefined;
           }
+          reportTargetAdmissionOperation?.(
+            "context-identity-sample",
+            contextStartedAt === undefined
+              ? undefined
+              : Math.max(0, performance.now() - contextStartedAt),
+          );
         }
       }
       const presentationSettings = dependencies.readPresentationSettings?.();
@@ -882,8 +1027,12 @@ export function createCapturedConstructionAdapter(
                 request.scope?.workCycleId === constructionCycleId + 1 &&
                 request.scope?.orderingGeneration === constructionCycleId + 1
               ) {
+                const contextStartedAt =
+                  globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
+                    true && typeof performance !== "undefined"
+                    ? performance.now()
+                    : undefined;
                 try {
-                  reportTargetAdmissionOperation?.("context-identity-sample");
                   const context = targetAdmissionForTest.readContext();
                   if (
                     context !== undefined &&
@@ -897,6 +1046,12 @@ export function createCapturedConstructionAdapter(
                 } catch {
                   completedAuthorityForTest = undefined;
                 }
+                reportTargetAdmissionOperation?.(
+                  "context-identity-sample",
+                  contextStartedAt === undefined
+                    ? undefined
+                    : Math.max(0, performance.now() - contextStartedAt),
+                );
               }
             }
           }
@@ -1142,14 +1297,50 @@ export function createCapturedConstructionAdapter(
                 progressionGeneration: string;
               }>
             | undefined;
+          const contextStartedAt =
+            globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+            typeof performance !== "undefined"
+              ? performance.now()
+              : undefined;
           try {
-            reportTargetAdmissionOperation?.("context-identity-sample");
             currentContext = targetAdmissionForTest.readContext();
           } catch {
             currentContext = undefined;
           }
-          reportTargetAdmissionOperation?.("native-control-authority-read");
+          reportTargetAdmissionOperation?.(
+            "context-identity-sample",
+            contextStartedAt === undefined
+              ? undefined
+              : Math.max(0, performance.now() - contextStartedAt),
+          );
+          const executionAuthorityStartedAt =
+            globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+            typeof performance !== "undefined"
+              ? performance.now()
+              : undefined;
+          const executionRootReadsBefore =
+            globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+              ? targetAdmissionForTest.readRootObservationCountForTest?.()
+              : undefined;
           const control = entry.source.readActionAuthority?.(decision.key);
+          const executionRootReadsAfter =
+            globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+              ? targetAdmissionForTest.readRootObservationCountForTest?.()
+              : undefined;
+          reportTargetAdmissionOperation?.(
+            "native-control-authority-read",
+            executionAuthorityStartedAt === undefined
+              ? undefined
+              : Math.max(0, performance.now() - executionAuthorityStartedAt),
+          );
+          if (
+            executionRootReadsBefore !== undefined &&
+            executionRootReadsAfter !== undefined
+          )
+            targetAdmissionForTest.onRootObservationSample?.(
+              "native-control-authority-read",
+              executionRootReadsAfter - executionRootReadsBefore,
+            );
           let staleReason: string | undefined;
           if (savingPriorityRevision === undefined) {
             staleReason = "saving-priority-revision-was-invalidated";
@@ -1215,7 +1406,18 @@ export function createCapturedConstructionAdapter(
           admissionExecutionAttempted = true;
         }
       }
-      const result = entry.source.execute(decision.key);
+      const result =
+        globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
+          ? (() => {
+              const actionStartedAt = performance.now();
+              const result = entry.source.execute(decision.key);
+              reportTargetAdmissionOperation?.(
+                "native-action-execution",
+                Math.max(0, performance.now() - actionStartedAt),
+              );
+              return result;
+            })()
+          : entry.source.execute(decision.key);
       if (
         globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
         p53AuthorizedForCandidate === true &&
@@ -1224,6 +1426,11 @@ export function createCapturedConstructionAdapter(
         result.clicked
       ) {
         verifiedPurchaseCount = (verifiedPurchaseCount ?? 0) + 1;
+        if (
+          admissionRequestForCycle !== undefined &&
+          targetAdmissionForTest?.onRequestConsumed !== undefined
+        )
+          targetAdmissionForTest.onRequestConsumed(admissionRequestForCycle);
         verifiedResourceDebits ??= {};
         for (const [resourceId, amount] of Object.entries(
           entry.candidate.cost,

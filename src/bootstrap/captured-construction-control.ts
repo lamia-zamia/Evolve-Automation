@@ -103,6 +103,7 @@ export interface CapturedConstructionControlDependencies {
   /** Test-surface-only prospective authority for one Construction candidate. */
   readonly targetAdmissionForTest?: Readonly<{
     readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readRootObservationCountForTest?: () => number | undefined;
     readContext: () =>
       | Readonly<{
           period: number;
@@ -118,9 +119,31 @@ export interface CapturedConstructionControlDependencies {
     onOperation?: (
       operation:
         | "request-source-read"
+        | "local-pending-request-check"
         | "context-identity-sample"
         | "reservation-evidence-read"
-        | "native-control-authority-read",
+        | "native-control-authority-read"
+        | "native-action-execution"
+        | "construction-cycle",
+      elapsedMs?: number,
+    ) => void;
+    eventFed?: boolean;
+    onActivationModeSample?: (enabled: boolean) => void;
+    onRequestConsumed?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestExpired?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestInvalidated?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRequestCycleReleased?: (
+      request: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onRootObservationSample?: (
+      operation: "reservation-evidence-read" | "native-control-authority-read",
+      rootReads: number,
     ) => void;
   }>;
 }
