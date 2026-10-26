@@ -11,9 +11,16 @@ import type { CostConflict } from "../../domain/cost-conflicts.ts";
 import { findCostConflict } from "../../domain/cost-conflicts.ts";
 import type { CostConflictResource } from "../../domain/cost-conflicts.ts";
 import { resourceView } from "../../domain/game-world.ts";
-import type { CostReservationSource } from "../../ports/game-cost-reservations.ts";
+import type {
+  CostReservationSample,
+  CostReservationSource,
+} from "../../ports/game-cost-reservations.ts";
 import type { GameResourceSource } from "../../ports/game-world-state.ts";
 import { ANYWHERE_POOL } from "./captured-affordability.ts";
+
+declare global {
+  var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+}
 
 export type CapturedCostConflict =
   | { readonly status: "none" }
@@ -36,6 +43,11 @@ export interface CapturedCostConflictDependencies {
 }
 
 export interface CapturedCostConflictReader {
+  /** Complete native queue and script reservation samples for an owner admission decision. */
+  readReservationEvidence?(): Readonly<{
+    nativeQueue?: Readonly<CostReservationSample>;
+    scriptReservations?: Readonly<CostReservationSample>;
+  }>;
   evaluate(
     cost: Readonly<Record<string, number>>,
     pool?: string,
@@ -67,6 +79,25 @@ export function createCapturedCostConflictReader(
   const additionalReservations = dependencies.additionalReservations;
 
   return Object.freeze({
+    ...(globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true
+      ? {
+          readReservationEvidence() {
+            try {
+              const sample = reservations.readReservations();
+              const additionalSample =
+                additionalReservations?.readReservations();
+              return Object.freeze({
+                nativeQueue: sample,
+                ...(additionalSample === undefined
+                  ? {}
+                  : { scriptReservations: additionalSample }),
+              });
+            } catch {
+              return Object.freeze({});
+            }
+          },
+        }
+      : {}),
     evaluate(
       cost: Readonly<Record<string, number>>,
       pool?: string,

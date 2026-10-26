@@ -41,6 +41,14 @@ import type {
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { KnowledgeGateLevels } from "../domain/progression/build/building-weighting.ts";
+import type {
+  ConstructionTargetAdmissionDecision,
+  ConstructionTargetAdmissionRequest,
+} from "../domain/progression/build/construction-target-admission.ts";
+
+declare global {
+  var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+}
 
 /** Everything the caller configures for one cycle, across both families. */
 export interface CapturedConstructionPolicy extends ConstructionCycleOptions {
@@ -92,6 +100,29 @@ export interface CapturedConstructionControlDependencies {
   readonly onMutation?: () => void;
   /** Reports a candidate, price, or catalog the capture could not supply. */
   readonly onSkipped?: (key: string, reason: string) => void;
+  /** Test-surface-only prospective authority for one Construction candidate. */
+  readonly targetAdmissionForTest?: Readonly<{
+    readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readContext: () =>
+      | Readonly<{
+          period: number;
+          rootGeneration: number;
+          progressionGeneration: string;
+        }>
+      | undefined;
+    onDecision?: (
+      decision: Readonly<ConstructionTargetAdmissionDecision>,
+      candidateKey?: string,
+      evaluationMs?: number,
+    ) => void;
+    onOperation?: (
+      operation:
+        | "request-source-read"
+        | "context-identity-sample"
+        | "reservation-evidence-read"
+        | "native-control-authority-read",
+    ) => void;
+  }>;
 }
 
 export interface CapturedConstructionControl {
@@ -252,6 +283,10 @@ export function createCapturedConstructionControl(
       ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
       ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
       readPresentationSettings,
+      ...(globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+      dependencies.targetAdmissionForTest !== undefined
+        ? { targetAdmissionForTest: dependencies.targetAdmissionForTest }
+        : {}),
       ...(dependencies.readStateLogPlannerDetailsDue === undefined
         ? {}
         : {

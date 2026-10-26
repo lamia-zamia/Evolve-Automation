@@ -48,6 +48,18 @@ export interface ConstructionCandidateSource {
   readSavingCost?(
     candidate: Readonly<ConstructionCandidate>,
   ): Readonly<Record<string, number>> | null | undefined;
+  /** Current native action identity for one already prepared building candidate. */
+  readActionAuthority?(key: string):
+    | Readonly<{
+        actionId: string;
+        available: boolean;
+        generation: number;
+        price?: Readonly<{
+          cost: Readonly<Record<string, number | undefined>>;
+          pool?: string;
+        }>;
+      }>
+    | undefined;
   /** Buys the candidate this source offered under `key` during the current cycle. */
   execute(key: string): BuildClickResult;
 }

@@ -1,4 +1,5 @@
 import { P42_EXPECTED } from "./p42-construction-priority-counterfactual-policy.mjs";
+import { qualifyP53QuarryRequest } from "./p53-construction-owned-target-authority-contract.mjs";
 
 export const P51_QUARRY_REQUEST = Object.freeze({
   requestId: "p51-test-only-quarry-priority-request-v1",
@@ -88,6 +89,12 @@ function rejectPublication(state, reason, details = {}) {
 export function qualifyP51QuarryRequest(request, arm) {
   if (arm === "A")
     return Object.freeze({ qualified: false, reason: "historical-control" });
+  const p53Qualification = qualifyP53QuarryRequest(request, arm);
+  if (p53Qualification.qualified)
+    return Object.freeze({
+      qualified: true,
+      reason: "p53-construction-owner-test-request",
+    });
   if (arm !== "B" && arm !== "B-repeat")
     return Object.freeze({ qualified: false, reason: "unknown-arm" });
   for (const [key, expected] of Object.entries(P51_QUARRY_REQUEST)) {
@@ -101,6 +108,29 @@ export function qualifyP51QuarryRequest(request, arm) {
     qualified: true,
     reason: "bounded-test-only-quarry-request",
   });
+}
+
+function requestWorkScope(request) {
+  return request?.scope ?? request;
+}
+
+function p53OwnerDecisionApplied(hooks, request) {
+  if (!qualifyP53QuarryRequest(request, hooks.p51Arm).qualified) return false;
+  const ownerDecision = hooks.p53OwnerDecision;
+  const decision = ownerDecision?.decision;
+  const revision = decision?.revision;
+  return (
+    ownerDecision?.candidateKey === request.targetBuildingId &&
+    decision?.status === "accepted-for-owner-decision" &&
+    revision?.requestId === request.requestId &&
+    revision?.requestGeneration === request.generation &&
+    revision?.workCycleId === request.scope.workCycleId &&
+    revision?.orderingGeneration === request.scope.orderingGeneration &&
+    revision?.previous?.name ===
+      request.priorityReplacement.displacedTargetId &&
+    revision?.previous?.name !== revision?.replacement?.name &&
+    revision?.lifetime === "this-construction-cycle"
+  );
 }
 
 export function createP51HandoffState() {
@@ -273,8 +303,11 @@ export function publishP51ConstructionReceiptForTest(
   let reason;
   if (!qualifyP51QuarryRequest(request, hooks.p51Arm).qualified)
     reason = "explicit-test-request-unqualified";
-  else if (hooks.p42OwnerCycleApplied !== true)
-    reason = "p42-intervention-not-qualified-and-applied";
+  else if (
+    !p53OwnerDecisionApplied(hooks, request) &&
+    hooks.p42OwnerCycleApplied !== true
+  )
+    reason = "construction-owner-authority-not-qualified-and-applied";
   else if (
     !isRecord(owner) ||
     !finiteIdentity(owner.workCycleId) ||
@@ -295,11 +328,13 @@ export function publishP51ConstructionReceiptForTest(
       typeof authority.identitySource.readProgressionEpoch !== "function")
   )
     reason = "construction-shared-identity-provenance-unavailable";
-  else if (owner.period !== request.period)
+  else if (owner.period !== requestWorkScope(request).period)
     reason = "construction-period-mismatch";
-  else if (owner.workCycleId !== request.workCycleId)
+  else if (owner.workCycleId !== requestWorkScope(request).workCycleId)
     reason = "construction-work-cycle-mismatch";
-  else if (owner.orderingGeneration !== request.orderingGeneration)
+  else if (
+    owner.orderingGeneration !== requestWorkScope(request).orderingGeneration
+  )
     reason = "construction-ordering-generation-mismatch";
   else if (candidate?.key !== request.targetBuildingId)
     reason = "executed-target-does-not-match-request";

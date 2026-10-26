@@ -55,6 +55,8 @@ export interface ConstructionObservations {
    * required current price/affordability comparison is unavailable, so consumers fail closed.
    */
   readSavingTarget(): SavingTarget | null;
+  /** Current owner revision for the one candidate conflict being evaluated, when present. */
+  readSavingTargetForConflict?(): SavingTarget | null;
   /**
    * The Knowledge the highest-weighted candidate that does not itself raise the Knowledge cap
    * needs, or 0. The Knowledge gate compares it against capacity: a target the player cannot even

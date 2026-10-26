@@ -56,6 +56,16 @@ import { stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
 import { costFitsNow, costFitsStorage } from "../../captured-affordability.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import {
+  decideConstructionTargetAdmission,
+  type ConstructionSavingPriorityRevision,
+  type ConstructionTargetAdmissionDecision,
+  type ConstructionTargetAdmissionRequest,
+} from "../../../../domain/progression/build/construction-target-admission.ts";
+
+declare global {
+  var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+}
 
 export interface CapturedConstructionDependencies {
   /** Families in the order they break weighting ties, matching the game's own list order. */
@@ -78,6 +88,29 @@ export interface CapturedConstructionDependencies {
   }>;
   /** A due State Log sample needs the same planner-detail observations as Script Planner. */
   readonly readStateLogPlannerDetailsDue?: () => boolean;
+  /** Prospective test-only authority; erased from ordinary bundles at build time. */
+  readonly targetAdmissionForTest?: Readonly<{
+    readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readContext: () =>
+      | Readonly<{
+          period: number;
+          rootGeneration: number;
+          progressionGeneration: string;
+        }>
+      | undefined;
+    onDecision?: (
+      decision: Readonly<ConstructionTargetAdmissionDecision>,
+      candidateKey?: string,
+      evaluationMs?: number,
+    ) => void;
+    onOperation?: (
+      operation:
+        | "request-source-read"
+        | "context-identity-sample"
+        | "reservation-evidence-read"
+        | "native-control-authority-read",
+    ) => void;
+  }>;
 }
 
 export interface CapturedConstructionAdapter {
@@ -129,6 +162,85 @@ function toBuildResourceView(
   });
 }
 
+function sameAuthorityRecord(
+  left: Readonly<Record<string, number>>,
+  right: Readonly<Record<string, number>>,
+): boolean {
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object"
+  )
+    return false;
+  const leftKeys = Object.keys(left);
+  return (
+    leftKeys.length === Object.keys(right).length &&
+    leftKeys.every((key) => left[key] === right[key])
+  );
+}
+
+function sameCompletePrice(
+  expected: Readonly<Record<string, number>>,
+  actual: Readonly<Record<string, number | undefined>> | undefined,
+): boolean {
+  if (actual === undefined || actual === null || typeof actual !== "object")
+    return false;
+  const expectedKeys = Object.keys(expected);
+  return (
+    expectedKeys.length === Object.keys(actual).length &&
+    expectedKeys.every(
+      (key) =>
+        typeof actual[key] === "number" &&
+        Number.isFinite(actual[key]) &&
+        actual[key] === expected[key],
+    )
+  );
+}
+
+function sameTargetAdmissionRequest(
+  left: Readonly<ConstructionTargetAdmissionRequest> | undefined,
+  right: Readonly<ConstructionTargetAdmissionRequest>,
+): boolean {
+  if (left === undefined) return false;
+  try {
+    return (
+      left.requestId === right.requestId &&
+      left.generation === right.generation &&
+      left.active === right.active &&
+      left.origin === right.origin &&
+      left.targetBuildingId === right.targetBuildingId &&
+      left.maximumPurchases === right.maximumPurchases &&
+      sameAuthorityRecord(
+        left.maximumTotalAuthorizedResourceDebit,
+        right.maximumTotalAuthorizedResourceDebit,
+      ) &&
+      left.scope.period === right.scope.period &&
+      left.scope.workCycleId === right.scope.workCycleId &&
+      left.scope.orderingGeneration === right.scope.orderingGeneration &&
+      left.expiresAt.period === right.expiresAt.period &&
+      left.expiresAt.workCycleId === right.expiresAt.workCycleId &&
+      left.cancelledAtGeneration === right.cancelledAtGeneration &&
+      left.replacedAtGeneration === right.replacedAtGeneration &&
+      left.targetPermission === right.targetPermission &&
+      left.priorityReplacement.permitted ===
+        right.priorityReplacement.permitted &&
+      left.priorityReplacement.displacedTargetId ===
+        right.priorityReplacement.displacedTargetId &&
+      left.priorityReplacement.displacedPublicationWorkCycleId ===
+        right.priorityReplacement.displacedPublicationWorkCycleId &&
+      left.nativeExecutionPermission === right.nativeExecutionPermission &&
+      left.materialGatheringPermission === right.materialGatheringPermission &&
+      left.jobsAssignmentPermission === right.jobsAssignmentPermission &&
+      left.playerSelected === right.playerSelected &&
+      left.productionAuthorized === right.productionAuthorized &&
+      left.testAuthorization === right.testAuthorization
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function createCapturedConstructionAdapter(
   dependencies: CapturedConstructionDependencies,
 ): CapturedConstructionAdapter {
@@ -140,10 +252,6 @@ export function createCapturedConstructionAdapter(
   let respectReservations = true;
   let completedIntent: readonly CycleEntry[] | undefined;
   let cycleReadyToPublish = false;
-  rootState.subscribeRootReplaced?.(() => {
-    completedIntent = undefined;
-    cycleReadyToPublish = false;
-  });
   let knowledgeRequirement = 0;
   let constructionCycleId = 0;
   let orderingOnly = false;
@@ -155,6 +263,54 @@ export function createCapturedConstructionAdapter(
     number,
     readonly Readonly<BuildScopedResourceSample>[]
   >();
+  let targetAdmissionForTest:
+    CapturedConstructionDependencies["targetAdmissionForTest"] | undefined;
+  if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true)
+    targetAdmissionForTest = dependencies.targetAdmissionForTest;
+  let completedWorkCycleId: number | undefined;
+  let completedAuthorityForTest:
+    | Readonly<{
+        rootGeneration: number;
+        progressionGeneration: string;
+      }>
+    | undefined;
+  let admissionRequestForCycle:
+    Readonly<ConstructionTargetAdmissionRequest> | undefined;
+  let admissionContextForCycle:
+    | Readonly<{
+        period: number;
+        rootGeneration: number;
+        progressionGeneration: string;
+      }>
+    | undefined;
+  let candidateAffordable: Map<number, boolean> | undefined;
+  let admissionAttempted: boolean | undefined;
+  let admissionAcceptedForCycle: boolean | undefined;
+  let admissionExecutionAttempted: boolean | undefined;
+  let verifiedPurchaseCount: number | undefined;
+  let verifiedResourceDebits: Record<string, number> | undefined;
+  let savingPriorityRevision:
+    Readonly<ConstructionSavingPriorityRevision> | undefined;
+  let revisionControlGeneration: number | undefined;
+  let currentConflictCandidateKey: string | undefined;
+  let admissionRequestReadFailed: boolean | undefined;
+  if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+    candidateAffordable = new Map();
+    admissionAttempted = false;
+    admissionAcceptedForCycle = false;
+    admissionExecutionAttempted = false;
+    verifiedPurchaseCount = 0;
+    verifiedResourceDebits = {};
+  }
+  rootState.subscribeRootReplaced?.(() => {
+    completedIntent = undefined;
+    cycleReadyToPublish = false;
+    if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+      completedWorkCycleId = undefined;
+      completedAuthorityForTest = undefined;
+      savingPriorityRevision = undefined;
+    }
+  });
 
   function capturePlannerResources(
     index: number,
@@ -305,6 +461,226 @@ export function createCapturedConstructionAdapter(
     return entry !== undefined && entry.candidate.key === key ? entry : null;
   }
 
+  let readTargetAdmissionRequest:
+    | (() => Readonly<ConstructionTargetAdmissionRequest> | undefined)
+    | undefined;
+  let reportTargetAdmissionDecision:
+    | ((
+        decision: Readonly<ConstructionTargetAdmissionDecision>,
+        candidateKey?: string,
+        evaluationMs?: number,
+      ) => void)
+    | undefined;
+  let reportTargetAdmissionOperation:
+    | ((
+        operation:
+          | "context-identity-sample"
+          | "request-source-read"
+          | "reservation-evidence-read"
+          | "native-control-authority-read",
+      ) => void)
+    | undefined;
+  let decideTargetAdmission:
+    | ((
+        index: number,
+        entry: CycleEntry,
+        candidateCatalogComplete: boolean,
+      ) => void)
+    | undefined;
+  let evaluateTargetAdmission:
+    | ((
+        input: Parameters<typeof decideConstructionTargetAdmission>[0],
+      ) => Readonly<{
+        decision: ConstructionTargetAdmissionDecision;
+        evaluationMs: number | undefined;
+      }>)
+    | undefined;
+  if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+    evaluateTargetAdmission = (input) => {
+      const startedAt =
+        typeof performance !== "undefined" ? performance.now() : undefined;
+      const decision = decideConstructionTargetAdmission(input);
+      const finishedAt =
+        typeof performance !== "undefined" ? performance.now() : undefined;
+      return Object.freeze({
+        decision,
+        evaluationMs:
+          startedAt === undefined || finishedAt === undefined
+            ? undefined
+            : Math.max(0, finishedAt - startedAt),
+      });
+    };
+    readTargetAdmissionRequest = ():
+      Readonly<ConstructionTargetAdmissionRequest> | undefined => {
+      if (targetAdmissionForTest === undefined) return undefined;
+      reportTargetAdmissionOperation?.("request-source-read");
+      try {
+        return targetAdmissionForTest.readRequest();
+      } catch {
+        admissionRequestReadFailed = true;
+        return undefined;
+      }
+    };
+    reportTargetAdmissionDecision = (
+      decision: Readonly<ConstructionTargetAdmissionDecision>,
+      candidateKey?: string,
+      evaluationMs?: number,
+    ): void => {
+      try {
+        targetAdmissionForTest?.onDecision?.(
+          decision,
+          candidateKey,
+          evaluationMs,
+        );
+      } catch {
+        // Test evidence cannot affect Construction.
+      }
+    };
+    reportTargetAdmissionOperation = (operation): void => {
+      try {
+        targetAdmissionForTest?.onOperation?.(operation);
+      } catch {
+        // Test evidence cannot affect Construction.
+      }
+    };
+    decideTargetAdmission = (
+      index: number,
+      entry: CycleEntry,
+      candidateCatalogComplete: boolean,
+    ): void => {
+      const request = admissionRequestForCycle;
+      if (
+        targetAdmissionForTest === undefined ||
+        request === undefined ||
+        entry.candidate.key !== request.targetBuildingId ||
+        request.scope?.workCycleId !== constructionCycleId ||
+        request.scope?.orderingGeneration !== constructionCycleId
+      )
+        return;
+      if (admissionAttempted === true) {
+        reportTargetAdmissionDecision?.(
+          Object.freeze({
+            status: "stale",
+            reason: "request-already-evaluated-this-construction-cycle",
+          }),
+          entry.candidate.key,
+        );
+        return;
+      }
+      admissionAttempted = true;
+      const currentRequest = readTargetAdmissionRequest?.();
+      if (
+        currentRequest === undefined ||
+        currentRequest.requestId !== request.requestId ||
+        currentRequest.generation !== request.generation
+      ) {
+        reportTargetAdmissionDecision?.(
+          Object.freeze({
+            status: "stale",
+            reason: admissionRequestReadFailed
+              ? "request-source-unavailable"
+              : "request-cancelled-or-replaced-before-decision",
+          }),
+          entry.candidate.key,
+        );
+        return;
+      }
+      const affordable = candidateAffordable?.get(index);
+      if (entry.candidate.ignored || affordable !== true) {
+        const { decision, evaluationMs } = evaluateTargetAdmission!({
+          request: currentRequest,
+          owner: Object.freeze({
+            period: admissionContextForCycle?.period,
+            workCycleId: constructionCycleId,
+            orderingGeneration: constructionCycleId,
+            rootGeneration: admissionContextForCycle?.rootGeneration,
+            progressionGeneration:
+              admissionContextForCycle?.progressionGeneration,
+            publicationWorkCycleId: completedWorkCycleId,
+            publicationRootGeneration:
+              completedAuthorityForTest?.rootGeneration,
+            publicationProgressionGeneration:
+              completedAuthorityForTest?.progressionGeneration,
+          }),
+          candidate: Object.freeze({
+            ...entry.candidate,
+            family: entry.source.family,
+          }),
+          orderingIndex: index,
+          candidateCatalogComplete,
+          affordable,
+          control: undefined,
+          nativeQueue: undefined,
+          scriptReservations: undefined,
+          previousSavingTarget: undefined,
+          verifiedPurchases: verifiedPurchaseCount ?? 0,
+          verifiedResourceDebits: verifiedResourceDebits ?? Object.freeze({}),
+        });
+        reportTargetAdmissionDecision?.(
+          decision,
+          entry.candidate.key,
+          evaluationMs,
+        );
+        return;
+      }
+      reportTargetAdmissionOperation?.("reservation-evidence-read");
+      const evidence =
+        conflicts.readReservationEvidence?.() ??
+        Object.freeze({
+          nativeQueue: undefined,
+          scriptReservations: undefined,
+        });
+      const scriptTargets = evidence.scriptReservations?.targets;
+      const saving = scriptTargets?.find((target) => target.cause === "Saving");
+      reportTargetAdmissionOperation?.("native-control-authority-read");
+      const control = entry.source.readActionAuthority?.(entry.candidate.key);
+      const context = admissionContextForCycle;
+      const { decision, evaluationMs } = evaluateTargetAdmission!({
+        request: currentRequest,
+        owner: Object.freeze({
+          period: context?.period,
+          workCycleId: constructionCycleId,
+          orderingGeneration: constructionCycleId,
+          rootGeneration: context?.rootGeneration,
+          progressionGeneration: context?.progressionGeneration,
+          publicationWorkCycleId: completedWorkCycleId,
+          publicationRootGeneration: completedAuthorityForTest?.rootGeneration,
+          publicationProgressionGeneration:
+            completedAuthorityForTest?.progressionGeneration,
+        }),
+        candidate: Object.freeze({
+          ...entry.candidate,
+          family: entry.source.family,
+        }),
+        orderingIndex: index,
+        candidateCatalogComplete,
+        affordable,
+        control,
+        nativeQueue: evidence.nativeQueue,
+        scriptReservations: evidence.scriptReservations,
+        previousSavingTarget:
+          saving === undefined
+            ? undefined
+            : Object.freeze({
+                name: saving.name,
+                ...(saving.pool === undefined ? {} : { pool: saving.pool }),
+                cost: saving.cost,
+              }),
+        verifiedPurchases: verifiedPurchaseCount ?? 0,
+        verifiedResourceDebits: verifiedResourceDebits ?? Object.freeze({}),
+      });
+      reportTargetAdmissionDecision?.(
+        decision,
+        entry.candidate.key,
+        evaluationMs,
+      );
+      if (decision.status !== "accepted-for-owner-decision") return;
+      savingPriorityRevision = decision.revision;
+      revisionControlGeneration = control?.generation;
+      admissionAcceptedForCycle = true;
+    };
+  }
+
   /**
    * Affordable means the game's own prices are covered by what the game says is held, sampled for
    * exactly the cost keys in question. Before the root is captured there are no holdings to
@@ -326,6 +702,38 @@ export function createCapturedConstructionAdapter(
       cycleReadyToPublish = false;
       const options = readOptions();
       if (!orderingOnly) constructionCycleId++;
+      if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+        candidateAffordable = new Map();
+        admissionAttempted = false;
+        admissionAcceptedForCycle = false;
+        admissionExecutionAttempted = false;
+        verifiedPurchaseCount = 0;
+        verifiedResourceDebits = {};
+        admissionRequestForCycle = undefined;
+        admissionContextForCycle = undefined;
+        savingPriorityRevision = undefined;
+        revisionControlGeneration = undefined;
+        currentConflictCandidateKey = undefined;
+        admissionRequestReadFailed = false;
+      }
+      if (
+        globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+        targetAdmissionForTest !== undefined &&
+        !orderingOnly
+      ) {
+        admissionRequestForCycle = readTargetAdmissionRequest?.();
+        if (
+          admissionRequestForCycle?.active === true &&
+          admissionRequestForCycle.scope?.workCycleId === constructionCycleId
+        ) {
+          try {
+            reportTargetAdmissionOperation?.("context-identity-sample");
+            admissionContextForCycle = targetAdmissionForTest.readContext();
+          } catch {
+            admissionContextForCycle = undefined;
+          }
+        }
+      }
       const presentationSettings = dependencies.readPresentationSettings?.();
       const stateLogPlannerDetailsDue =
         dependencies.readStateLogPlannerDetailsDue?.() === true;
@@ -366,6 +774,48 @@ export function createCapturedConstructionAdapter(
       if (!sourcesComplete) entries.length = 0;
       cycle = Object.freeze(entries);
       cycleReadyToPublish = sourcesComplete;
+      if (
+        globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+        targetAdmissionForTest !== undefined
+      ) {
+        const request = admissionRequestForCycle;
+        if (
+          request?.active === true &&
+          request.scope?.workCycleId === constructionCycleId &&
+          !cycle.some(
+            ({ candidate }) => candidate.key === request.targetBuildingId,
+          )
+        ) {
+          const { decision, evaluationMs } = evaluateTargetAdmission!({
+            request,
+            owner: Object.freeze({
+              period: admissionContextForCycle?.period,
+              workCycleId: constructionCycleId,
+              orderingGeneration: constructionCycleId,
+              rootGeneration: admissionContextForCycle?.rootGeneration,
+              progressionGeneration:
+                admissionContextForCycle?.progressionGeneration,
+              publicationWorkCycleId: completedWorkCycleId,
+              publicationRootGeneration:
+                completedAuthorityForTest?.rootGeneration,
+              publicationProgressionGeneration:
+                completedAuthorityForTest?.progressionGeneration,
+            }),
+            candidate: undefined,
+            orderingIndex: -1,
+            candidateCatalogComplete: sourcesComplete,
+            affordable: undefined,
+            control: undefined,
+            nativeQueue: undefined,
+            scriptReservations: undefined,
+            previousSavingTarget: undefined,
+            verifiedPurchases: verifiedPurchaseCount ?? 0,
+            verifiedResourceDebits: verifiedResourceDebits ?? Object.freeze({}),
+          });
+          admissionAttempted = true;
+          reportTargetAdmissionDecision?.(decision, undefined, evaluationMs);
+        }
+      }
       // The Knowledge requirement needs only the sorted list, so it describes this cycle. Only the
       // highest-weighted candidate that does not itself raise the cap counts: a Knowledge building
       // is the answer to a capacity shortage, not evidence of one.
@@ -397,26 +847,70 @@ export function createCapturedConstructionAdapter(
     },
 
     finishCycle(completed: boolean): void {
-      if (!cycleReadyToPublish) return;
-      if (completed) {
-        for (const source of sources) source.finishCycle?.();
-        completedIntent = Object.freeze(
-          cycle
-            .filter(
-              ({ candidate }) => !candidate.ignored && candidate.weighting > 0,
-            )
-            .map(({ candidate, source }) =>
-              Object.freeze({
-                candidate: Object.freeze({
-                  ...candidate,
-                  cost: Object.freeze({ ...candidate.cost }),
+      try {
+        if (!cycleReadyToPublish) return;
+        if (completed) {
+          for (const source of sources) source.finishCycle?.();
+          completedIntent = Object.freeze(
+            cycle
+              .filter(
+                ({ candidate }) =>
+                  !candidate.ignored && candidate.weighting > 0,
+              )
+              .map(({ candidate, source }) =>
+                Object.freeze({
+                  candidate: Object.freeze({
+                    ...candidate,
+                    cost: Object.freeze({ ...candidate.cost }),
+                  }),
+                  source,
                 }),
-                source,
-              }),
-            ),
-        );
+              ),
+          );
+          if (!orderingOnly) {
+            if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+              completedWorkCycleId = constructionCycleId;
+              completedAuthorityForTest = undefined;
+            }
+            if (
+              globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+              targetAdmissionForTest !== undefined
+            ) {
+              const request = readTargetAdmissionRequest?.();
+              if (
+                request?.active === true &&
+                request.scope?.workCycleId === constructionCycleId + 1 &&
+                request.scope?.orderingGeneration === constructionCycleId + 1
+              ) {
+                try {
+                  reportTargetAdmissionOperation?.("context-identity-sample");
+                  const context = targetAdmissionForTest.readContext();
+                  if (
+                    context !== undefined &&
+                    context.period < request.scope?.period
+                  ) {
+                    completedAuthorityForTest = Object.freeze({
+                      rootGeneration: context.rootGeneration,
+                      progressionGeneration: context.progressionGeneration,
+                    });
+                  }
+                } catch {
+                  completedAuthorityForTest = undefined;
+                }
+              }
+            }
+          }
+        }
+      } finally {
+        cycleReadyToPublish = false;
+        if (!orderingOnly) {
+          if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+            savingPriorityRevision = undefined;
+            revisionControlGeneration = undefined;
+            currentConflictCandidateKey = undefined;
+          }
+        }
       }
-      cycleReadyToPublish = false;
     },
 
     sampleCandidate(
@@ -424,12 +918,20 @@ export function createCapturedConstructionAdapter(
       request: Readonly<BuildSampleRequest>,
     ): BuildCandidateSample {
       const { candidate } = entryAt(index);
+      const entry = entryAt(index);
       const sample: {
         affordable?: boolean;
         consumption?: readonly Readonly<BuildConsumptionView>[];
       } = {};
       if (request.needAffordability) {
         sample.affordable = affordable(candidate);
+        if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true)
+          candidateAffordable?.set(index, sample.affordable);
+        if (
+          globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+          sample.affordable !== true
+        )
+          decideTargetAdmission?.(index, entry, cycleReadyToPublish);
         if (capturePlannerDetails) {
           plannerAffordability.set(index, sample.affordable);
           if (!sample.affordable) capturePlannerResources(index, candidate);
@@ -442,16 +944,27 @@ export function createCapturedConstructionAdapter(
     },
 
     sampleConflict(index: number): BuildConflictSample {
-      const { candidate } = entryAt(index);
+      const entry = entryAt(index);
+      const { candidate } = entry;
       const important = candidate.important;
       if (!respectReservations) {
         return Object.freeze({ conflict: null, important });
       }
-      const evaluated = conflicts.evaluate(
-        candidate.cost,
-        candidate.pool,
-        candidate.key,
-      );
+      if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+        decideTargetAdmission?.(index, entry, cycleReadyToPublish);
+        currentConflictCandidateKey = candidate.key;
+      }
+      let evaluated;
+      try {
+        evaluated = conflicts.evaluate(
+          candidate.cost,
+          candidate.pool,
+          candidate.key,
+        );
+      } finally {
+        if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true)
+          currentConflictCandidateKey = undefined;
+      }
       if (evaluated.status === "none") {
         return Object.freeze({ conflict: null, important });
       }
@@ -611,9 +1124,193 @@ export function createCapturedConstructionAdapter(
           consumption: NO_CONSUMPTION,
         });
       }
-      return entry.source.execute(decision.key);
+      let p53AuthorizedForCandidate: boolean | undefined;
+      if (
+        globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+        targetAdmissionForTest !== undefined
+      ) {
+        const request = admissionRequestForCycle;
+        p53AuthorizedForCandidate =
+          admissionAcceptedForCycle === true &&
+          request?.targetBuildingId === decision.key;
+        if (p53AuthorizedForCandidate && request !== undefined) {
+          const currentRequest = readTargetAdmissionRequest?.();
+          let currentContext:
+            | Readonly<{
+                period: number;
+                rootGeneration: number;
+                progressionGeneration: string;
+              }>
+            | undefined;
+          try {
+            reportTargetAdmissionOperation?.("context-identity-sample");
+            currentContext = targetAdmissionForTest.readContext();
+          } catch {
+            currentContext = undefined;
+          }
+          reportTargetAdmissionOperation?.("native-control-authority-read");
+          const control = entry.source.readActionAuthority?.(decision.key);
+          let staleReason: string | undefined;
+          if (savingPriorityRevision === undefined) {
+            staleReason = "saving-priority-revision-was-invalidated";
+          } else if (!sameTargetAdmissionRequest(currentRequest, request)) {
+            staleReason = "request-cancelled-or-replaced-before-execution";
+          } else if ((verifiedPurchaseCount ?? 0) >= request.maximumPurchases) {
+            staleReason = "request-purchase-budget-exhausted";
+          } else if (
+            currentContext === undefined ||
+            currentContext.period !== admissionContextForCycle?.period ||
+            currentContext.rootGeneration !==
+              admissionContextForCycle?.rootGeneration ||
+            currentContext.progressionGeneration !==
+              admissionContextForCycle?.progressionGeneration
+          ) {
+            staleReason = "root-or-progression-changed-before-execution";
+          } else if (
+            control === undefined ||
+            control.available !== true ||
+            control.actionId !== decision.key ||
+            control.generation !== revisionControlGeneration
+          ) {
+            staleReason = "native-control-generation-changed-before-execution";
+          } else if (control.price === undefined) {
+            staleReason = "native-price-unavailable-before-execution";
+          } else if (
+            !sameCompletePrice(entry.candidate.cost, control.price.cost) ||
+            control.price.pool !== entry.candidate.pool
+          ) {
+            staleReason = "native-price-changed-before-execution";
+          }
+          if (staleReason !== undefined) {
+            admissionExecutionAttempted = true;
+            reportTargetAdmissionDecision?.(
+              Object.freeze({ status: "stale", reason: staleReason }),
+              decision.key,
+            );
+            return Object.freeze({
+              // The explicit target is deferred; ordinary Construction candidates can still run.
+              outcome: SUCCEEDED,
+              disposition: "candidate-rejected" as const,
+              clicked: false,
+              mission: false,
+              consumption: NO_CONSUMPTION,
+            });
+          }
+          if (admissionExecutionAttempted === true) {
+            reportTargetAdmissionDecision?.(
+              Object.freeze({
+                status: "stale",
+                reason: "request-execution-already-attempted-this-cycle",
+              }),
+              decision.key,
+            );
+            return Object.freeze({
+              outcome: SUCCEEDED,
+              disposition: "candidate-rejected" as const,
+              clicked: false,
+              mission: false,
+              consumption: NO_CONSUMPTION,
+            });
+          }
+          admissionExecutionAttempted = true;
+        }
+      }
+      const result = entry.source.execute(decision.key);
+      if (
+        globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+        p53AuthorizedForCandidate === true &&
+        result.outcome.status === "succeeded" &&
+        result.disposition === "verified-success" &&
+        result.clicked
+      ) {
+        verifiedPurchaseCount = (verifiedPurchaseCount ?? 0) + 1;
+        verifiedResourceDebits ??= {};
+        for (const [resourceId, amount] of Object.entries(
+          entry.candidate.cost,
+        )) {
+          verifiedResourceDebits[resourceId] =
+            (verifiedResourceDebits[resourceId] ?? 0) + amount;
+        }
+      }
+      return result;
     },
   });
+
+  const readPublishedSavingTarget = (): SavingTarget | null => {
+    const intent = completedIntent;
+    if (intent === undefined) {
+      throw new TypeError("construction saving order is not established");
+    }
+    const root = rootState.readRoot();
+    if (root === undefined) {
+      throw new TypeError("construction saving root is unavailable");
+    }
+    for (const { candidate, source } of intent) {
+      const cost =
+        source.readSavingCost === undefined
+          ? candidate.cost
+          : source.readSavingCost(candidate);
+      if (cost === null) continue;
+      if (cost === undefined) {
+        throw new TypeError(
+          `construction saving cost unavailable for ${candidate.key}`,
+        );
+      }
+      const options = { pool: candidate.pool };
+      const storable = costFitsStorage(root, cost, options);
+      if (storable === false) continue;
+      if (storable === undefined) {
+        throw new TypeError(
+          `construction storage fit unavailable for ${candidate.key}`,
+        );
+      }
+      const affordable = costFitsNow(root, cost, options);
+      if (affordable === undefined) {
+        throw new TypeError(
+          `construction affordability unavailable for ${candidate.key}`,
+        );
+      }
+      if (affordable) continue;
+      return Object.freeze({
+        name: candidate.key,
+        ...(candidate.pool === undefined ? {} : { pool: candidate.pool }),
+        cost: Object.freeze({ ...cost }),
+      });
+    }
+    return null;
+  };
+  let readSavingTargetForConflict: (() => SavingTarget | null) | undefined;
+  if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+    readSavingTargetForConflict = (): SavingTarget | null => {
+      const revision = savingPriorityRevision;
+      return revision !== undefined &&
+        revision.workCycleId === constructionCycleId &&
+        revision.orderingGeneration === constructionCycleId &&
+        currentConflictCandidateKey === revision.replacement.name
+        ? revision.replacement
+        : readPublishedSavingTarget();
+    };
+  }
+  const observations: Omit<
+    ConstructionObservations,
+    "readSavingTargetForConflict"
+  > & {
+    readSavingTargetForConflict?: () => SavingTarget | null;
+  } = {
+    hasCompletedOrdering: (): boolean => completedIntent !== undefined,
+    readSavingTarget: readPublishedSavingTarget,
+    readKnowledgeRequirement: (): number => knowledgeRequirement,
+    readPlannerSnapshot,
+    readStateLogSnapshot,
+  };
+  if (
+    globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+    targetAdmissionForTest !== undefined &&
+    readSavingTargetForConflict !== undefined
+  )
+    observations.readSavingTargetForConflict = readSavingTargetForConflict;
+  const publishedObservations: ConstructionObservations =
+    Object.freeze(observations);
 
   return Object.freeze({
     reader,
@@ -629,54 +1326,6 @@ export function createCapturedConstructionAdapter(
         orderingOnly = false;
       }
     },
-    observations: Object.freeze({
-      hasCompletedOrdering: (): boolean => completedIntent !== undefined,
-      readSavingTarget(): SavingTarget | null {
-        const intent = completedIntent;
-        if (intent === undefined) {
-          throw new TypeError("construction saving order is not established");
-        }
-        const root = rootState.readRoot();
-        if (root === undefined) {
-          throw new TypeError("construction saving root is unavailable");
-        }
-        for (const { candidate, source } of intent) {
-          const cost =
-            source.readSavingCost === undefined
-              ? candidate.cost
-              : source.readSavingCost(candidate);
-          if (cost === null) continue;
-          if (cost === undefined) {
-            throw new TypeError(
-              `construction saving cost unavailable for ${candidate.key}`,
-            );
-          }
-          const options = { pool: candidate.pool };
-          const storable = costFitsStorage(root, cost, options);
-          if (storable === false) continue;
-          if (storable === undefined) {
-            throw new TypeError(
-              `construction storage fit unavailable for ${candidate.key}`,
-            );
-          }
-          const affordable = costFitsNow(root, cost, options);
-          if (affordable === undefined) {
-            throw new TypeError(
-              `construction affordability unavailable for ${candidate.key}`,
-            );
-          }
-          if (affordable) continue;
-          return Object.freeze({
-            name: candidate.key,
-            ...(candidate.pool === undefined ? {} : { pool: candidate.pool }),
-            cost: Object.freeze({ ...cost }),
-          });
-        }
-        return null;
-      },
-      readKnowledgeRequirement: (): number => knowledgeRequirement,
-      readPlannerSnapshot,
-      readStateLogSnapshot,
-    }),
+    observations: publishedObservations,
   });
 }

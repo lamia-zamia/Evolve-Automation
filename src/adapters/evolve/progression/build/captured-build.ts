@@ -31,6 +31,10 @@ import { readCapturedBuildQueueEntryCount } from "../../captured-queue-reservati
 import { isRecord, readProperty } from "../../../validation.ts";
 import { readCapturedGrantAction } from "./captured-grant-action.ts";
 
+declare global {
+  var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+}
+
 /** One building the caller manages, with the settings the planners need. */
 export interface CapturedBuildTarget {
   /** Stable identity for settings and planner caches, e.g. `city-basic_housing`. */
@@ -214,6 +218,36 @@ export function createCapturedBuildSource(
         ),
       });
     },
+
+    ...(globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true
+      ? {
+          readActionAuthority(key: string) {
+            const candidate = cycle.get(key);
+            if (candidate === undefined) return undefined;
+            const actionId = candidate.target.elementId;
+            const handle = controls.resolve(actionId);
+            const currentPrice = costs.readCost(actionId);
+            return Object.freeze({
+              actionId,
+              available:
+                handle !== undefined &&
+                handle.methods.includes("action") &&
+                (controls.isCurrent?.(actionId, handle.generation) ?? true),
+              generation: handle?.generation ?? -1,
+              ...(currentPrice === undefined
+                ? {}
+                : {
+                    price: Object.freeze({
+                      cost: currentPrice.cost,
+                      ...(currentPrice.pool === undefined
+                        ? {}
+                        : { pool: currentPrice.pool }),
+                    }),
+                  }),
+            });
+          },
+        }
+      : {}),
 
     execute(key: string): BuildClickResult {
       const base = {

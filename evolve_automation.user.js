@@ -157,7 +157,7 @@
 
   // src/adapters/browser/diagnostics.ts
   function createBrowserDiagnostics(globalObject) {
-    let readMechDebugEnabled = () => isRecord(globalObject) && globalObject.mechDebug === !0, performance = isRecord(globalObject) && isRecord(globalObject.performance) ? globalObject.performance : void 0, performanceNow = performance?.now, externalDiagnosticsNow = isRecord(globalObject) && typeof globalObject.eaDiagnosticsNow == "function" ? globalObject.eaDiagnosticsNow : void 0, consoleObject = isRecord(globalObject) && isRecord(globalObject.console) ? globalObject.console : void 0, consoleLog = consoleObject?.log, samples = /* @__PURE__ */ new Map(), counters = /* @__PURE__ */ new Map(), pendingTicks = 0, readPerformanceEnabled = () => isRecord(globalObject) && globalObject.eaPerformance === !0;
+    let readMechDebugEnabled = () => isRecord(globalObject) && globalObject.mechDebug === !0, performance2 = isRecord(globalObject) && isRecord(globalObject.performance) ? globalObject.performance : void 0, performanceNow = performance2?.now, externalDiagnosticsNow = isRecord(globalObject) && typeof globalObject.eaDiagnosticsNow == "function" ? globalObject.eaDiagnosticsNow : void 0, consoleObject = isRecord(globalObject) && isRecord(globalObject.console) ? globalObject.console : void 0, consoleLog = consoleObject?.log, samples = /* @__PURE__ */ new Map(), counters = /* @__PURE__ */ new Map(), pendingTicks = 0, readPerformanceEnabled = () => isRecord(globalObject) && globalObject.eaPerformance === !0;
     return Object.freeze({
       readMechDebugEnabled,
       nowMs: () => {
@@ -169,7 +169,7 @@
           }
         if (typeof performanceNow == "function")
           try {
-            let value = Reflect.apply(performanceNow, performance, []);
+            let value = Reflect.apply(performanceNow, performance2, []);
             if (typeof value == "number" && Number.isFinite(value)) return value;
           } catch {
           }
@@ -7138,11 +7138,10 @@
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, completedIntent, cycleReadyToPublish = !1;
+    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, completedIntent, cycleReadyToPublish = !1, knowledgeRequirement = 0, constructionCycleId = 0, orderingOnly = !1, uiPresentationMode = "off", capturePlannerDetails = !1, stateLogDetailsDue = !1, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map(), targetAdmissionForTest, completedWorkCycleId, completedAuthorityForTest, admissionRequestForCycle, admissionContextForCycle, candidateAffordable, admissionAttempted, admissionAcceptedForCycle, admissionExecutionAttempted, verifiedPurchaseCount, verifiedResourceDebits, savingPriorityRevision, revisionControlGeneration, currentConflictCandidateKey, admissionRequestReadFailed;
     rootState.subscribeRootReplaced?.(() => {
       completedIntent = void 0, cycleReadyToPublish = !1;
     });
-    let knowledgeRequirement = 0, constructionCycleId = 0, orderingOnly = !1, uiPresentationMode = "off", capturePlannerDetails = !1, stateLogDetailsDue = !1, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
     function capturePlannerResources(index, candidate) {
       try {
         let resourceIds = Object.keys(candidate.cost), sample = resources.readResources(
@@ -7247,6 +7246,7 @@
       let entry = cycle[index];
       return entry !== void 0 && entry.candidate.key === key ? entry : null;
     }
+    let readTargetAdmissionRequest, reportTargetAdmissionDecision, reportTargetAdmissionOperation, decideTargetAdmission, evaluateTargetAdmission;
     function affordable(candidate) {
       let root = rootState.readRoot();
       return root !== void 0 && costFitsNow(root, candidate.cost, { pool: candidate.pool }) === !0;
@@ -7297,7 +7297,8 @@
         });
       },
       finishCycle(completed) {
-        if (cycleReadyToPublish) {
+        try {
+          if (!cycleReadyToPublish) return;
           if (completed) {
             for (let source of sources) source.finishCycle?.();
             completedIntent = Object.freeze(
@@ -7314,23 +7315,24 @@
               )
             );
           }
+        } finally {
           cycleReadyToPublish = !1;
         }
       },
       sampleCandidate(index, request) {
-        let { candidate } = entryAt(index), sample = {};
+        let { candidate } = entryAt(index), entry = entryAt(index), sample = {};
         return request.needAffordability && (sample.affordable = affordable(candidate), capturePlannerDetails && (plannerAffordability.set(index, sample.affordable), sample.affordable || capturePlannerResources(index, candidate))), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
       },
       sampleConflict(index) {
-        let { candidate } = entryAt(index), important = candidate.important;
+        let entry = entryAt(index), { candidate } = entry, important = candidate.important;
         if (!respectReservations)
           return Object.freeze({ conflict: null, important });
-        let evaluated = conflicts.evaluate(
+        let evaluated;
+        return evaluated = conflicts.evaluate(
           candidate.cost,
           candidate.pool,
           candidate.key
-        );
-        return evaluated.status === "none" ? Object.freeze({ conflict: null, important }) : evaluated.status === "unavailable" ? Object.freeze({
+        ), evaluated.status === "none" ? Object.freeze({ conflict: null, important }) : evaluated.status === "unavailable" ? Object.freeze({
           conflict: Object.freeze({
             unavailable: !0,
             targetNames: Object.freeze([]),
@@ -7421,18 +7423,60 @@
       },
       executeClick(decision) {
         let entry = entryFor(decision.index, decision.key);
-        return entry === null ? Object.freeze({
-          outcome: stale(
-            "stale-construction-target",
-            "construction candidate list changed",
-            { key: decision.key, index: decision.index }
-          ),
-          disposition: "stopped",
-          clicked: !1,
-          mission: !1,
-          consumption: NO_CONSUMPTION2
-        }) : entry.source.execute(decision.key);
+        if (entry === null)
+          return Object.freeze({
+            outcome: stale(
+              "stale-construction-target",
+              "construction candidate list changed",
+              { key: decision.key, index: decision.index }
+            ),
+            disposition: "stopped",
+            clicked: !1,
+            mission: !1,
+            consumption: NO_CONSUMPTION2
+          });
+        let p53AuthorizedForCandidate;
+        return entry.source.execute(decision.key);
       }
+    }), readPublishedSavingTarget = () => {
+      let intent = completedIntent;
+      if (intent === void 0)
+        throw new TypeError("construction saving order is not established");
+      let root = rootState.readRoot();
+      if (root === void 0)
+        throw new TypeError("construction saving root is unavailable");
+      for (let { candidate, source } of intent) {
+        let cost = source.readSavingCost === void 0 ? candidate.cost : source.readSavingCost(candidate);
+        if (cost === null) continue;
+        if (cost === void 0)
+          throw new TypeError(
+            `construction saving cost unavailable for ${candidate.key}`
+          );
+        let options = { pool: candidate.pool }, storable = costFitsStorage(root, cost, options);
+        if (storable === !1) continue;
+        if (storable === void 0)
+          throw new TypeError(
+            `construction storage fit unavailable for ${candidate.key}`
+          );
+        let affordable2 = costFitsNow(root, cost, options);
+        if (affordable2 === void 0)
+          throw new TypeError(
+            `construction affordability unavailable for ${candidate.key}`
+          );
+        if (!affordable2)
+          return Object.freeze({
+            name: candidate.key,
+            ...candidate.pool === void 0 ? {} : { pool: candidate.pool },
+            cost: Object.freeze({ ...cost })
+          });
+      }
+      return null;
+    }, readSavingTargetForConflict, publishedObservations = Object.freeze({
+      hasCompletedOrdering: () => completedIntent !== void 0,
+      readSavingTarget: readPublishedSavingTarget,
+      readKnowledgeRequirement: () => knowledgeRequirement,
+      readPlannerSnapshot,
+      readStateLogSnapshot
     });
     return Object.freeze({
       reader,
@@ -7445,46 +7489,7 @@
           orderingOnly = !1;
         }
       },
-      observations: Object.freeze({
-        hasCompletedOrdering: () => completedIntent !== void 0,
-        readSavingTarget() {
-          let intent = completedIntent;
-          if (intent === void 0)
-            throw new TypeError("construction saving order is not established");
-          let root = rootState.readRoot();
-          if (root === void 0)
-            throw new TypeError("construction saving root is unavailable");
-          for (let { candidate, source } of intent) {
-            let cost = source.readSavingCost === void 0 ? candidate.cost : source.readSavingCost(candidate);
-            if (cost === null) continue;
-            if (cost === void 0)
-              throw new TypeError(
-                `construction saving cost unavailable for ${candidate.key}`
-              );
-            let options = { pool: candidate.pool }, storable = costFitsStorage(root, cost, options);
-            if (storable === !1) continue;
-            if (storable === void 0)
-              throw new TypeError(
-                `construction storage fit unavailable for ${candidate.key}`
-              );
-            let affordable2 = costFitsNow(root, cost, options);
-            if (affordable2 === void 0)
-              throw new TypeError(
-                `construction affordability unavailable for ${candidate.key}`
-              );
-            if (!affordable2)
-              return Object.freeze({
-                name: candidate.key,
-                ...candidate.pool === void 0 ? {} : { pool: candidate.pool },
-                cost: Object.freeze({ ...cost })
-              });
-          }
-          return null;
-        },
-        readKnowledgeRequirement: () => knowledgeRequirement,
-        readPlannerSnapshot,
-        readStateLogSnapshot
-      })
+      observations: publishedObservations
     });
   }
 
@@ -12417,8 +12422,9 @@
       return establishedOffersAvailable ? policy : void 0;
     } : readPolicy, readObservations = () => NO_OBSERVATIONS, savingReservations = Object.freeze({
       readReservations() {
-        if (!readObservations().hasCompletedOrdering()) return NO_RESERVATIONS3;
-        let target = readObservations().readSavingTarget();
+        let observations = readObservations();
+        if (!observations.hasCompletedOrdering()) return NO_RESERVATIONS3;
+        let target = observations.readSavingTarget();
         return target === null ? NO_RESERVATIONS3 : Object.freeze({
           unavailable: !1,
           targets: Object.freeze([

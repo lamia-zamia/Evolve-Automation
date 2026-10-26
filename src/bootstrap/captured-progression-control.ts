@@ -42,6 +42,10 @@ import {
 } from "../adapters/evolve/progression/build/captured-build-policy.ts";
 import { createCapturedKnowledgeReader } from "../adapters/evolve/progression/build/captured-knowledge-gate.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
+import type {
+  ConstructionTargetAdmissionDecision,
+  ConstructionTargetAdmissionRequest,
+} from "../domain/progression/build/construction-target-admission.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
 import type { ResearchShadowObservation } from "../adapters/evolve/progression/research/captured-research.ts";
 import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
@@ -81,6 +85,9 @@ import type {
 import type { TickDiagnostics } from "../ports/tick.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+declare global {
+  var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+}
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
 import type { ResearchInput } from "../domain/progression/research/research.ts";
@@ -176,6 +183,29 @@ export interface CapturedProgressionControlDependencies {
   readonly readResearchShadowObserver?: () =>
     ((observation: Readonly<ResearchShadowObservation>) => void) | undefined;
   readonly readComputedResearchRequirementsEnabled?: () => boolean;
+  /** Test-surface-only Construction target admission request and owner identity. */
+  readonly constructionTargetAdmissionForTest?: Readonly<{
+    readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readContext: () =>
+      | Readonly<{
+          period: number;
+          rootGeneration: number;
+          progressionGeneration: string;
+        }>
+      | undefined;
+    onDecision?: (
+      decision: Readonly<ConstructionTargetAdmissionDecision>,
+      candidateKey?: string,
+      evaluationMs?: number,
+    ) => void;
+    onOperation?: (
+      operation:
+        | "request-source-read"
+        | "context-identity-sample"
+        | "reservation-evidence-read"
+        | "native-control-authority-read",
+    ) => void;
+  }>;
 }
 
 export interface CapturedProgressionControl {
@@ -964,8 +994,13 @@ export function createCapturedProgressionControl(
   let readObservations: () => ConstructionObservations = () => NO_OBSERVATIONS;
   const savingReservations: CostReservationSource = Object.freeze({
     readReservations() {
-      if (!readObservations().hasCompletedOrdering()) return NO_RESERVATIONS;
-      const target = readObservations().readSavingTarget();
+      const observations = readObservations();
+      if (!observations.hasCompletedOrdering()) return NO_RESERVATIONS;
+      const target =
+        globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+        observations.readSavingTargetForConflict !== undefined
+          ? observations.readSavingTargetForConflict()
+          : observations.readSavingTarget();
       return target === null
         ? NO_RESERVATIONS
         : Object.freeze({
@@ -1044,6 +1079,13 @@ export function createCapturedProgressionControl(
     readKnowledgeGate,
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
     readOfferedTechs: () => sampleOfferedTechs("construction"),
+    ...(globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
+    dependencies.constructionTargetAdmissionForTest !== undefined
+      ? {
+          targetAdmissionForTest:
+            dependencies.constructionTargetAdmissionForTest,
+        }
+      : {}),
     ...(dependencies.onConstructionMutation === undefined
       ? {}
       : { onMutation: dependencies.onConstructionMutation }),

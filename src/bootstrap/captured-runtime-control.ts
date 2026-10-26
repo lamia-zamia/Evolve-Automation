@@ -13,6 +13,7 @@ import {
 } from "../application/jobs.ts";
 import type { PreparedJobsExecution } from "../ports/jobs.ts";
 import type { JobsCycleInput } from "../domain/civic/jobs.ts";
+import type { ConstructionTargetAdmissionRequest } from "../domain/progression/build/construction-target-admission.ts";
 import {
   FOOD_STONE_DIAGNOSTIC_OBJECTIVE,
   FOOD_STONE_DIAGNOSTIC_SCOPE,
@@ -324,6 +325,9 @@ import {
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+declare global {
+  var __EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__: boolean | undefined;
+}
 declare const __EA_RESEARCH_CONDITION_GATE_ENABLED__: boolean;
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import { createGameCustomRaceLab } from "../adapters/browser/game-custom-race-lab.ts";
@@ -1203,6 +1207,65 @@ export function startCapturedRuntime({
     onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
     nowMs: () => Date.now(),
     diagnostics: phaseDiagnostics,
+    ...(globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true
+      ? {
+          constructionTargetAdmissionForTest: {
+            readRequest: () => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              if (readProperty(hooks, "p53Mode") !== true) return undefined;
+              const request = readProperty(hooks, "p53ConstructionRequest");
+              return isRecord(request)
+                ? (request as unknown as ConstructionTargetAdmissionRequest)
+                : undefined;
+            },
+            readContext: () => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const period = readProperty(hooks, "p40CurrentPeriod");
+              if (
+                readProperty(hooks, "p53Mode") !== true ||
+                !Number.isSafeInteger(period)
+              )
+                return undefined;
+              return Object.freeze({
+                period: period as number,
+                rootGeneration: progression.readRootGeneration(),
+                progressionGeneration: progression.readProgressionEpoch(),
+              });
+            },
+            onDecision: (decision, candidateKey, evaluationMs) => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const record = readProperty(
+                hooks,
+                "p53RecordOwnerDecisionForTest",
+              );
+              if (typeof record === "function")
+                Reflect.apply(record, hooks, [
+                  decision,
+                  candidateKey,
+                  evaluationMs,
+                ]);
+            },
+            onOperation: (operation) => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const record = readProperty(hooks, "p53RecordOperationForTest");
+              if (typeof record === "function")
+                Reflect.apply(record, hooks, [operation]);
+            },
+          },
+        }
+      : {}),
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
