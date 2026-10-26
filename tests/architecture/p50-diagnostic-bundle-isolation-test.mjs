@@ -13,6 +13,8 @@ const fullJobsProjection = "capturedAllocationDiagnosticFacts";
 const decisionIdentity = "capturedJobsDecisionIdentity";
 const diagnosticInputSuffix =
   "src/domain/civic/allocation-diagnostic-admission.ts";
+const constructionAdmissionInputSuffix =
+  "src/domain/progression/build/construction-target-admission.ts";
 const productionOnlyNames = [
   admissionFunction,
   observerFunction,
@@ -49,6 +51,13 @@ const productionOnlyNames = [
   "p52HandoffClassification",
   "p52ConstructionIdentitySample",
   "p52JobsIdentitySample",
+  "decideConstructionTargetAdmission",
+  "ConstructionTargetAdmissionRequest",
+  "ConstructionSavingPriorityRevision",
+  "readActionAuthority",
+  "readReservationEvidence",
+  "p53ConstructionRequest",
+  "p53OwnerDecision",
 ];
 const productionOnlyStrings = [
   "p48-allocation-diagnostic-observation",
@@ -66,9 +75,17 @@ const productionOnlyStrings = [
   "post-construction-success",
   "jobs-owner-admission",
   "source-backed-known-mutation",
+  "p53-test-only-city-rock-quarry-v1",
+  "explicit-test-only-priority-replacement",
+  "bounded-test-only-request-and-current-evidence-match",
 ];
 
-async function bundle(testSurface, p51Surface = false, p52Surface = false) {
+async function bundle(
+  testSurface,
+  p51Surface = false,
+  p52Surface = false,
+  p53Surface = false,
+) {
   assert.equal(
     (p51Surface || p52Surface) && !testSurface,
     false,
@@ -79,12 +96,18 @@ async function bundle(testSurface, p51Surface = false, p52Surface = false) {
     false,
     "P52 instrumentation extends the P51 test surface",
   );
+  assert.equal(
+    p53Surface && (!p51Surface || !p52Surface),
+    false,
+    "P53 comparison requires the retained P51/P52 test surface",
+  );
   const result = await esbuild.build({
     ...createBuildOptions({
       root: repositoryRoot,
       outfile: `test-artifacts/p50/p50-${testSurface ? "test" : "production"}.js`,
       banner: { js: "" },
       testSurface,
+      p53Surface,
     }),
     ...(p51Surface
       ? { plugins: [createP51ConstructionJobsHandoffPlugin(p52Surface)] }
@@ -129,6 +152,12 @@ async function bundle(testSurface, p51Surface = false, p52Surface = false) {
     Object.entries(outputMetadata.inputs).find(([inputPath]) =>
       inputPath.replaceAll("\\", "/").endsWith(diagnosticInputSuffix),
     )?.[1].bytesInOutput ?? 0;
+  const constructionAdmissionModuleBytes =
+    Object.entries(outputMetadata.inputs).find(([inputPath]) =>
+      inputPath
+        .replaceAll("\\", "/")
+        .endsWith(constructionAdmissionInputSuffix),
+    )?.[1].bytesInOutput ?? 0;
 
   return {
     text: output.text,
@@ -138,6 +167,7 @@ async function bundle(testSurface, p51Surface = false, p52Surface = false) {
     strings,
     calls,
     diagnosticModuleBytes,
+    constructionAdmissionModuleBytes,
   };
 }
 
@@ -148,6 +178,35 @@ for (const name of productionOnlyNames) {
     false,
     `ordinary bundle retains P48/P49 diagnostic identifier ${name}`,
   );
+}
+for (const name of [
+  "targetAdmissionForTest",
+  "readSavingTargetForConflict",
+  "completedWorkCycleId",
+  "completedAuthorityForTest",
+  "admissionRequestForCycle",
+  "admissionContextForCycle",
+  "candidateAffordable",
+  "admissionAttempted",
+  "admissionAcceptedForCycle",
+  "admissionExecutionAttempted",
+  "verifiedPurchaseCount",
+  "verifiedResourceDebits",
+  "savingPriorityRevision",
+  "revisionControlGeneration",
+  "currentConflictCandidateKey",
+  "admissionRequestReadFailed",
+]) {
+  const nodes = production.identifierNodes.get(name) ?? [];
+  assert.ok(
+    nodes.length <= 1,
+    `ordinary bundle retains P53 ${name} references`,
+  );
+  if (nodes.length === 1) {
+    const declaration = nodes[0].parent;
+    assert.equal(ts.isVariableDeclaration(declaration), true);
+    assert.equal(declaration.initializer, undefined);
+  }
 }
 for (const marker of productionOnlyStrings) {
   assert.equal(
@@ -160,6 +219,11 @@ assert.equal(
   production.calls.get(admissionFunction) ?? 0,
   0,
   "ordinary bundle invokes the diagnostic admission predicate",
+);
+assert.equal(
+  production.constructionAdmissionModuleBytes,
+  0,
+  "ordinary bundle includes P53 target-admission implementation bytes",
 );
 assert.equal(
   production.diagnosticModuleBytes,
@@ -229,6 +293,28 @@ for (const name of [
 }
 
 assert.ok(testSurface.diagnosticModuleBytes > 0);
+assert.equal(testSurface.constructionAdmissionModuleBytes, 0);
+for (const marker of [
+  "decideConstructionTargetAdmission",
+  "explicit-test-only-priority-replacement",
+]) {
+  assert.equal(
+    testSurface.identifiers.has(marker) || testSurface.strings.has(marker),
+    false,
+    `ordinary test-surface bundle unexpectedly includes P53 owner-authority marker ${marker}`,
+  );
+}
+for (const name of ["targetAdmissionForTest", "readSavingTargetForConflict"]) {
+  const nodes = testSurface.identifierNodes.get(name) ?? [];
+  assert.ok(
+    nodes.length <= 1,
+    `ordinary test surface retains P53 ${name} behavior`,
+  );
+  if (nodes.length === 1) {
+    assert.equal(ts.isVariableDeclaration(nodes[0].parent), true);
+    assert.equal(nodes[0].parent.initializer, undefined);
+  }
+}
 
 for (const name of [
   "publishP51ConstructionReceiptForTest",
@@ -303,6 +389,22 @@ for (const marker of [
     p52Surface.identifiers.has(marker) || p52Surface.strings.has(marker),
     true,
     `P52 exact test surface omits identity provenance marker ${marker}`,
+  );
+}
+
+const p53Surface = await bundle(true, true, true, true);
+assert.ok(p53Surface.constructionAdmissionModuleBytes > 0);
+for (const marker of [
+  "decideConstructionTargetAdmission",
+  "targetAdmissionForTest",
+  "readSavingTargetForConflict",
+  "explicit-test-only-priority-replacement",
+  "p53-test-only-city-rock-quarry-v1",
+]) {
+  assert.equal(
+    p53Surface.identifiers.has(marker) || p53Surface.strings.has(marker),
+    true,
+    `P53 exact test surface omits owner-authority marker ${marker}`,
   );
 }
 
