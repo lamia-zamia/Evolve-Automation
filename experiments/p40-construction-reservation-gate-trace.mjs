@@ -90,12 +90,18 @@ function instrumentProgressionControl(source) {
   return replaceOnce(
     source,
     [
-      "      if (!readObservations().hasCompletedOrdering()) return NO_RESERVATIONS;",
-      "      const target = readObservations().readSavingTarget();",
+      "      const observations = readObservations();",
+      "      if (!observations.hasCompletedOrdering()) return NO_RESERVATIONS;",
+      "      const target =",
+      "        globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&",
+      "        observations.readSavingTargetForConflict !== undefined",
+      "          ? observations.readSavingTargetForConflict()",
+      "          : observations.readSavingTarget();",
     ].join("\n"),
     [
-      "      const __p40HasCompletedOrdering = readObservations().hasCompletedOrdering();",
-      "      const target = __p40HasCompletedOrdering ? readObservations().readSavingTarget() : null;",
+      "      const observations = readObservations();",
+      "      const __p40HasCompletedOrdering = observations.hasCompletedOrdering();",
+      "      const target = __p40HasCompletedOrdering ? (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true && observations.readSavingTargetForConflict !== undefined ? observations.readSavingTargetForConflict() : observations.readSavingTarget()) : null;",
       "      const __p40Hooks = (globalThis as any).__EA_TEST_HOOKS__;",
       "      const __p40Candidate = __p40Hooks?.p40CurrentBuildCandidate;",
       "      if (__p40Candidate && __p40Hooks?.p40ShouldCaptureCandidate(__p40Candidate.candidateKey, __p40Candidate.actionId)) {",
@@ -166,6 +172,7 @@ function instrumentConstructionAdapter(source) {
     source,
     [
       "      const { candidate } = entryAt(index);",
+      "      const entry = entryAt(index);",
       "      const sample: {",
       "        affordable?: boolean;",
       "        consumption?: readonly Readonly<BuildConsumptionView>[];",
@@ -173,6 +180,7 @@ function instrumentConstructionAdapter(source) {
     ].join("\n"),
     [
       "      const { candidate } = entryAt(index);",
+      "      const entry = entryAt(index);",
       "      beginP40OwnerDecision(candidate);",
       "      const sample: {",
       "        affordable?: boolean;",
@@ -214,38 +222,53 @@ function instrumentConstructionAdapter(source) {
   );
   source = replaceOnce(
     source,
-    [
-      "      const important = candidate.important;",
-      "      if (!respectReservations) {",
-      "        return Object.freeze({ conflict: null, important });",
-      "      }",
-      "      const evaluated = conflicts.evaluate(",
-      "        candidate.cost,",
-      "        candidate.pool,",
-      "        candidate.key,",
-      "      );",
-    ].join("\n"),
+    "      const important = candidate.important;",
     [
       "      const important = candidate.important;",
       "      const __p40Hooks = (globalThis as any).__EA_TEST_HOOKS__;",
       "      const __p40Relevant = __p40Hooks?.p40ShouldCaptureCandidate(candidate.key, candidate.actionId);",
       "      const __p40Candidate = { orderingGeneration: constructionCycleId, candidateKey: candidate.key, targetId: candidate.key, actionId: candidate.actionId ?? null, weighting: candidate.weighting, important, knowledge: candidate.knowledge, cost: candidate.cost, pool: candidate.pool ?? null, respectReservations };",
       "      if (__p40Relevant) __p40Hooks.p40CurrentBuildCandidate = __p40Candidate;",
+    ].join("\n"),
+    "captured-construction.ts",
+    "expose the actual candidate to conflict source instrumentation",
+  );
+  source = replaceOnce(
+    source,
+    "      if (!respectReservations) {",
+    [
       "      if (!respectReservations) {",
-      "        if (__p40Relevant) {",
+      "        if (__p40Relevant)",
       '          __p40Hooks.p40CaptureConstructionTrace("conflict-adapter", () => ({ orderingGeneration: constructionCycleId, input: { candidate: __p40Candidate }, output: { evaluated: false, status: "not-evaluated", conflict: null, important } }));',
-      "        }",
-      "        return Object.freeze({ conflict: null, important });",
-      "      }",
+    ].join("\n"),
+    "captured-construction.ts",
+    "record conflict bypass when reservations are disabled",
+  );
+  source = replaceOnce(
+    source,
+    "      let evaluated;",
+    [
       "      let evaluated;",
       "      const __p41MeasureReader = __p40Relevant && __p40Hooks?.p40OwnerContext?.period === 720;",
       "      const __p41Clock = __p41MeasureReader ? window.eaDiagnosticsNow : undefined;",
       '      const __p41Started = typeof __p41Clock === "function" ? __p41Clock() : 0;',
-      "      evaluated = conflicts.evaluate(candidate.cost, candidate.pool, candidate.key);",
-      '      if (__p41MeasureReader && typeof __p41Clock === "function") { __p40Hooks.p41ConflictReaderCalls++; __p40Hooks.p41ConflictReaderElapsedMs += __p41Clock() - __p41Started; __p40Hooks.p41DiagnosticClockReads += 2; }',
     ].join("\n"),
     "captured-construction.ts",
-    "expose the actual candidate to conflict source instrumentation",
+    "start P41 conflict reader measurement",
+  );
+  source = replaceOnce(
+    source,
+    [
+      "        if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true)",
+      "          currentConflictCandidateKey = undefined;",
+    ].join("\n"),
+    [
+      "        if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true)",
+      "          currentConflictCandidateKey = undefined;",
+      '        if (__p41MeasureReader && typeof __p41Clock === "function") { __p40Hooks.p41ConflictReaderCalls++; __p40Hooks.p41ConflictReaderElapsedMs += __p41Clock() - __p41Started; __p40Hooks.p41DiagnosticClockReads += 2; }',
+    ].join("\n"),
+    "captured-construction.ts",
+    "record P41 conflict reader measurement",
   );
   source = replaceOnce(
     source,

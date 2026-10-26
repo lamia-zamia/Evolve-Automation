@@ -42,6 +42,7 @@ import {
   P51_QUARRY_REQUEST,
   qualifyP51QuarryRequest,
 } from "./p51-construction-jobs-handoff-contract.mjs";
+import { P53_QUARRY_REQUEST } from "./p53-construction-owned-target-authority-contract.mjs";
 import {
   applyP51RuntimeAdmissionInstrumentation,
   applyP52RuntimeAdmissionInstrumentation,
@@ -58,9 +59,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const p42Mode = process.argv.includes(
   "--p42-construction-priority-counterfactual",
 );
-const p52Mode = process.argv.includes(
-  "--p52-independent-construction-jobs-identity",
+const p53Mode = process.argv.includes(
+  "--p53-construction-owned-target-authority",
 );
+const p52Mode =
+  process.argv.includes("--p52-independent-construction-jobs-identity") ||
+  p53Mode;
 const p51Mode =
   process.argv.includes("--p51-construction-jobs-handoff") || p52Mode;
 const p43Mode = process.argv.includes("--p43-food-safe-jobs");
@@ -86,13 +90,15 @@ const bundlePath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs.user.js"
-    : p52Mode
-      ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity.user.js"
-      : p51Mode
-        ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
-        : p42Mode
-          ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
-          : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
+    : p53Mode
+      ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority.user.js"
+      : p52Mode
+        ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity.user.js"
+        : p51Mode
+          ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
+          : p42Mode
+            ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
+            : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
 );
 const evidencePath = path.join(
   root,
@@ -130,6 +136,10 @@ const p52EvidencePath = path.join(
   root,
   "experiments/p52-independent-construction-jobs-identity-evidence.json",
 );
+const p53EvidencePath = path.join(
+  root,
+  "experiments/p53-construction-owned-target-authority-evidence.json",
+);
 const p42PluginPath = path.join(
   root,
   "experiments/p42-construction-priority-counterfactual-trace.mjs",
@@ -150,13 +160,15 @@ const interimPath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
-    : p52Mode
-      ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
-      : p51Mode
-        ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
-        : p42Mode
-          ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
-          : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+    : p53Mode
+      ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority-interim.json"
+      : p52Mode
+        ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
+        : p51Mode
+          ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
+          : p42Mode
+            ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+            : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -621,6 +633,7 @@ window.__EA_TEST_HOOKS__ = {
   define: {
     "globalThis.__EA_TEST_SURFACE_ENABLED__": "true",
     __EA_TEST_SURFACE_ENABLED__: "true",
+    "globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__": String(p53Mode),
   },
   minifySyntax: true,
   treeShaking: true,
@@ -686,7 +699,7 @@ async function capture(session, period) {
     session.readState(),
     session.diagnostics(),
     session.evaluate(
-      (period, p42Mode, p43Mode, p51Mode, p52Mode, quarryTarget) => {
+      (period, p42Mode, p43Mode, p51Mode, p52Mode, p53Mode, quarryTarget) => {
         const hooks = window.__EA_TEST_HOOKS__;
         const p51State = hooks?.p51HandoffState ?? null;
         const publishedReceipt = p51State?.events?.find(
@@ -897,12 +910,29 @@ async function capture(session, period) {
                 instrumentationMetrics: {
                   p40ResourceReadCount: hooks?.p40ResourceReadCount ?? 0,
                   p40DiagnosticClockReads: hooks?.p40DiagnosticClockReads ?? 0,
+                  p41ConflictReaderCalls: hooks?.p41ConflictReaderCalls ?? 0,
+                  p41ConflictReaderElapsedMs:
+                    hooks?.p41ConflictReaderElapsedMs ?? 0,
+                  p41DiagnosticClockReads: hooks?.p41DiagnosticClockReads ?? 0,
                   p42ResourceAmountReads: hooks?.p42ResourceAmountReads ?? 0,
                   p42OwnerAuthorityReads: hooks?.p42OwnerAuthorityReads ?? 0,
                   p42AppliedReservationReads:
                     hooks?.p42AppliedReservationReads ?? 0,
                   p42DiagnosticClockReads: hooks?.p42DiagnosticClockReads ?? 0,
                 },
+                ...(p53Mode
+                  ? {
+                      p53: {
+                        request: hooks?.p53ConstructionRequest ?? null,
+                        ownerDecision: hooks?.p53OwnerDecision ?? null,
+                        ownerDecisionEvents:
+                          hooks?.p53OwnerDecisionEvents ?? [],
+                        metrics: hooks?.p53Metrics ?? null,
+                        eventBytes: hooks?.p53EventBytes ?? 0,
+                        eventOverflow: hooks?.p53EventOverflow ?? 0,
+                      },
+                    }
+                  : {}),
               }
             : undefined,
           savingTargetObservation: p42Mode
@@ -917,6 +947,7 @@ async function capture(session, period) {
       p43Mode,
       p51Mode,
       p52Mode,
+      p53Mode,
       P42_EXPECTED.quarryTarget,
     ),
   ]);
@@ -1072,6 +1103,83 @@ async function replay(
           hooks.p52NativeInvocationStartIndex = null;
           hooks.p52ConstructionIdentityError = null;
           hooks.p52JobsIdentityError = null;
+        }
+        if (configuration.p53Mode) {
+          hooks.p53Mode = true;
+          hooks.p53ConstructionRequest = configuration.p53Request;
+          hooks.p53OwnerDecision = null;
+          hooks.p53OwnerDecisionEvents = [];
+          hooks.p53EventBytes = 0;
+          hooks.p53EventOverflow = 0;
+          hooks.p53Metrics = {
+            ownerDecisionEvaluations: 0,
+            savingRevisionConstructions: 0,
+            requestSourceReads: 0,
+            contextIdentitySamples: 0,
+            contextRootReads: 0,
+            reservationEvidenceReads: 0,
+            nativeControlAuthorityReads: 0,
+            nativePriceReads: 0,
+            additionalResourceOrCatalogReads: 0,
+            totalOwnerDecisionEvaluationMs: 0,
+            maximumOwnerDecisionEvaluationMs: 0,
+            maximumSynchronousCallbackMs: 0,
+          };
+          hooks.p53RecordOwnerDecisionForTest = (
+            decision,
+            candidateKey,
+            evaluationMs,
+          ) => {
+            const startedAt = performance.now();
+            const event = {
+              period: hooks.p40CurrentPeriod ?? null,
+              candidateKey: candidateKey ?? null,
+              decision,
+            };
+            const bytes = JSON.stringify(event).length * 2;
+            if (
+              hooks.p53OwnerDecisionEvents.length >= 16 ||
+              hooks.p53EventBytes + bytes > 16_384
+            ) {
+              hooks.p53EventOverflow++;
+            } else {
+              hooks.p53OwnerDecisionEvents.push(event);
+              hooks.p53EventBytes += bytes;
+            }
+            hooks.p53OwnerDecision = { decision, candidateKey };
+            hooks.p53Metrics.ownerDecisionEvaluations++;
+            if (Number.isFinite(evaluationMs)) {
+              hooks.p53Metrics.totalOwnerDecisionEvaluationMs += evaluationMs;
+              hooks.p53Metrics.maximumOwnerDecisionEvaluationMs = Math.max(
+                hooks.p53Metrics.maximumOwnerDecisionEvaluationMs,
+                evaluationMs,
+              );
+            }
+            if (decision?.status === "accepted-for-owner-decision")
+              hooks.p53Metrics.savingRevisionConstructions++;
+            hooks.p53Metrics.maximumSynchronousCallbackMs = Math.max(
+              hooks.p53Metrics.maximumSynchronousCallbackMs,
+              performance.now() - startedAt,
+            );
+          };
+          hooks.p53RecordOperationForTest = (operation) => {
+            const startedAt = performance.now();
+            if (operation === "request-source-read") {
+              hooks.p53Metrics.requestSourceReads++;
+            } else if (operation === "context-identity-sample") {
+              hooks.p53Metrics.contextIdentitySamples++;
+              hooks.p53Metrics.contextRootReads += 2;
+            } else if (operation === "reservation-evidence-read") {
+              hooks.p53Metrics.reservationEvidenceReads++;
+            } else if (operation === "native-control-authority-read") {
+              hooks.p53Metrics.nativeControlAuthorityReads++;
+              hooks.p53Metrics.nativePriceReads++;
+            }
+            hooks.p53Metrics.maximumSynchronousCallbackMs = Math.max(
+              hooks.p53Metrics.maximumSynchronousCallbackMs,
+              performance.now() - startedAt,
+            );
+          };
         }
         if (configuration.p40Trace) {
           hooks.p40TraceEnabled = true;
@@ -1641,6 +1749,11 @@ async function replay(
         p43Mode,
         p51Mode,
         p52Mode,
+        p53Mode,
+        p53Request:
+          p53Mode && (arm === "C" || arm === "C-repeat")
+            ? P53_QUARRY_REQUEST
+            : null,
         p43Enabled: p43Mode && (arm === "B" || arm === "B-repeat"),
         p43CommitmentMode: p43Mode ? "test-only-assume-empty" : null,
         pinnedGameRevision: P43_PINNED_GAME,
@@ -1719,9 +1832,17 @@ async function replay(
           {
             arm,
             p51Request:
-              arm === "B" || arm === "B-repeat" ? P51_QUARRY_REQUEST : null,
+              arm === "B" || arm === "B-repeat"
+                ? P51_QUARRY_REQUEST
+                : p53Mode && (arm === "C" || arm === "C-repeat")
+                  ? P53_QUARRY_REQUEST
+                  : null,
             p51RequestQualification: qualifyP51QuarryRequest(
-              arm === "B" || arm === "B-repeat" ? P51_QUARRY_REQUEST : null,
+              arm === "B" || arm === "B-repeat"
+                ? P51_QUARRY_REQUEST
+                : p53Mode && (arm === "C" || arm === "C-repeat")
+                  ? P53_QUARRY_REQUEST
+                  : null,
               arm,
             ),
             p42Enabled:
@@ -2175,13 +2296,120 @@ try {
 
   const A = await replayOrReuse("A");
   const B = await replayOrReuse("B");
-  const BRepeat = await replayOrReuse("B-repeat");
-  for (const arm of [A, B, BRepeat]) {
+  const BRepeat = p53Mode ? null : await replayOrReuse("B-repeat");
+  for (const arm of [A, B, ...(BRepeat === null ? [] : [BRepeat])]) {
     for (const entry of arm.checkpoints) {
       entry.jobsSnapshot ??= entry.native?.jobsSnapshot ?? null;
       entry.jobsInput ??= entry.native?.jobsInput ?? null;
       entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
     }
+  }
+  if (p53Mode) {
+    const C = await replayOrReuse("C");
+    const CRepeat = await replayOrReuse("C-repeat");
+    for (const arm of [C, CRepeat]) {
+      for (const entry of arm.checkpoints) {
+        entry.jobsSnapshot ??= entry.native?.jobsSnapshot ?? null;
+        entry.jobsInput ??= entry.native?.jobsInput ?? null;
+        entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
+      }
+    }
+    const evidenceModule =
+      await import("./p53-construction-owned-target-authority-evidence.mjs");
+    const sourcePaths = [
+      "build-config.mjs",
+      "src/application/build.ts",
+      "src/ports/build.ts",
+      "src/ports/construction-candidates.ts",
+      "src/ports/game-construction-observations.ts",
+      "src/adapters/evolve/progression/construction/captured-construction.ts",
+      "src/adapters/evolve/progression/build/captured-build.ts",
+      "src/adapters/evolve/captured-cost-conflict.ts",
+      "src/adapters/evolve/captured-action-costs.ts",
+      "src/adapters/evolve/captured-queue-reservations.ts",
+      "src/bootstrap/captured-construction-control.ts",
+      "src/bootstrap/captured-progression-control.ts",
+      "src/bootstrap/captured-runtime-control.ts",
+      "src/domain/progression/build/construction-target-admission.ts",
+      "experiments/p42-construction-priority-counterfactual-policy.mjs",
+      "experiments/p40-construction-reservation-gate-trace.mjs",
+      "experiments/p42-construction-priority-counterfactual-trace.mjs",
+      "experiments/p51-construction-jobs-handoff-contract.mjs",
+      "experiments/p51-construction-jobs-handoff-trace.mjs",
+      "experiments/p53-construction-owned-target-authority-contract.mjs",
+      "experiments/p53-construction-owned-target-authority-evidence.mjs",
+      "experiments/p53-construction-owned-target-authority-exact.mjs",
+      "experiments/p38-quarry-production-validation-exact.mjs",
+      "tests/experiments/p53-construction-owned-target-authority-test.mjs",
+      "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs",
+      "tools/chromium-evolve-runner.mjs",
+      "tools/chromium/bridge.js",
+    ];
+    const sourceHashes = Object.fromEntries(
+      await Promise.all(
+        sourcePaths.map(async (relativePath) => [
+          relativePath,
+          hash(await readFile(path.join(root, relativePath))),
+        ]),
+      ),
+    );
+    const admissionSource = await readFile(
+      path.join(
+        root,
+        "src/domain/progression/build/construction-target-admission.ts",
+      ),
+      "utf8",
+    );
+    const constructionSource = await readFile(
+      path.join(
+        root,
+        "src/adapters/evolve/progression/construction/captured-construction.ts",
+      ),
+      "utf8",
+    );
+    const evidence =
+      evidenceModule.createP53ConstructionTargetAuthorityEvidence({
+        A,
+        B,
+        C,
+        CRepeat,
+        gameSnapshotSha256: pinnedGameSha256,
+        bundleSha256,
+        replayHarnessSha256,
+        sourceHashes,
+        staticContract: {
+          admissionOutcomes: [
+            "accepted-for-owner-decision",
+            "rejected-target-unavailable",
+            "rejected-priority-conflict",
+            "rejected-incomplete-authority",
+            "rejected-unaffordable",
+            "stale",
+            "inactive",
+          ].filter((outcome) => admissionSource.includes(`"${outcome}"`)),
+          historicalPublicationPreserved:
+            constructionSource.includes("readPublishedSavingTarget()") &&
+            constructionSource.includes("readSavingTargetForConflict"),
+          p53CompileDefinePresent: constructionSource.includes(
+            "__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__",
+          ),
+        },
+      });
+    await writeFile(
+      p53EvidencePath,
+      await prettier.format(JSON.stringify(evidence), { parser: "json" }),
+    );
+    console.log(
+      JSON.stringify({
+        experiment: evidence.schema,
+        outcome: evidence.decision.outcome,
+        p53EvidencePath,
+        ownerDecision: evidence.ownerDecision.status,
+        exactNativeParity: evidence.comparison.BCNativeEquality,
+        replayHashes: { bundleSha256, replayHarnessSha256 },
+      }),
+    );
+    process.exit(0);
   }
   if (p51Mode && !p52Mode) {
     const sourcePaths = [

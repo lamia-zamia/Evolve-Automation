@@ -1,0 +1,376 @@
+{
+  "schema": "p53-construction-owned-target-authority-v1",
+  "decision": {
+    "outcome": "A — Owner-side authority established",
+    "reason": "Construction accepted the exact test-only Quarry request, owned a one-cycle Farm-to-Quarry saving revision, and reused the native purchase and P52 receipt path with deterministic A/B/C/C-repeat results.",
+    "executionAuthority": "test-only-native-execution-permission; no player permission",
+    "productionAuthorized": false,
+    "autonomousAllocatorIntroduced": false,
+    "autonomousGatherAuthorized": false,
+    "jobsAssignmentAuthorized": false
+  },
+  "game": {
+    "pinned": "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f",
+    "snapshotSha256": "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7",
+    "fixture": "test-artifacts/benchmark/slice0/saves/p18-standard-human-fixture.txt",
+    "seed": 44,
+    "epoch": "2026-09-21T00:00:00.000Z",
+    "periods": [719, 720],
+    "workCycles": [89, 90]
+  },
+  "request": {
+    "requestId": "p53-test-only-city-rock-quarry-v1",
+    "generation": 1,
+    "active": true,
+    "origin": "test-only",
+    "targetBuildingId": "city-rock_quarry",
+    "maximumPurchases": 1,
+    "maximumTotalAuthorizedResourceDebit": { "Lumber": 50, "Stone": 10 },
+    "scope": { "period": 720, "workCycleId": 90, "orderingGeneration": 90 },
+    "expiresAt": { "period": 720, "workCycleId": 90 },
+    "targetPermission": true,
+    "priorityReplacement": {
+      "permitted": true,
+      "displacedTargetId": "city-farm",
+      "displacedPublicationWorkCycleId": 89
+    },
+    "nativeExecutionPermission": true,
+    "materialGatheringPermission": false,
+    "jobsAssignmentPermission": false,
+    "playerSelected": false,
+    "productionAuthorized": false,
+    "testAuthorization": true
+  },
+  "ownerDecision": {
+    "status": "accepted-for-owner-decision",
+    "reason": "bounded-test-only-request-and-current-evidence-match",
+    "candidateKey": "city-rock_quarry",
+    "revision": {
+      "requestId": "p53-test-only-city-rock-quarry-v1",
+      "requestGeneration": 1,
+      "previous": {
+        "name": "city-farm",
+        "cost": { "Lumber": 27, "Stone": 14 }
+      },
+      "replacement": {
+        "name": "city-rock_quarry",
+        "cost": { "Lumber": 50, "Stone": 10 }
+      },
+      "workCycleId": 90,
+      "orderingGeneration": 90,
+      "reason": "explicit-test-only-priority-replacement",
+      "lifetime": "this-construction-cycle"
+    },
+    "accepted": true,
+    "historicalFarmPublicationPreserved": true
+  },
+  "comparison": {
+    "arms": {
+      "A": "Historical control; Farm priority remains published.",
+      "B": "P42 external test reservation substitution, retained as native-result reference.",
+      "C": "Construction owner admission and one-cycle saving revision.",
+      "C-repeat": "Exact repeat of the Construction owner request."
+    },
+    "preInterventionEqual": true,
+    "legacyP42AndConstructionOwnerNativeEquality": true,
+    "expectedOwnerSpecificNativeReadDelta": {
+      "buildQueue.setData": { "returned": 2, "threw": 0 }
+    },
+    "ownerSpecificReadDeltaBounded": true,
+    "constructionOwnerRepeatExact": true,
+    "legacyAndOwnerMechanismsDiffer": true,
+    "quarryPurchaseAndNativeDebit": {
+      "verified": true,
+      "amountByResource": { "Lumber": 50, "Stone": 10 },
+      "P42Reference": { "Lumber": 50, "Stone": 10 },
+      "Crepeat": { "Lumber": 50, "Stone": 10 }
+    },
+    "noAdditionalGather": true,
+    "noResearchChangesAcrossArms": true,
+    "unrelatedConstructionDecisionsMatchP42BetweenTreatments": true,
+    "ordinaryJobsPolicyAndResultsMatchBetweenTreatments": true,
+    "ordinaryJobsByArm": {
+      "A": { "farmer": 4 },
+      "B": { "farmer": 2, "quarry_worker": 2 },
+      "C": { "farmer": 2, "quarry_worker": 2 },
+      "C-repeat": { "farmer": 2, "quarry_worker": 2 }
+    },
+    "treatmentResultHasNoOtherActionChanges": true,
+    "mechanismDifference": {
+      "B": {
+        "constructionOwnerDecision": false,
+        "externalP42ReservationSubstitution": true
+      },
+      "C": {
+        "constructionOwnerDecision": true,
+        "externalP42ReservationSubstitution": false,
+        "revisionInterface": "Construction observations.readSavingTargetForConflict"
+      },
+      "nativeActionDifference": "none",
+      "expectedAdditionalCostAuthorityReads": "Two bounded current-price checks at admission and before execution."
+    }
+  },
+  "receipt": {
+    "published": {
+      "receiptId": "construction:90:90:city-rock_quarry",
+      "origin": {
+        "owner": "Construction",
+        "workCycleId": 90,
+        "orderingGeneration": 90,
+        "period": 720,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "identityProvenance": {
+          "source": "captured-runtime-shared-progression-reader",
+          "samplePoint": "post-construction-success"
+        }
+      },
+      "targetBuildingId": "city-rock_quarry",
+      "result": "verified-purchase",
+      "nativePostcondition": {
+        "source": "captured-build-count-postcondition",
+        "targetBuildingId": "city-rock_quarry",
+        "beforeCount": 0,
+        "afterCount": 1,
+        "actionReportedSuccess": true,
+        "constructionCycleCompleted": true
+      },
+      "cost": { "Lumber": 50, "Stone": 10 },
+      "requestIdentity": {
+        "requestId": "p53-test-only-city-rock-quarry-v1",
+        "generation": 1
+      },
+      "executionAuthority": "none"
+    },
+    "consumed": {
+      "kind": "receipt-consumed",
+      "receiptId": "construction:90:90:city-rock_quarry",
+      "status": "correlated-owner-event",
+      "reason": "same-runtime-identities-and-current-jobs-observation",
+      "period": 720,
+      "receiptAgePeriods": 0,
+      "receiptAgeWorkCycles": 0,
+      "ownerScope": "ordinary-jobs-only",
+      "ownerSessionFreshness": "verified-current",
+      "jobsPreparationGeneration": 90,
+      "workCycleIdentity": 90,
+      "capturedRootIdentity": {
+        "preparationGeneration": 90,
+        "referenceMatchedAtExecution": true
+      },
+      "progressionEvidence": {
+        "workCycle": 90,
+        "progressionEpoch": "unavailable",
+        "rootGeneration": "unavailable"
+      },
+      "identityEvidence": {
+        "constructionSource": "verified",
+        "jobsSource": "verified",
+        "sameRuntimeSource": true,
+        "constructionSamplePoint": "post-construction-success",
+        "jobsSamplePoint": "jobs-owner-admission",
+        "constructionRootGeneration": 0,
+        "jobsRootGeneration": 0,
+        "constructionProgressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "jobsProgressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "jobsPreparationGeneration": 90
+      },
+      "progressionRelationship": "same-fingerprint",
+      "nativeMutationsAfterPublication": [],
+      "quarryWorker": { "status": "observed", "unlocked": true },
+      "plannedDecisionIdentity": "[\"assign-jobs\",[[0,0,0],[3,2,0],[5,2,0]],5,false,false,0,4,2,null,true,null,null,null]",
+      "crossOwnerIdentity": {
+        "workCycle": "matched-current",
+        "rootGeneration": "matched-current",
+        "progression": "same-fingerprint",
+        "runtimeSource": "same-runtime-reader"
+      },
+      "executionAuthority": "none"
+    },
+    "repeatPublished": {
+      "receiptId": "construction:90:90:city-rock_quarry",
+      "origin": {
+        "owner": "Construction",
+        "workCycleId": 90,
+        "orderingGeneration": 90,
+        "period": 720,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "identityProvenance": {
+          "source": "captured-runtime-shared-progression-reader",
+          "samplePoint": "post-construction-success"
+        }
+      },
+      "targetBuildingId": "city-rock_quarry",
+      "result": "verified-purchase",
+      "nativePostcondition": {
+        "source": "captured-build-count-postcondition",
+        "targetBuildingId": "city-rock_quarry",
+        "beforeCount": 0,
+        "afterCount": 1,
+        "actionReportedSuccess": true,
+        "constructionCycleCompleted": true
+      },
+      "cost": { "Lumber": 50, "Stone": 10 },
+      "requestIdentity": {
+        "requestId": "p53-test-only-city-rock-quarry-v1",
+        "generation": 1
+      },
+      "executionAuthority": "none"
+    },
+    "repeatConsumed": {
+      "kind": "receipt-consumed",
+      "receiptId": "construction:90:90:city-rock_quarry",
+      "status": "correlated-owner-event",
+      "reason": "same-runtime-identities-and-current-jobs-observation",
+      "period": 720,
+      "receiptAgePeriods": 0,
+      "receiptAgeWorkCycles": 0,
+      "ownerScope": "ordinary-jobs-only",
+      "ownerSessionFreshness": "verified-current",
+      "jobsPreparationGeneration": 90,
+      "workCycleIdentity": 90,
+      "capturedRootIdentity": {
+        "preparationGeneration": 90,
+        "referenceMatchedAtExecution": true
+      },
+      "progressionEvidence": {
+        "workCycle": 90,
+        "progressionEpoch": "unavailable",
+        "rootGeneration": "unavailable"
+      },
+      "identityEvidence": {
+        "constructionSource": "verified",
+        "jobsSource": "verified",
+        "sameRuntimeSource": true,
+        "constructionSamplePoint": "post-construction-success",
+        "jobsSamplePoint": "jobs-owner-admission",
+        "constructionRootGeneration": 0,
+        "jobsRootGeneration": 0,
+        "constructionProgressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "jobsProgressionFingerprint": "0|7:9|4:0|27|human|standard|0|0|anarchy|1|0|0|0",
+        "jobsPreparationGeneration": 90
+      },
+      "progressionRelationship": "same-fingerprint",
+      "nativeMutationsAfterPublication": [],
+      "quarryWorker": { "status": "observed", "unlocked": true },
+      "plannedDecisionIdentity": "[\"assign-jobs\",[[0,0,0],[3,2,0],[5,2,0]],5,false,false,0,4,2,null,true,null,null,null]",
+      "crossOwnerIdentity": {
+        "workCycle": "matched-current",
+        "rootGeneration": "matched-current",
+        "progression": "same-fingerprint",
+        "runtimeSource": "same-runtime-reader"
+      },
+      "executionAuthority": "none"
+    },
+    "correlatedThroughP52": true,
+    "classification": "correlated-owner-event",
+    "executionAuthority": "none",
+    "oneTimeConsumption": true
+  },
+  "measurements": {
+    "ownerDecisionEvaluation": {
+      "count": 1,
+      "totalMilliseconds": 0,
+      "maximumMilliseconds": 0
+    },
+    "savingRevisionConstructionCount": 1,
+    "requestSourceReadsThroughDecision": 182,
+    "additionalIdentitySampling": {
+      "contextSamples": 3,
+      "attributedNativeRootReads": 6,
+      "rootReadsPerContextSample": 2,
+      "reason": "The existing progression reader reads the native root once for root generation and once for the progression fingerprint."
+    },
+    "additionalNativeEvidenceReads": {
+      "nativeQueueAndScriptReservationSamples": 1,
+      "nativeActionAuthorityReads": 2,
+      "currentNativePriceReads": 2,
+      "addedResourceOrCatalogReads": 0,
+      "resourceSampling": "No additional holdings/resource sample.",
+      "priceSampling": "One current-price verification at admission and one before native execution; the 2 buildQueue.setData calls are recorded separately."
+    },
+    "eventMetrics": {
+      "retainedEventCount": 1,
+      "retainedBytes": 1028,
+      "eventOverflow": 0
+    },
+    "maximumSynchronousCallbackMilliseconds": 0,
+    "existingConflictReaderTiming": {
+      "P42": { "calls": 1, "elapsedMilliseconds": 11.099999999627471 },
+      "C": { "calls": 1, "elapsedMilliseconds": 7.799999998882413 },
+      "note": "Existing reader timing is synchronous diagnostic time, not renderer CPU share."
+    },
+    "dormantPath": {
+      "ownerDecisionEvaluations": 0,
+      "ownerDecisionEvents": 0,
+      "requestSourceReadsAtPeriod719": 178,
+      "requestSourceReadsThroughCDecision": 182,
+      "contextIdentitySamples": 0,
+      "reservationEvidenceReads": 0,
+      "nativeControlAuthorityReads": 0,
+      "nativePriceReads": 0,
+      "theseAreBoundedLocalRequestLookups": "No resource, price, queue, catalog, or target-wide native scan is triggered by these lookups.",
+      "constructionRequest": null,
+      "nativeActionsAdded": 0,
+      "recurringGlobalScans": 0
+    }
+  },
+  "staticContract": {
+    "admissionOutcomes": [
+      "accepted-for-owner-decision",
+      "rejected-target-unavailable",
+      "rejected-priority-conflict",
+      "rejected-incomplete-authority",
+      "rejected-unaffordable",
+      "stale",
+      "inactive"
+    ],
+    "historicalPublicationPreserved": true,
+    "p53CompileDefinePresent": true
+  },
+  "artifacts": {
+    "bundleSha256": "e519f0b8c07fb27c604c3321b9a64daa767dfc95c1b905ad4de8e13cb20370b8",
+    "replayHarnessSha256": "2570e67d92758d82964ae89626e32c184d7f88ccb2a44ccfa3bb766d544228f9",
+    "sourceHashes": {
+      "build-config.mjs": "067e4389fe7a47cb62b9f1deb971e431211f28c0b3f26daa8b3bef347ac2e03c",
+      "src/application/build.ts": "a3b2486e4b5520c08c5e68ec743c528b10f537a7d407b7d6db06691982a9f0c0",
+      "src/ports/build.ts": "03ce17e0e6da9461c537c3dd555dbeb3c41f764895c64722e830daeba4c500ea",
+      "src/ports/construction-candidates.ts": "b32465f21c506305190be385f5cfeba79d4a992c4c8b6a168e3df8c30120faa7",
+      "src/ports/game-construction-observations.ts": "ed6a0f979e81c1525fa7dff38b88e6d4b9c65600d7d28855e1edb4ee6553c883",
+      "src/adapters/evolve/progression/construction/captured-construction.ts": "8e0bae04e86c7cd23660b75e1ac26e3b0d42b795ada1ad50b80e573c06ed1d66",
+      "src/adapters/evolve/progression/build/captured-build.ts": "9ee774636fcda762629c4c6d26c0056a69d3b65b790011a53b603d29cc70bbec",
+      "src/adapters/evolve/captured-cost-conflict.ts": "cf47793256d63e42caebbb99e81f8526d3d5f0e6a85566d7c8e964dcf2aebcf2",
+      "src/adapters/evolve/captured-action-costs.ts": "d86fb0cc3e791dc7159703c7562517a114472a1b710f1c8b17a535e101984ef3",
+      "src/adapters/evolve/captured-queue-reservations.ts": "b1c776e97531519b2d5a358a763653795ff60286bb7a6d8143b5c41f26bcb59b",
+      "src/bootstrap/captured-construction-control.ts": "a584fa53def2b8a801765d072b3385db29bc74788d2dfcaf3c9e6aa04a3f2df0",
+      "src/bootstrap/captured-progression-control.ts": "d001b3a3dbd87f001e9b304a96b578dc762e0310774b3a2ef40cebf1e3203f97",
+      "src/bootstrap/captured-runtime-control.ts": "12b26acd92f2d1da74ef7641ba39828df167b5b67dd759189f43e8ce7f403c95",
+      "src/domain/progression/build/construction-target-admission.ts": "31278f9bd337d729c00a91e2abeb1d2784ea1a81a7472723812258f2f2f0f5be",
+      "experiments/p42-construction-priority-counterfactual-policy.mjs": "d0cb22e450d75db984ad823346c8b9ba0635036c2f892ad543e11096e9c49302",
+      "experiments/p40-construction-reservation-gate-trace.mjs": "1034642c64795ffeade54ba1c7bb5dbf512e1282d6eb913457c5dc575bf28d6e",
+      "experiments/p42-construction-priority-counterfactual-trace.mjs": "3194a1e02de4912f1c81a627a756f86d6a6e4c95c1a66a7f73db73e05cda3d27",
+      "experiments/p51-construction-jobs-handoff-contract.mjs": "5a41a63aaadc75648a07e0b0cabd2f0f5a7706624d7efc18ff34cb8fb16e5399",
+      "experiments/p51-construction-jobs-handoff-trace.mjs": "ac25a840f181e5134ccf32d6b68b78f15bd4cf629f19593d87805097ec1ab250",
+      "experiments/p53-construction-owned-target-authority-contract.mjs": "4796e393f938806422818f8a5abe769a79006c52e80d314d04bce74d2d8e7639",
+      "experiments/p53-construction-owned-target-authority-evidence.mjs": "e9ac24a3c67ca7d83044ed278e8233d0b1798ae65fe401b8cb5a6b1cc0fe6b6f",
+      "experiments/p53-construction-owned-target-authority-exact.mjs": "b919405cd947a05de19e768dceee6d6782b015b12cacccd4a2e6534aa3dc998c",
+      "experiments/p38-quarry-production-validation-exact.mjs": "2570e67d92758d82964ae89626e32c184d7f88ccb2a44ccfa3bb766d544228f9",
+      "tests/experiments/p53-construction-owned-target-authority-test.mjs": "e8c0378d6ca443031fca07150f764dd4d130cf87d40b892911a23f2c41f2744b",
+      "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs": "1fc1e44810b713662cc821bef1e9faec00c0b003999aea794215feabacdb9c41",
+      "tools/chromium-evolve-runner.mjs": "fd3a8f3f4b1b7ac47d4424ec603c28459c3b61766dd76a4509ea46ce044d7059",
+      "tools/chromium/bridge.js": "88f0c7671faaefefdd394e706d46dea965e0390eb56fa7d5740d44eeb4132120"
+    },
+    "missingBaselineTunedFixture": {
+      "path": "test-artifacts/benchmark/settings/baseline-tuned.json",
+      "status": "absent",
+      "note": "The existing native-parity fixture is absent. P53 uses the controlled exact Chromium replay and makes no native-parity benchmark claim."
+    },
+    "rendererCpuClaim": "not made; the ≤2% requirement remains unresolved"
+  },
+  "limitations": [
+    "Matching P42's Quarry purchase does not establish economic improvement; P43/P44 left Food sustainability unresolved.",
+    "The test request grants no production authority, material gathering, or Jobs assignment permission.",
+    "Owner callback timings do not establish renderer CPU share."
+  ]
+}

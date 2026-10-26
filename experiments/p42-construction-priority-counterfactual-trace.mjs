@@ -69,7 +69,13 @@ function instrumentConstructionAdapter(source) {
 
   return replaceOnce(
     source,
-    "      evaluated = conflicts.evaluate(candidate.cost, candidate.pool, candidate.key);",
+    [
+      "        evaluated = conflicts.evaluate(",
+      "          candidate.cost,",
+      "          candidate.pool,",
+      "          candidate.key,",
+      "        );",
+    ].join("\n"),
     [
       "      const __p42BuildConflictRead = __p40Hooks?.p42Mode === true;",
       "      if (__p42BuildConflictRead) __p40Hooks.p42BuildConflictReadActive = true;",
