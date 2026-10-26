@@ -58,6 +58,21 @@ const productionOnlyNames = [
   "readReservationEvidence",
   "p53ConstructionRequest",
   "p53OwnerDecision",
+  "__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__",
+  "p54ConstructionRequestEventSinkForTest",
+  "p54PendingRequestForTest",
+  "p54EventFedActivation",
+  "p54Metrics",
+  "readRootObservationCountForTest",
+  "recordContextRootObservations",
+  "onRootObservationSample",
+  "localPendingRequestCheckTotalMs",
+  "nativeControlAuthorityRootObservations",
+  "nativePriceProbeCalls",
+  "readActionAuthority",
+  "constructionRequestLatchForTest",
+  "activationModeReportedForTest",
+  "rootObservationCountForTest",
 ];
 const productionOnlyStrings = [
   "p48-allocation-diagnostic-observation",
@@ -78,6 +93,13 @@ const productionOnlyStrings = [
   "p53-test-only-city-rock-quarry-v1",
   "explicit-test-only-priority-replacement",
   "bounded-test-only-request-and-current-evidence-match",
+  "local-pending-request-check",
+  "requestCancellationEvents",
+  "p54-test-only-event-fed-construction-request",
+  "contextRootObservations",
+  "native-control-authority-read",
+  "native-price-authority",
+  "native-action-execution",
 ];
 
 async function bundle(
@@ -85,6 +107,7 @@ async function bundle(
   p51Surface = false,
   p52Surface = false,
   p53Surface = false,
+  p54Surface = false,
 ) {
   assert.equal(
     (p51Surface || p52Surface) && !testSurface,
@@ -101,6 +124,11 @@ async function bundle(
     false,
     "P53 comparison requires the retained P51/P52 test surface",
   );
+  assert.equal(
+    p54Surface && !p53Surface,
+    false,
+    "P54 activation requires the retained P53 owner-authority test surface",
+  );
   const result = await esbuild.build({
     ...createBuildOptions({
       root: repositoryRoot,
@@ -108,6 +136,7 @@ async function bundle(
       banner: { js: "" },
       testSurface,
       p53Surface,
+      p54Surface,
     }),
     ...(p51Surface
       ? { plugins: [createP51ConstructionJobsHandoffPlugin(p52Surface)] }
@@ -196,6 +225,9 @@ for (const name of [
   "revisionControlGeneration",
   "currentConflictCandidateKey",
   "admissionRequestReadFailed",
+  "activationModeReportedForTest",
+  "constructionRequestLatchForTest",
+  "rootObservationCountForTest",
 ]) {
   const nodes = production.identifierNodes.get(name) ?? [];
   assert.ok(
@@ -257,6 +289,17 @@ assert.equal(testSurface.functions.has(fullJobsProjection), true);
 assert.equal(testSurface.functions.has(decisionIdentity), true);
 assert.equal(testSurface.calls.get(admissionFunction), 1);
 assert.equal(testSurface.calls.get(observerFunction), 2);
+for (const marker of [
+  "p54ConstructionRequestEventSinkForTest",
+  "readRootObservationCountForTest",
+  "local-pending-request-check",
+]) {
+  assert.equal(
+    testSurface.identifiers.has(marker) || testSurface.strings.has(marker),
+    false,
+    `ordinary test surface unexpectedly includes P54 activation code ${marker}`,
+  );
+}
 for (const marker of [
   "p48-allocation-diagnostic-observation",
   "maintain-food-buffer-and-useful-stone-production",
@@ -408,6 +451,36 @@ for (const marker of [
   );
 }
 
+for (const name of [
+  "p54ConstructionRequestEventSinkForTest",
+  "readRootObservationCountForTest",
+  "rootObservationCountForTest",
+  "activationModeReportedForTest",
+  "constructionRequestLatchForTest",
+  "local-pending-request-check",
+]) {
+  assert.equal(
+    p53Surface.identifiers.has(name) || p53Surface.strings.has(name),
+    false,
+    `ordinary P53 test surface unexpectedly includes P54 activation code ${name}`,
+  );
+}
+
+const p54Surface = await bundle(true, true, true, true, true);
+for (const marker of [
+  "p54ConstructionRequestEventSinkForTest",
+  "readRootObservationCountForTest",
+  "local-pending-request-check",
+  "requestCancellationEvents",
+  "native-action-execution",
+]) {
+  assert.equal(
+    p54Surface.identifiers.has(marker) || p54Surface.strings.has(marker),
+    true,
+    `P54 exact test surface omits activation/cost marker ${marker}`,
+  );
+}
+
 console.log(
-  "P50 production diagnostic isolation and P51/P52 test-only handoff retention tests passed",
+  "P50 production diagnostic isolation and P51/P52/P53/P54 test-only surface retention tests passed",
 );

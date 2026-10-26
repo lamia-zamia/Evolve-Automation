@@ -79,6 +79,11 @@ assert.deepEqual(accepted.revision, {
   lifetime: "this-construction-cycle",
 });
 assert.equal(qualifyP53QuarryRequest(P53_QUARRY_REQUEST, "C").qualified, true);
+assert.equal(qualifyP53QuarryRequest(P53_QUARRY_REQUEST, "D").qualified, true);
+assert.equal(
+  qualifyP53QuarryRequest(P53_QUARRY_REQUEST, "D-repeat").qualified,
+  true,
+);
 assert.equal(
   qualifyP53QuarryRequest(P53_QUARRY_REQUEST, "C-repeat").qualified,
   true,
@@ -288,6 +293,7 @@ for (const [name, override, status] of rejected) {
 // Enable the narrowly compiled test seam before loading the adapter module.
 globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
 globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ = true;
+globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ = true;
 const [
   { createCapturedConstructionAdapter },
   { createCapturedCostConflictReader },
@@ -308,6 +314,7 @@ function makeOwnerCycle({
   prepare = true,
   onBeforeCurrentCycle = () => {},
   initialNativePrice = { Lumber: 50, Stone: 10 },
+  eventFed = false,
 } = {}) {
   const root = {
     tech: {},
@@ -320,11 +327,14 @@ function makeOwnerCycle({
   };
   let period = 719;
   let liveRequest = request;
+  let localPendingRequest = request;
   let liveNativePrice = initialNativePrice;
   let liveProgressionGeneration = "standard-human|progression-4";
   let ownerAdapter;
   let sourceCycle = 0;
   const decisions = [];
+  const operationSamples = [];
+  const requestLifecycle = [];
   const reservationReads = [];
   const purchases = [];
   const nativeInvocations = [];
@@ -491,7 +501,9 @@ function makeOwnerCycle({
       saveWhiteholeGems: false,
     }),
     targetAdmissionForTest: {
-      readRequest: () => liveRequest,
+      readRequest: () => (eventFed ? localPendingRequest : liveRequest),
+      eventFed,
+      readRootObservationCountForTest: () => 0,
       readContext: () => ({
         period,
         rootGeneration: 4,
@@ -499,6 +511,19 @@ function makeOwnerCycle({
       }),
       onDecision: (decision, candidateKey) =>
         decisions.push({ decision, candidateKey }),
+      onOperation: (operation) => operationSamples.push(operation),
+      onRequestConsumed: (request) => {
+        if (localPendingRequest === request) localPendingRequest = undefined;
+        requestLifecycle.push("consumed");
+      },
+      onRequestExpired: (request) => {
+        if (localPendingRequest === request) localPendingRequest = undefined;
+        requestLifecycle.push("expired");
+      },
+      onRequestInvalidated: (request) => {
+        if (localPendingRequest === request) localPendingRequest = undefined;
+        requestLifecycle.push("invalidated");
+      },
     },
   });
 
@@ -526,7 +551,15 @@ function makeOwnerCycle({
     liveRequest: () => liveRequest,
     replaceRequest(next) {
       liveRequest = next;
+      if (eventFed) localPendingRequest = next;
     },
+    cancelRequest() {
+      liveRequest = undefined;
+      if (eventFed) localPendingRequest = undefined;
+    },
+    pendingRequest: () => localPendingRequest,
+    operationSamples,
+    requestLifecycle,
     reservationReads,
     purchases,
     nativeInvocations,
@@ -578,6 +611,34 @@ function makeOwnerCycle({
   assert.equal(second.disposition, "candidate-rejected");
   assert.deepEqual(cycle.purchases, ["city-rock_quarry"]);
   assert.equal(cycle.adapter.observations.readSavingTarget().name, "city-farm");
+}
+
+// Event-fed Construction reads the exact pending request locally and releases it only after the
+// same native action and verified postcondition succeed.
+{
+  const cycle = makeOwnerCycle({ eventFed: true });
+  assert.equal(
+    cycle.decisions.at(-1).decision.status,
+    "accepted-for-owner-decision",
+  );
+  assert.ok(cycle.operationSamples.includes("local-pending-request-check"));
+  assert.equal(cycle.pendingRequest(), P53_QUARRY_REQUEST);
+  const result = cycle.adapter.executor.executeClick({
+    index: 0,
+    key: "city-rock_quarry",
+  });
+  assert.equal(result.disposition, "verified-success");
+  assert.deepEqual(cycle.nativeInvocations, ["city-rock_quarry"]);
+  assert.deepEqual(cycle.requestLifecycle, ["consumed"]);
+  assert.equal(cycle.pendingRequest(), undefined);
+  assert.equal(
+    cycle.adapter.executor.executeClick({
+      index: 0,
+      key: "city-rock_quarry",
+    }).disposition,
+    "candidate-rejected",
+  );
+  assert.deepEqual(cycle.nativeInvocations, ["city-rock_quarry"]);
 }
 
 // A denied replacement leaves the old saving priority active and lets an unrelated native action proceed.
@@ -637,7 +698,7 @@ for (const invalidation of [
   "progression",
   "price",
 ]) {
-  const cycle = makeOwnerCycle();
+  const cycle = makeOwnerCycle({ eventFed: true });
   if (invalidation === "root") cycle.replaceRoot();
   if (invalidation === "control") cycle.setControlGeneration(10);
   if (invalidation === "request")
@@ -655,6 +716,28 @@ for (const invalidation of [
   });
   assert.equal(result.disposition, "candidate-rejected", invalidation);
   assert.deepEqual(cycle.purchases, [], invalidation);
+}
+
+// A cancellation/replacement before the Construction decision or execution invalidates the
+// original exact request object; an expired request is released at the next owner cycle.
+{
+  const cancelled = makeOwnerCycle({ eventFed: true });
+  cancelled.cancelRequest();
+  assert.equal(
+    cancelled.adapter.executor.executeClick({
+      index: 0,
+      key: "city-rock_quarry",
+    }).disposition,
+    "candidate-rejected",
+  );
+  assert.equal(cancelled.pendingRequest(), undefined);
+  assert.deepEqual(cancelled.purchases, []);
+
+  const expired = makeOwnerCycle({ eventFed: true });
+  expired.adapter.reader.finishCycle(true);
+  expired.adapter.reader.beginCycle();
+  assert.equal(expired.pendingRequest(), undefined);
+  assert.deepEqual(expired.requestLifecycle, ["expired"]);
 }
 
 // An unavailable source rejects the requested action and leaves P41's conflict reader fail-closed.
