@@ -91,7 +91,12 @@ export interface CapturedConstructionDependencies {
   readonly readStateLogPlannerDetailsDue?: () => boolean;
   /** Prospective test-only authority; erased from ordinary bundles at build time. */
   readonly targetAdmissionForTest?: Readonly<{
-    readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readRequest: (
+      eventFed?: boolean,
+    ) => ConstructionTargetAdmissionRequest | undefined;
+    readEventFedMode?: () => boolean;
+    /** Compatibility for existing test owners that provide a fixed activation mode. */
+    eventFed?: boolean;
     readRootObservationCountForTest?: () => number | undefined;
     readContext: () =>
       | Readonly<{
@@ -116,8 +121,29 @@ export interface CapturedConstructionDependencies {
         | "construction-cycle",
       elapsedMs?: number,
     ) => void;
-    eventFed?: boolean;
-    onActivationModeSample?: (enabled: boolean) => void;
+    onActivationModeSample?: (
+      enabled: boolean,
+      boundary:
+        | "adapter-created"
+        | "cycle-begin"
+        | "admission"
+        | "publication-finish"
+        | "execution-revalidation",
+      workCycleId: number,
+      request?: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onPublicationAuthoritySample?: (
+      sample: Readonly<{
+        constructionWorkCycleId: number;
+        nextWorkCycleId: number;
+        capturedContextPeriod: number | null;
+        completedIntentCandidateKeys: readonly string[];
+        requestId: string | null;
+        requestGeneration: number | null;
+        capturedRootGeneration: number | null;
+        capturedProgressionGeneration: string | null;
+      }>,
+    ) => void;
     onRequestConsumed?: (
       request: Readonly<ConstructionTargetAdmissionRequest>,
     ) => void;
@@ -319,6 +345,15 @@ export function createCapturedConstructionAdapter(
   let currentConflictCandidateKey: string | undefined;
   let admissionRequestReadFailed: boolean | undefined;
   if (globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true) {
+    if (
+      globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
+      targetAdmissionForTest !== undefined
+    )
+      targetAdmissionForTest.onActivationModeSample?.(
+        targetAdmissionForTest.readEventFedMode?.() === true,
+        "adapter-created",
+        constructionCycleId,
+      );
     candidateAffordable = new Map();
     admissionAttempted = false;
     admissionAcceptedForCycle = false;
@@ -493,7 +528,13 @@ export function createCapturedConstructionAdapter(
   }
 
   let readTargetAdmissionRequest:
-    | (() => Readonly<ConstructionTargetAdmissionRequest> | undefined)
+    | ((
+        boundary:
+          | "cycle-begin"
+          | "admission"
+          | "publication-finish"
+          | "execution-revalidation",
+      ) => Readonly<ConstructionTargetAdmissionRequest> | undefined)
     | undefined;
   let reportTargetAdmissionDecision:
     | ((
@@ -545,24 +586,32 @@ export function createCapturedConstructionAdapter(
             : Math.max(0, finishedAt - startedAt),
       });
     };
-    readTargetAdmissionRequest = ():
-      Readonly<ConstructionTargetAdmissionRequest> | undefined => {
+    readTargetAdmissionRequest = (
+      boundary,
+    ): Readonly<ConstructionTargetAdmissionRequest> | undefined => {
       if (targetAdmissionForTest === undefined) return undefined;
+      const configuredEventFedMode =
+        targetAdmissionForTest.readEventFedMode?.() ??
+        targetAdmissionForTest.eventFed === true;
       const eventFed =
         globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
-        targetAdmissionForTest.eventFed === true;
-      if (globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true) {
-        targetAdmissionForTest.onActivationModeSample?.(eventFed);
-      }
+        configuredEventFedMode;
       const startedAt =
         globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
         typeof performance !== "undefined"
           ? performance.now()
           : undefined;
       try {
-        const request = targetAdmissionForTest.readRequest();
+        const request = targetAdmissionForTest.readRequest(eventFed);
         const finishedAt =
           startedAt === undefined ? undefined : performance.now();
+        if (globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true)
+          targetAdmissionForTest.onActivationModeSample?.(
+            eventFed,
+            boundary,
+            constructionCycleId,
+            request,
+          );
         reportTargetAdmissionOperation?.(
           globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
             eventFed
@@ -575,6 +624,12 @@ export function createCapturedConstructionAdapter(
         return request;
       } catch {
         admissionRequestReadFailed = true;
+        if (globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true)
+          targetAdmissionForTest.onActivationModeSample?.(
+            eventFed,
+            boundary,
+            constructionCycleId,
+          );
         reportTargetAdmissionOperation?.(
           globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
             eventFed
@@ -631,7 +686,7 @@ export function createCapturedConstructionAdapter(
         return;
       }
       admissionAttempted = true;
-      const currentRequest = readTargetAdmissionRequest?.();
+      const currentRequest = readTargetAdmissionRequest?.("admission");
       if (
         currentRequest === undefined ||
         currentRequest.requestId !== request.requestId ||
@@ -845,7 +900,7 @@ export function createCapturedConstructionAdapter(
         targetAdmissionForTest !== undefined &&
         !orderingOnly
       ) {
-        admissionRequestForCycle = readTargetAdmissionRequest?.();
+        admissionRequestForCycle = readTargetAdmissionRequest?.("cycle-begin");
         if (
           globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true &&
           admissionRequestForCycle?.active === true &&
@@ -1021,7 +1076,9 @@ export function createCapturedConstructionAdapter(
               globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__ === true &&
               targetAdmissionForTest !== undefined
             ) {
-              const request = readTargetAdmissionRequest?.();
+              const request =
+                readTargetAdmissionRequest?.("publication-finish");
+              let capturedContextPeriod: number | null = null;
               if (
                 request?.active === true &&
                 request.scope?.workCycleId === constructionCycleId + 1 &&
@@ -1034,6 +1091,7 @@ export function createCapturedConstructionAdapter(
                     : undefined;
                 try {
                   const context = targetAdmissionForTest.readContext();
+                  capturedContextPeriod = context?.period ?? null;
                   if (
                     context !== undefined &&
                     context.period < request.scope?.period
@@ -1053,6 +1111,29 @@ export function createCapturedConstructionAdapter(
                     : Math.max(0, performance.now() - contextStartedAt),
                 );
               }
+              if (
+                globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
+                  true &&
+                constructionCycleId === 89
+              )
+                targetAdmissionForTest.onPublicationAuthoritySample?.(
+                  Object.freeze({
+                    constructionWorkCycleId: constructionCycleId,
+                    nextWorkCycleId: constructionCycleId + 1,
+                    capturedContextPeriod,
+                    completedIntentCandidateKeys: Object.freeze(
+                      (completedIntent ?? []).map(
+                        ({ candidate }) => candidate.key,
+                      ),
+                    ),
+                    requestId: request?.requestId ?? null,
+                    requestGeneration: request?.generation ?? null,
+                    capturedRootGeneration:
+                      completedAuthorityForTest?.rootGeneration ?? null,
+                    capturedProgressionGeneration:
+                      completedAuthorityForTest?.progressionGeneration ?? null,
+                  }),
+                );
             }
           }
         }
@@ -1289,7 +1370,9 @@ export function createCapturedConstructionAdapter(
           admissionAcceptedForCycle === true &&
           request?.targetBuildingId === decision.key;
         if (p53AuthorizedForCandidate && request !== undefined) {
-          const currentRequest = readTargetAdmissionRequest?.();
+          const currentRequest = readTargetAdmissionRequest?.(
+            "execution-revalidation",
+          );
           let currentContext:
             | Readonly<{
                 period: number;

@@ -185,7 +185,10 @@ export interface CapturedProgressionControlDependencies {
   readonly readComputedResearchRequirementsEnabled?: () => boolean;
   /** Test-surface-only Construction target admission request and owner identity. */
   readonly constructionTargetAdmissionForTest?: Readonly<{
-    readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readRequest: (
+      eventFed?: boolean,
+    ) => ConstructionTargetAdmissionRequest | undefined;
+    readEventFedMode?: () => boolean;
     readRootObservationCountForTest?: () => number | undefined;
     readContext: () =>
       | Readonly<{
@@ -210,8 +213,29 @@ export interface CapturedProgressionControlDependencies {
         | "construction-cycle",
       elapsedMs?: number,
     ) => void;
-    readonly eventFed?: boolean;
-    readonly onActivationModeSample?: (enabled: boolean) => void;
+    readonly onActivationModeSample?: (
+      enabled: boolean,
+      boundary:
+        | "adapter-created"
+        | "cycle-begin"
+        | "admission"
+        | "publication-finish"
+        | "execution-revalidation",
+      workCycleId: number,
+      request?: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    readonly onPublicationAuthoritySample?: (
+      sample: Readonly<{
+        constructionWorkCycleId: number;
+        nextWorkCycleId: number;
+        capturedContextPeriod: number | null;
+        completedIntentCandidateKeys: readonly string[];
+        requestId: string | null;
+        requestGeneration: number | null;
+        capturedRootGeneration: number | null;
+        capturedProgressionGeneration: string | null;
+      }>,
+    ) => void;
     onRequestConsumed?: (
       request: Readonly<ConstructionTargetAdmissionRequest>,
     ) => void;

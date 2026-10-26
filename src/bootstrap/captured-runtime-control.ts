@@ -412,8 +412,79 @@ function createP54ConstructionActivationForTest(
       : undefined;
   let currentPhase: "dormant" | "pending" | "active" | "consumed" =
     pendingRequest === undefined ? "dormant" : "pending";
+  const activationModeSamples: Readonly<Record<string, unknown>>[] = [];
+  const readActivationPeriod = (): number | null => {
+    const reader = readProperty(hooks, "p54ReadPeriodForTest");
+    if (typeof reader === "function") {
+      try {
+        const period = Reflect.apply(reader, hooks, []);
+        return typeof period === "number" && Number.isSafeInteger(period)
+          ? period
+          : null;
+      } catch {
+        return null;
+      }
+    }
+    const fallback = readProperty(hooks, "p40CurrentPeriod");
+    return typeof fallback === "number" && Number.isSafeInteger(fallback)
+      ? fallback
+      : null;
+  };
+  const flushActivationModeSamples = (): void => {
+    if (metrics === undefined) return;
+    Reflect.set(metrics, "activationModeSamples", [...activationModeSamples]);
+    const adapterCreated = activationModeSamples.find(
+      (sample) => readProperty(sample, "boundary") === "adapter-created",
+    );
+    if (adapterCreated !== undefined)
+      Reflect.set(
+        metrics,
+        "constructionAdapterEventFedAtInitialization",
+        readProperty(adapterCreated, "eventFed"),
+      );
+  };
+  const recordActivationModeSample = (
+    boundary: string,
+    eventFed: boolean,
+    workCycleId?: number,
+    request?: Readonly<ConstructionTargetAdmissionRequest>,
+  ): void => {
+    if (
+      boundary !== "runtime-created" &&
+      boundary !== "runtime-configured" &&
+      boundary !== "adapter-created" &&
+      workCycleId !== 89 &&
+      workCycleId !== 90
+    )
+      return;
+    if (activationModeSamples.length >= 64) return;
+    const hookedRequest = readProperty(hooks, "p53ConstructionRequest");
+    const requestSource = eventFed ? pendingRequest : hookedRequest;
+    activationModeSamples.push(
+      Object.freeze({
+        boundary,
+        eventFed,
+        workCycleId: workCycleId ?? null,
+        period: readActivationPeriod(),
+        requestId: request?.requestId ?? null,
+        requestGeneration: request?.generation ?? null,
+        requestSource: eventFed
+          ? "runtime-event-latch"
+          : "p53-construction-hook",
+        requestSourceIdentityMatches:
+          request === requestSource && request !== undefined,
+      }),
+    );
+    flushActivationModeSamples();
+  };
   if (metrics !== undefined)
     Reflect.set(metrics, "runtimeEventFedActivation", eventFedActivation);
+  recordActivationModeSample(
+    "runtime-created",
+    eventFedActivation,
+    undefined,
+    pendingRequest,
+  );
   const addMetric = (key: string, amount = 1): void => {
     if (metrics === undefined) return;
     Reflect.set(metrics, key, Number(readProperty(metrics, key) ?? 0) + amount);
@@ -475,6 +546,12 @@ function createP54ConstructionActivationForTest(
           pendingRequest = isRecord(request)
             ? (request as unknown as ConstructionTargetAdmissionRequest)
             : undefined;
+          recordActivationModeSample(
+            "runtime-configured",
+            eventFedActivation,
+            undefined,
+            pendingRequest,
+          );
           currentPhase = pendingRequest === undefined ? "dormant" : "pending";
           if (pendingRequest !== undefined) {
             addMetric("initialPendingRequestCount");
@@ -503,6 +580,19 @@ function createP54ConstructionActivationForTest(
           );
           if (pendingRequest !== undefined)
             Reflect.set(metrics, "maximumPendingRequestReferences", 1);
+          const lifecycleSamples = readProperty(
+            metrics,
+            "requestLifecycleSamples",
+          );
+          if (Array.isArray(lifecycleSamples) && lifecycleSamples.length < 16)
+            lifecycleSamples.push(
+              Object.freeze({
+                period: readActivationPeriod(),
+                event: pendingRequest === undefined ? "cancel" : "install",
+                requestId: pendingRequest?.requestId ?? null,
+                requestGeneration: pendingRequest?.generation ?? null,
+              }),
+            );
         }
       },
     );
@@ -526,13 +616,39 @@ function createP54ConstructionActivationForTest(
     get eventFed() {
       return eventFedActivation;
     },
-    recordAdapterActivationMode(enabled: boolean): void {
-      if (metrics !== undefined)
-        Reflect.set(
-          metrics,
-          "constructionAdapterEventFedAtInitialization",
-          enabled,
-        );
+    recordAdapterActivationMode(
+      enabled: boolean,
+      boundary:
+        | "adapter-created"
+        | "cycle-begin"
+        | "admission"
+        | "publication-finish"
+        | "execution-revalidation",
+      workCycleId: number,
+      request?: Readonly<ConstructionTargetAdmissionRequest>,
+    ): void {
+      recordActivationModeSample(boundary, enabled, workCycleId, request);
+    },
+    recordPublicationAuthoritySample(
+      sample: Readonly<{
+        constructionWorkCycleId: number;
+        nextWorkCycleId: number;
+        capturedContextPeriod: number | null;
+        completedIntentCandidateKeys: readonly string[];
+        requestId: string | null;
+        requestGeneration: number | null;
+        capturedRootGeneration: number | null;
+        capturedProgressionGeneration: string | null;
+      }>,
+    ): void {
+      if (!experimentEnabled || metrics === undefined) return;
+      if (sample.constructionWorkCycleId !== 89) return;
+      const publicationSamples = readProperty(
+        metrics,
+        "publicationAuthoritySamples",
+      );
+      if (Array.isArray(publicationSamples) && publicationSamples.length < 16)
+        publicationSamples.push(Object.freeze({ ...sample }));
     },
     readPendingRequest: () => pendingRequest,
     readRootObservationCountForTest: readRootObservationCount,
@@ -1484,13 +1600,13 @@ export function startCapturedRuntime({
               : undefined;
           return {
             constructionTargetAdmissionForTest: {
-              readRequest: () => {
+              readRequest: (eventFedMode?: boolean) => {
                 if (
                   globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ ===
                     true &&
-                  constructionRequestLatchForTest?.eventFed === true
+                  eventFedMode === true
                 )
-                  return constructionRequestLatchForTest.readPendingRequest();
+                  return constructionRequestLatchForTest?.readPendingRequest();
                 const hooks = readProperty(
                   settingsHostWindow,
                   "__EA_TEST_HOOKS__",
@@ -1615,12 +1731,28 @@ export function startCapturedRuntime({
               },
               ...(globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__ === true
                 ? {
-                    get eventFed() {
-                      return constructionRequestLatchForTest?.eventFed === true;
-                    },
-                    onActivationModeSample: (enabled: boolean) =>
+                    readEventFedMode: () =>
+                      constructionRequestLatchForTest?.eventFed === true,
+                    onActivationModeSample: (
+                      enabled: boolean,
+                      boundary:
+                        | "adapter-created"
+                        | "cycle-begin"
+                        | "admission"
+                        | "publication-finish"
+                        | "execution-revalidation",
+                      workCycleId: number,
+                      request?: Readonly<ConstructionTargetAdmissionRequest>,
+                    ) =>
                       constructionRequestLatchForTest?.recordAdapterActivationMode(
                         enabled,
+                        boundary,
+                        workCycleId,
+                        request,
+                      ),
+                    onPublicationAuthoritySample: (sample) =>
+                      constructionRequestLatchForTest?.recordPublicationAuthoritySample(
+                        sample,
                       ),
                     readRootObservationCountForTest: () =>
                       constructionRequestLatchForTest?.readRootObservationCountForTest(),

@@ -102,7 +102,10 @@ export interface CapturedConstructionControlDependencies {
   readonly onSkipped?: (key: string, reason: string) => void;
   /** Test-surface-only prospective authority for one Construction candidate. */
   readonly targetAdmissionForTest?: Readonly<{
-    readRequest: () => ConstructionTargetAdmissionRequest | undefined;
+    readRequest: (
+      eventFed?: boolean,
+    ) => ConstructionTargetAdmissionRequest | undefined;
+    readEventFedMode?: () => boolean;
     readRootObservationCountForTest?: () => number | undefined;
     readContext: () =>
       | Readonly<{
@@ -127,8 +130,29 @@ export interface CapturedConstructionControlDependencies {
         | "construction-cycle",
       elapsedMs?: number,
     ) => void;
-    eventFed?: boolean;
-    onActivationModeSample?: (enabled: boolean) => void;
+    onActivationModeSample?: (
+      enabled: boolean,
+      boundary:
+        | "adapter-created"
+        | "cycle-begin"
+        | "admission"
+        | "publication-finish"
+        | "execution-revalidation",
+      workCycleId: number,
+      request?: Readonly<ConstructionTargetAdmissionRequest>,
+    ) => void;
+    onPublicationAuthoritySample?: (
+      sample: Readonly<{
+        constructionWorkCycleId: number;
+        nextWorkCycleId: number;
+        capturedContextPeriod: number | null;
+        completedIntentCandidateKeys: readonly string[];
+        requestId: string | null;
+        requestGeneration: number | null;
+        capturedRootGeneration: number | null;
+        capturedProgressionGeneration: string | null;
+      }>,
+    ) => void;
     onRequestConsumed?: (
       request: Readonly<ConstructionTargetAdmissionRequest>,
     ) => void;
