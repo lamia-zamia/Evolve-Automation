@@ -56,18 +56,20 @@ import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const p54Mode = process.argv.includes("--p54-construction-authority-cost");
 const p42Mode = process.argv.includes(
   "--p42-construction-priority-counterfactual",
 );
-const p53Mode = process.argv.includes(
-  "--p53-construction-owned-target-authority",
-);
+const p53Mode =
+  p54Mode || process.argv.includes("--p53-construction-owned-target-authority");
 const p52Mode =
   process.argv.includes("--p52-independent-construction-jobs-identity") ||
   p53Mode;
 const p51Mode =
   process.argv.includes("--p51-construction-jobs-handoff") || p52Mode;
 const p43Mode = process.argv.includes("--p43-food-safe-jobs");
+if (p54Mode && !p42Mode)
+  throw new Error("P54 requires the retained P42 Construction intervention");
 if (p51Mode && !p42Mode)
   throw new Error("P51 reuses the retained P42 Construction intervention");
 if (p43Mode && !p42Mode)
@@ -90,15 +92,17 @@ const bundlePath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs.user.js"
-    : p53Mode
-      ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority.user.js"
-      : p52Mode
-        ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity.user.js"
-        : p51Mode
-          ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
-          : p42Mode
-            ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
-            : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
+    : p54Mode
+      ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost.user.js"
+      : p53Mode
+        ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority.user.js"
+        : p52Mode
+          ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity.user.js"
+          : p51Mode
+            ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff.user.js"
+            : p42Mode
+              ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual.user.js"
+              : "test-artifacts/benchmark/tmp/p38-quarry-production-validation.user.js",
 );
 const evidencePath = path.join(
   root,
@@ -140,6 +144,10 @@ const p53EvidencePath = path.join(
   root,
   "experiments/p53-construction-owned-target-authority-evidence.json",
 );
+const p54EvidencePath = path.join(
+  root,
+  "experiments/p54-construction-authority-cost-evidence.json",
+);
 const p42PluginPath = path.join(
   root,
   "experiments/p42-construction-priority-counterfactual-trace.mjs",
@@ -160,15 +168,17 @@ const interimPath = path.join(
   root,
   p43Mode
     ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
-    : p53Mode
-      ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority-interim.json"
-      : p52Mode
-        ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
-        : p51Mode
-          ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
-          : p42Mode
-            ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
-            : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+    : p54Mode
+      ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost-interim.json"
+      : p53Mode
+        ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority-interim.json"
+        : p52Mode
+          ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
+          : p51Mode
+            ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
+            : p42Mode
+              ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+              : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -634,6 +644,7 @@ window.__EA_TEST_HOOKS__ = {
     "globalThis.__EA_TEST_SURFACE_ENABLED__": "true",
     __EA_TEST_SURFACE_ENABLED__: "true",
     "globalThis.__EA_P53_CONSTRUCTION_AUTHORITY_ENABLED__": String(p53Mode),
+    "globalThis.__EA_P54_CONSTRUCTION_ACTIVATION_ENABLED__": String(p54Mode),
   },
   minifySyntax: true,
   treeShaking: true,
@@ -694,12 +705,21 @@ if (process.argv.includes("--bundle-only")) {
 
 const runner = await createChromiumRunner({ game: gamePath });
 
-async function capture(session, period) {
+async function capture(session, period, arm) {
   const [state, diagnostics, native] = await Promise.all([
     session.readState(),
     session.diagnostics(),
     session.evaluate(
-      (period, p42Mode, p43Mode, p51Mode, p52Mode, p53Mode, quarryTarget) => {
+      (
+        period,
+        p42Mode,
+        p43Mode,
+        p51Mode,
+        p52Mode,
+        p53Mode,
+        p54Mode,
+        quarryTarget,
+      ) => {
         const hooks = window.__EA_TEST_HOOKS__;
         const p51State = hooks?.p51HandoffState ?? null;
         const publishedReceipt = p51State?.events?.find(
@@ -737,6 +757,9 @@ async function capture(session, period) {
             : p51State;
         const pageCapture =
           window[Symbol.for("evolve-automation.page-capture")];
+        const rootObservationCountAtCapture = p54Mode
+          ? (pageCapture?.rootState.readRootObservationCountForTest?.() ?? null)
+          : null;
         const global = pageCapture?.rootState.readRoot();
         const jobsSnapshot = p51Mode
           ? null
@@ -927,9 +950,37 @@ async function capture(session, period) {
                         ownerDecision: hooks?.p53OwnerDecision ?? null,
                         ownerDecisionEvents:
                           hooks?.p53OwnerDecisionEvents ?? [],
-                        metrics: hooks?.p53Metrics ?? null,
+                        metrics:
+                          p54Mode && hooks?.p53Metrics
+                            ? {
+                                ...hooks.p53Metrics,
+                                contextRootReads:
+                                  hooks?.p54Metrics?.contextRootObservations ??
+                                  null,
+                              }
+                            : (hooks?.p53Metrics ?? null),
                         eventBytes: hooks?.p53EventBytes ?? 0,
                         eventOverflow: hooks?.p53EventOverflow ?? 0,
+                      },
+                    }
+                  : {}),
+                ...(p54Mode
+                  ? {
+                      p54: {
+                        metrics: hooks?.p54Metrics
+                          ? JSON.parse(JSON.stringify(hooks.p54Metrics))
+                          : null,
+                        rootObservationCountAtCapture,
+                        rootCounterCallsite:
+                          "GameRootStateSource.readRoot actual-call counter",
+                        metricsEvidenceBytes:
+                          hooks?.p54Metrics === undefined
+                            ? 0
+                            : JSON.stringify(hooks.p54Metrics).length * 2,
+                        ownerDecision: hooks?.p53OwnerDecision ?? null,
+                        ownerDecisionEvents:
+                          hooks?.p53OwnerDecisionEvents ?? [],
+                        receiptEvents: hooks?.p51HandoffState?.events ?? [],
                       },
                     }
                   : {}),
@@ -948,6 +999,7 @@ async function capture(session, period) {
       p51Mode,
       p52Mode,
       p53Mode,
+      p54Mode,
       P42_EXPECTED.quarryTarget,
     ),
   ]);
@@ -1011,6 +1063,39 @@ async function capture(session, period) {
     nativeCallsSha256: hash(JSON.stringify(relevantNativeCalls)),
     nativeCallsCount: relevantNativeCalls.length,
     ...(p43Mode ? {} : { nativeCalls: relevantNativeCalls }),
+    ...(p54Mode
+      ? {
+          p54: {
+            ...native.p51.p54,
+            nativeInvocationCount: (diagnostics.nativeInvocations ?? []).length,
+            nativeInvocationSequenceSha256: hash(
+              JSON.stringify(diagnostics.nativeInvocations ?? []),
+            ),
+            nativeInvocationPeriod: (
+              diagnostics.nativeInvocations ?? []
+            ).filter((entry) => entry.period === period),
+            nativeInvocationPeriodCount: (
+              diagnostics.nativeInvocations ?? []
+            ).filter((entry) => entry.period === period).length,
+            nativeInvocationSequence:
+              period === 720 || period === 719
+                ? (diagnostics.nativeInvocations ?? [])
+                : undefined,
+            nativePriceProbeCount: (diagnostics.nativeInvocations ?? []).filter(
+              (entry) =>
+                entry.elementId === "buildQueue" && entry.method === "setData",
+            ).length,
+            periodNativePriceProbeCount: (
+              diagnostics.nativeInvocations ?? []
+            ).filter(
+              (entry) =>
+                entry.period === period &&
+                entry.elementId === "buildQueue" &&
+                entry.method === "setData",
+            ).length,
+          },
+        }
+      : {}),
     randomCalls: diagnostics.randomCalls,
     rngState: diagnostics.rngState,
     native: {
@@ -1179,6 +1264,79 @@ async function replay(
               hooks.p53Metrics.maximumSynchronousCallbackMs,
               performance.now() - startedAt,
             );
+          };
+        }
+        if (configuration.p54Mode) {
+          hooks.p54EventFedActivation = configuration.p54EventFed === true;
+          hooks.p54Metrics = {
+            eventFedActivation: configuration.p54EventFed === true,
+            runtimeEventFedActivation: null,
+            requestLifecycleEvents: 0,
+            requestCancellationEvents: 0,
+            requestReplacementOrInstallEvents: 0,
+            requestConsumedEvents: 0,
+            requestExpiredEvents: 0,
+            requestInvalidatedEvents: 0,
+            requestPresenceChecks: 0,
+            localPendingRequestChecks: 0,
+            constructionAdapterEventFedAtInitialization: null,
+            localPendingRequestCheckTotalMs: 0,
+            localPendingRequestCheckMaximumMs: 0,
+            contextIdentitySamples: 0,
+            contextRootObservations: 0,
+            reservationEvidenceSamples: 0,
+            reservationRootObservations: 0,
+            nativeControlAuthorityReads: 0,
+            nativeControlAuthorityRootObservations: 0,
+            nativePriceProbeCalls: 0,
+            constructionWorkCycles: 0,
+            cumulativeSynchronousCostMs: 0,
+            maximumMeasuredOperationMs: 0,
+            maximumEvidenceCallbackMs: 0,
+            eventFeedEmissionMs: 0,
+            eventFeedEmissionMaximumMs: 0,
+            pendingRequestReferences: 0,
+            maximumPendingRequestReferences: 0,
+            ownerCycleRequestReferences: 0,
+            maximumOwnerCycleRequestReferences: 0,
+            synchronousCostByOperation: {},
+            synchronousCostByPhase: {
+              dormant: 0,
+              pending: 0,
+              active: 0,
+              consumed: 0,
+            },
+            operationCountByPhase: {
+              dormant: {},
+              pending: {},
+              active: {},
+              consumed: {},
+            },
+            acceptedOwnerDecisions: 0,
+          };
+          const sink = hooks.p54ConstructionRequestEventSinkForTest;
+          if (typeof sink === "function")
+            Reflect.apply(sink, hooks, [
+              {
+                type: "configure",
+                experiment: true,
+                eventFed: configuration.p54EventFed === true,
+                request: null,
+              },
+            ]);
+          hooks.p54PublishConstructionRequestForTest = (request) => {
+            const startedAt = performance.now();
+            hooks.p53ConstructionRequest = request ?? null;
+            const eventSink = hooks.p54ConstructionRequestEventSinkForTest;
+            if (typeof eventSink === "function")
+              Reflect.apply(eventSink, hooks, [request ?? null]);
+            const elapsedMs = Math.max(0, performance.now() - startedAt);
+            hooks.p54Metrics.eventFeedEmissionMs += elapsedMs;
+            hooks.p54Metrics.eventFeedEmissionMaximumMs = Math.max(
+              hooks.p54Metrics.eventFeedEmissionMaximumMs,
+              elapsedMs,
+            );
+            return elapsedMs;
           };
         }
         if (configuration.p40Trace) {
@@ -1740,7 +1898,12 @@ async function replay(
         arm,
         p40Trace: p40TraceEnabled,
         p38Enabled: p42Mode || arm !== "A",
-        p38PolicyArm: p42Mode && arm === "A" ? "B" : arm,
+        p38PolicyArm:
+          p54Mode && ["A", "D", "D-repeat"].includes(arm)
+            ? "B"
+            : p42Mode && arm === "A"
+              ? "B"
+              : arm,
         p42Mode,
         p42Arm: p43Mode ? "B" : arm,
         p42Enabled: p51Mode
@@ -1750,6 +1913,9 @@ async function replay(
         p51Mode,
         p52Mode,
         p53Mode,
+        p54Mode,
+        p54EventFed:
+          p54Mode && (arm === "A" || arm === "D" || arm === "D-repeat"),
         p53Request:
           p53Mode && (arm === "C" || arm === "C-repeat")
             ? P53_QUARRY_REQUEST
@@ -1783,7 +1949,7 @@ async function replay(
     for (const targetPeriod of requested) {
       await session.advance(targetPeriod - elapsed);
       elapsed = targetPeriod;
-      const checkpoint = await capture(session, targetPeriod);
+      const checkpoint = await capture(session, targetPeriod, arm);
       captured.push(checkpoint);
       if (p43Mode && targetPeriod === 719) {
         await session.evaluate(
@@ -1834,13 +2000,21 @@ async function replay(
             p51Request:
               arm === "B" || arm === "B-repeat"
                 ? P51_QUARRY_REQUEST
-                : p53Mode && (arm === "C" || arm === "C-repeat")
+                : p53Mode &&
+                    (arm === "C" ||
+                      arm === "C-repeat" ||
+                      arm === "D" ||
+                      arm === "D-repeat")
                   ? P53_QUARRY_REQUEST
                   : null,
             p51RequestQualification: qualifyP51QuarryRequest(
               arm === "B" || arm === "B-repeat"
                 ? P51_QUARRY_REQUEST
-                : p53Mode && (arm === "C" || arm === "C-repeat")
+                : p53Mode &&
+                    (arm === "C" ||
+                      arm === "C-repeat" ||
+                      arm === "D" ||
+                      arm === "D-repeat")
                   ? P53_QUARRY_REQUEST
                   : null,
               arm,
@@ -1849,8 +2023,19 @@ async function replay(
               (arm === "B" || arm === "B-repeat") &&
               qualifyP51QuarryRequest(P51_QUARRY_REQUEST, arm).qualified,
             jobsRequest: p51JobsRequest,
+            p54PublishRequest:
+              p54Mode && (arm === "D" || arm === "D-repeat")
+                ? P53_QUARRY_REQUEST
+                : null,
           },
         );
+        if (p54Mode && (arm === "D" || arm === "D-repeat")) {
+          await session.evaluate((request) => {
+            const publisher =
+              window.__EA_TEST_HOOKS__?.p54PublishConstructionRequestForTest;
+            if (typeof publisher === "function") publisher(request);
+          }, P53_QUARRY_REQUEST);
+        }
       }
       if (manualTransferPeriod === targetPeriod) {
         const productionIsSafe =
@@ -2303,6 +2488,97 @@ try {
       entry.jobsInput ??= entry.native?.jobsInput ?? null;
       entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
     }
+  }
+  if (p54Mode) {
+    const C = await replayOrReuse("C");
+    const D = await replayOrReuse("D");
+    const DRepeat = await replayOrReuse("D-repeat");
+    for (const arm of [C, D, DRepeat]) {
+      for (const entry of arm.checkpoints) {
+        entry.jobsSnapshot ??= entry.native?.jobsSnapshot ?? null;
+        entry.jobsInput ??= entry.native?.jobsInput ?? null;
+        entry.jobsTraceCount ??= entry.native?.jobsTraceCount ?? 0;
+      }
+    }
+    const evidenceModule =
+      await import("./p54-construction-authority-cost-evidence.mjs");
+    const sourcePaths = [
+      "build-config.mjs",
+      "src/application/build.ts",
+      "src/ports/build.ts",
+      "src/ports/game-root-state.ts",
+      "src/adapters/evolve/vue-capture.ts",
+      "src/adapters/evolve/progression-epoch.ts",
+      "src/adapters/evolve/progression/construction/captured-construction.ts",
+      "src/adapters/evolve/progression/build/captured-build.ts",
+      "src/adapters/evolve/captured-cost-conflict.ts",
+      "src/adapters/evolve/captured-action-costs.ts",
+      "src/adapters/evolve/captured-queue-reservations.ts",
+      "src/bootstrap/captured-progression-control.ts",
+      "src/bootstrap/captured-runtime-control.ts",
+      "src/domain/progression/build/construction-target-admission.ts",
+      "experiments/p42-construction-priority-counterfactual-policy.mjs",
+      "experiments/p42-construction-priority-counterfactual-trace.mjs",
+      "experiments/p51-construction-jobs-handoff-contract.mjs",
+      "experiments/p51-construction-jobs-handoff-trace.mjs",
+      "experiments/p52-independent-construction-jobs-identity-evidence.mjs",
+      "experiments/p53-construction-owned-target-authority-contract.mjs",
+      "experiments/p54-construction-authority-cost-evidence.mjs",
+      "experiments/p54-construction-authority-cost-exact.mjs",
+      "experiments/p38-quarry-production-validation-exact.mjs",
+      "tests/experiments/p53-construction-owned-target-authority-test.mjs",
+      "tests/architecture/p50-diagnostic-bundle-isolation-test.mjs",
+      "tools/chromium-evolve-runner.mjs",
+      "tools/chromium/bridge.js",
+    ];
+    const sourceHashes = Object.fromEntries(
+      await Promise.all(
+        sourcePaths.map(async (relativePath) => [
+          relativePath,
+          hash(await readFile(path.join(root, relativePath))),
+        ]),
+      ),
+    );
+    const priorP42Evidence = await readFile(p42EvidencePath);
+    const evidence = evidenceModule.createP54ConstructionAuthorityCostEvidence({
+      A,
+      B,
+      C,
+      D,
+      DRepeat,
+      gameSnapshotSha256: pinnedGameSha256,
+      bundleSha256,
+      replayHarnessSha256,
+      sourceHashes,
+      priorP42EvidenceSha256: hash(priorP42Evidence),
+      baselineTunedFixturePresent: await readFile(
+        path.join(
+          root,
+          "test-artifacts/benchmark/settings/baseline-tuned.json",
+        ),
+        { flag: "r" },
+      )
+        .then(() => true)
+        .catch(() => false),
+    });
+    await writeFile(
+      p54EvidencePath,
+      await prettier.format(JSON.stringify(evidence), { parser: "json" }),
+    );
+    console.log(
+      JSON.stringify({
+        experiment: evidence.schema,
+        outcome: evidence.decision.outcome,
+        p54EvidencePath,
+        preInterventionExact: evidence.preIntervention.exact,
+        BCNativeInvocationParity: evidence.nativeTrace.BC.equal,
+        DRepeatExact: evidence.nativeTrace.DRepeat.exact,
+        rendererCpuGate:
+          evidence.acceptance.independentRendererCpuAcceptance.status,
+        replayHashes: { bundleSha256, replayHarnessSha256 },
+      }),
+    );
+    process.exit(0);
   }
   if (p53Mode) {
     const C = await replayOrReuse("C");
