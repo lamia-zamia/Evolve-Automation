@@ -68,6 +68,16 @@ const p54Mode =
 const p42Mode = process.argv.includes(
   "--p42-construction-priority-counterfactual",
 );
+const p56Mode = process.argv.includes("--p56-food-stock-provenance");
+const p56RunKind = process.env.P56_RUN_KIND ?? null;
+if (
+  p56Mode &&
+  (!new Set(["control", "instrumented"]).has(p56RunKind) ||
+    process.env.P56_GAME_PATH === undefined)
+)
+  throw new Error(
+    "P56 requires a run kind and an explicit pinned game snapshot",
+  );
 const p53Mode =
   p54Mode || process.argv.includes("--p53-construction-owned-target-authority");
 const p52Mode =
@@ -94,7 +104,12 @@ const settingsPath = path.join(
   root,
   "experiments/p18-standard-human-settings.json",
 );
-const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
+const gamePath = path.resolve(
+  root,
+  p56Mode
+    ? process.env.P56_GAME_PATH
+    : "test-artifacts/game/evolve-deadspace.js",
+);
 const metadataPath = path.join(root, "src/userscript.meta.js");
 const bundlePath = path.join(
   root,
@@ -136,11 +151,15 @@ const p42EvidencePath = path.join(
 );
 const p43EvidencePath = path.join(
   root,
-  "experiments/p43-food-safe-jobs-evidence.json",
+  p56Mode
+    ? `test-artifacts/benchmark/tmp/p56-${p56RunKind}-p43-evidence.json`
+    : "experiments/p43-food-safe-jobs-evidence.json",
 );
 const p43TimelinePath = path.join(
   root,
-  "experiments/p43-food-safe-jobs-timeline.json",
+  p56Mode
+    ? `test-artifacts/benchmark/tmp/p56-${p56RunKind}-p43-timeline.json`
+    : "experiments/p43-food-safe-jobs-timeline.json",
 );
 const p51EvidencePath = path.join(
   root,
@@ -180,21 +199,23 @@ const jobsEvidencePath = path.join(
 );
 const interimPath = path.join(
   root,
-  p541Mode
-    ? "test-artifacts/benchmark/tmp/p54-1-activation-lifecycle-correction-interim.json"
-    : p43Mode
-      ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
-      : p54Mode
-        ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost-interim.json"
-        : p53Mode
-          ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority-interim.json"
-          : p52Mode
-            ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
-            : p51Mode
-              ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
-              : p42Mode
-                ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
-                : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
+  p56Mode
+    ? `test-artifacts/benchmark/tmp/p56-${p56RunKind}-interim.json`
+    : p541Mode
+      ? "test-artifacts/benchmark/tmp/p54-1-activation-lifecycle-correction-interim.json"
+      : p43Mode
+        ? "test-artifacts/benchmark/tmp/p43-food-safe-jobs-interim.json"
+        : p54Mode
+          ? "test-artifacts/benchmark/tmp/p54-construction-authority-cost-interim.json"
+          : p53Mode
+            ? "test-artifacts/benchmark/tmp/p53-construction-owned-target-authority-interim.json"
+            : p52Mode
+              ? "test-artifacts/benchmark/tmp/p52-independent-construction-jobs-identity-interim.json"
+              : p51Mode
+                ? "test-artifacts/benchmark/tmp/p51-construction-jobs-handoff-interim.json"
+                : p42Mode
+                  ? "test-artifacts/benchmark/tmp/p42-construction-priority-counterfactual-interim.json"
+                  : "test-artifacts/benchmark/tmp/p38-quarry-production-validation-interim.json",
 );
 const fixtureSha256 =
   "2d2def2ecad5ae015c0dc825747da105bb90dbd0c405ed0ae5fe672755e0c684";
@@ -202,6 +223,16 @@ const pinnedGame =
   "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f";
 const pinnedGameSha256 =
   "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7";
+const p56Windows = p56Mode
+  ? JSON.parse(process.env.P56_WINDOWS_JSON ?? "[]")
+  : [];
+const p56BoundaryPeriods = new Set(
+  p56Windows.flatMap(([start, end]) => [start, end]),
+);
+const p56IncludesPeriod = (period) =>
+  p56Windows.some(
+    ([start, end]) => Number(period) >= start && Number(period) <= end,
+  );
 const seed = 44;
 const epoch = "2026-09-21T00:00:00.000Z";
 const p51JobsRequest = Object.freeze({
@@ -275,7 +306,22 @@ const [fixtureText, settingsText, gameBytes, metadata] = await Promise.all([
 ]);
 const settings = JSON.parse(settingsText);
 assert.equal(hash(fixtureText), fixtureSha256);
-assert.equal(hash(gameBytes), pinnedGameSha256);
+if (p56Mode) {
+  assert.equal(
+    hash(await readFile(process.env.P56_SOURCE_GAME_PATH)),
+    pinnedGameSha256,
+    "P56 source snapshot must be the pinned native game",
+  );
+  assert.equal(
+    hash(gameBytes),
+    process.env.P56_EXPECTED_GAME_SHA256,
+    "P56 runtime snapshot hash must match its declared diagnostic input",
+  );
+  if (p56RunKind === "control") assert.equal(hash(gameBytes), pinnedGameSha256);
+  else assert.notEqual(hash(gameBytes), pinnedGameSha256);
+} else {
+  assert.equal(hash(gameBytes), pinnedGameSha256);
+}
 assert.equal(settings.buildingAlwaysClick, false);
 assert.equal(settings.autoBuild, true);
 assert.equal(settings.autoJobs, true);
@@ -1019,6 +1065,20 @@ async function capture(session, period, arm) {
       P42_EXPECTED.quarryTarget,
     ),
   ]);
+  const p56FoodTracePosition =
+    p56Mode && p56BoundaryPeriods.has(period)
+      ? await session.evaluate((boundaryPeriod) => {
+          const position = {
+            period: boundaryPeriod,
+            phase: "post-period-checkpoint",
+            writerOrder: window.__P56_FOOD_WRITES__?.length ?? 0,
+          };
+          const markers = window.__P56_FOOD_MARKERS__ ?? [];
+          markers.push(position);
+          window.__P56_FOOD_MARKERS__ = markers;
+          return position;
+        }, period)
+      : null;
   const species = state.race?.species;
   const canonicalState = {
     population: state.resource?.[species]?.amount ?? null,
@@ -1086,6 +1146,7 @@ async function capture(session, period, arm) {
     buildQueueSetDataInvocations.filter((entry) => entry.period === period);
   return {
     period,
+    p56FoodTracePosition,
     saveSha256: hash(await session.exportSave()),
     state: canonicalState,
     production: {
@@ -1185,6 +1246,22 @@ async function replay(
       : {}),
   });
   try {
+    if (p56Mode) {
+      await session.evaluate((windows) => {
+        const boundaries = new Set(
+          windows.flatMap(([start, end]) => [start, end]),
+        );
+        window.__P56_FOOD_MARKERS__ = [];
+        window.__P56_FOOD_MARK = (event) => {
+          if (!boundaries.has(event.period)) return;
+          window.__P56_FOOD_MARKERS__.push({
+            period: event.period,
+            phase: event.phase,
+            writerOrder: window.__P56_FOOD_WRITES__?.length ?? 0,
+          });
+        };
+      }, p56Windows);
+    }
     await session.evaluate(
       (configuration) => {
         const hooks = window.__EA_TEST_HOOKS__;
@@ -2213,6 +2290,12 @@ async function replay(
                   metrics: value.p43Metrics ?? null,
                 }
               : null,
+          p56FoodWriterTrace: window.__P56_FOOD_WRITES__ ?? [],
+          p56FoodMarkers: window.__P56_FOOD_MARKERS__ ?? [],
+          p56FoodTraceStatus: {
+            overflow: window.__P56_FOOD_TRACE_OVERFLOW__ ?? 0,
+            errors: window.__P56_FOOD_TRACE_ERRORS__ ?? 0,
+          },
         };
       }),
     ]);
@@ -2270,6 +2353,25 @@ async function replay(
       p40: hooks.p40,
       p42: hooks.p42,
       p43: hooks.p43,
+      p56FoodWriterTrace: hooks.p56FoodWriterTrace,
+      p56FoodMarkers: hooks.p56FoodMarkers,
+      p56FoodTraceStatus: hooks.p56FoodTraceStatus,
+      p56FoodActionInvocations: p56Mode
+        ? (diagnostics.nativeInvocations ?? []).filter(
+            (entry) =>
+              entry.method === "action" &&
+              String(entry.elementId ?? "")
+                .toLowerCase()
+                .includes("food") &&
+              p56IncludesPeriod(entry.period),
+          )
+        : undefined,
+      p56NativeActionSequence: p56Mode
+        ? {
+            count: diagnostics.nativeInvocations?.length ?? 0,
+            sha256: hash(JSON.stringify(diagnostics.nativeInvocations ?? [])),
+          }
+        : undefined,
       controlUsage: diagnostics.controlUsage ?? {},
       nativeCalls: (diagnostics.nativeInvocations ?? [])
         .filter(
@@ -3064,6 +3166,56 @@ try {
         parser: "json",
       }),
     );
+    if (p56Mode) {
+      const p56Replay = {
+        schema: "p56-food-stock-replay-v1",
+        runKind: p56RunKind,
+        pinnedGame,
+        pinnedGameSha256,
+        runtimeGameSha256: hash(gameBytes),
+        fixtureSha256,
+        settingsSha256: hash(settingsText),
+        seed,
+        epoch,
+        runtimeBundleSha256,
+        policyBundleSha256,
+        p38PolicyBundleSha256,
+        replayHarnessSha256,
+        armB: {
+          periods: B.periods,
+          finalExportSha256: B.finalExportSha256,
+          finalRng: B.finalRng,
+          checkpointCount: B.checkpoints.length,
+          checkpoints: B.checkpoints,
+          p43EventCount: B.p43?.events?.length ?? 0,
+          p43EventsSha256: hash(JSON.stringify(B.p43?.events ?? [])),
+          nativeActionSequence: B.p56NativeActionSequence,
+          foodActionInvocations: B.p56FoodActionInvocations,
+          foodWriterTrace: B.p56FoodWriterTrace,
+          foodTraceStatus: B.p56FoodTraceStatus,
+        },
+        armBRepeat: {
+          periods: BRepeat.periods,
+          finalExportSha256: BRepeat.finalExportSha256,
+          finalRng: BRepeat.finalRng,
+          checkpointCount: BRepeat.checkpoints.length,
+          checkpoints: BRepeat.checkpoints,
+          p43EventCount: BRepeat.p43?.events?.length ?? 0,
+          p43EventsSha256: hash(JSON.stringify(BRepeat.p43?.events ?? [])),
+          nativeActionSequence: BRepeat.p56NativeActionSequence,
+          foodWriterCount: BRepeat.p56FoodWriterTrace?.length ?? 0,
+        },
+        p43EvidencePath,
+        p43TimelinePath,
+      };
+      await writeFile(
+        path.join(
+          root,
+          `test-artifacts/benchmark/tmp/p56-${p56RunKind}-replay.json`,
+        ),
+        await prettier.format(JSON.stringify(p56Replay), { parser: "json" }),
+      );
+    }
     console.log(
       JSON.stringify({
         experiment: p43Result.evidence.experiment,
