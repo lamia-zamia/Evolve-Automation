@@ -97,9 +97,39 @@ assert.equal(evidence.replay.parity.nativeActionSequenceEqual, true);
 assert.equal(evidence.replay.parity.interventionEventsEqual, true);
 assert.equal(evidence.replay.nativeActionSequence.count, 108_698);
 assert.equal(
+  evidence.replay.nativeActionSequence.countUnit,
+  "raw Chromium bridge trace records",
+);
+assert.equal(evidence.replay.nativeActionSequence.rawTraceRecords, 108_698);
+assert.equal(
   evidence.replay.nativeActionSequence.sha256,
   "5e53745422c5194643d1d98012fb4bddd31aa3ec456466d124ef06a059c3b4be",
 );
+const nativeAccounting = evidence.replay.nativeInvocationAccounting;
+assert.equal(nativeAccounting.armB.rawTraceRecords, 108_698);
+assert.equal(nativeAccounting.armB.validatedNativeApiInvocations, 54_349);
+assert.equal(nativeAccounting.armB.mutatingActionMethodInvocations, 2_149);
+assert.equal(nativeAccounting.armB.readOnlyNativeCalls, 12_270);
+assert.equal(nativeAccounting.armB.otherNativeControlMethodInvocations, 39_930);
+assert.equal(nativeAccounting.armB.unknownMethods.length, 0);
+assert.equal(
+  nativeAccounting.armB.rawTraceSha256,
+  "5e53745422c5194643d1d98012fb4bddd31aa3ec456466d124ef06a059c3b4be",
+);
+assert.equal(nativeAccounting.armB.historicalP43CheckpointCount, 123);
+assert.equal(nativeAccounting.armB.historicalP43RawRecordCountsExact, true);
+assert.equal(nativeAccounting.armB.historicalP43RawRecordHashesExact, true);
+assert.equal(nativeAccounting.armB.reproducedP56InvocationCountsExact, true);
+assert.equal(nativeAccounting.armB.reproducedP56InvocationHashesExact, true);
+assert.equal(nativeAccounting.armB.transformedCountsExact, true);
+assert.equal(nativeAccounting.armB.transformedHashesExact, true);
+assert.deepEqual(nativeAccounting.foodRecoveryWindows, {
+  count: 39,
+  rawActionTraceRecords: 3_900,
+  foodHarvestActionInvocations: 1_950,
+  nativeFoodWriterMutations: 1_950,
+  nativeFoodWriterDelta: 1_950,
+});
 
 for (const parity of [
   evidence.replay.controlRepeatParity,
@@ -162,6 +192,8 @@ for (const transition of mutations.transitions) {
     transition.id,
   );
   assert.equal(transition.foodActionWriterCount, 50, transition.id);
+  assert.equal(transition.foodActionTraceRecordCount, 100, transition.id);
+  assert.equal(transition.foodHarvestActionInvocationCount, 50, transition.id);
   assert.equal(transition.foodActionWriterDelta, 50, transition.id);
   assert.ok(transition.before.foodCapacity > 0, transition.id);
   assert.ok(transition.after.foodCapacity > 0, transition.id);
@@ -241,6 +273,8 @@ assert.equal(
 );
 assert.equal(special.writerDeltaMatchesObservedStockChange, true);
 assert.equal(special.foodWriters.length, 52);
+assert.equal(special.foodActionTraceRecordCount, 100);
+assert.equal(special.foodHarvestActionInvocationCount, 50);
 assert.equal(special.foodActionWriterCount, 50);
 assert.ok(Math.abs(special.writerDelta - 49.281421333333284) < 1e-8);
 assert.ok(special.foodWriters.every((writer) => writer.writer === "modRes"));
@@ -294,4 +328,7 @@ assert.equal(
   nativeSnapshot.split(/\r?\n/u).length,
 );
 
-assert.equal(evidence.decision, "A — Source identified and reproduced");
+assert.equal(
+  evidence.decision,
+  "A — Native trace accounting and historical diagnostics reconciled",
+);

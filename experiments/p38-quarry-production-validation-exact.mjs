@@ -52,10 +52,8 @@ import { createP42ConstructionPriorityEvidence } from "./p42-construction-priori
 import { createP43FoodSafeJobsEvidence } from "./p43-food-safe-jobs-evidence.mjs";
 import { createP51ConstructionJobsHandoffEvidence } from "./p51-construction-jobs-handoff-evidence.mjs";
 import { createP52IndependentConstructionJobsIdentityEvidence } from "./p52-independent-construction-jobs-identity-evidence.mjs";
-import {
-  createP541ActivationLifecycleEvidence,
-  nativeTraceCalls,
-} from "./p54-1-activation-lifecycle-correction-evidence.mjs";
+import { createP541ActivationLifecycleEvidence } from "./p54-1-activation-lifecycle-correction-evidence.mjs";
+import { normalizeNativeInvocationTrace } from "./p56-native-invocation-accounting.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
@@ -70,6 +68,8 @@ const p42Mode = process.argv.includes(
 );
 const p56Mode = process.argv.includes("--p56-food-stock-provenance");
 const p56RunKind = process.env.P56_RUN_KIND ?? null;
+const p56NativeTraceAuditOnly =
+  p56Mode && process.env.P56_NATIVE_TRACE_AUDIT_ONLY === "1";
 if (
   p56Mode &&
   (!new Set(["control", "instrumented"]).has(p56RunKind) ||
@@ -92,7 +92,7 @@ if (p51Mode && !p42Mode)
   throw new Error("P51 reuses the retained P42 Construction intervention");
 if (p43Mode && !p42Mode)
   throw new Error("P43 requires the retained P42 Construction intervention");
-if (p43Mode && process.argv.includes("--reuse"))
+if (p43Mode && process.argv.includes("--reuse") && !p56NativeTraceAuditOnly)
   throw new Error("P43 exact replay must use fresh isolated arms");
 const p40TraceEnabled =
   p42Mode || process.argv.includes("--p40-construction-trace");
@@ -1111,7 +1111,7 @@ async function capture(session, period, arm) {
     deaths: state.stats?.died ?? null,
   };
   const nativeTraceRows = diagnostics.nativeInvocations ?? [];
-  const nativeApiInvocations = nativeTraceCalls(nativeTraceRows);
+  const nativeApiInvocations = normalizeNativeInvocationTrace(nativeTraceRows);
   const relevantNativeCalls = nativeApiInvocations
     .filter(
       (entry) =>
@@ -2299,6 +2299,17 @@ async function replay(
         };
       }),
     ]);
+    if (p56Mode && process.env.P56_NATIVE_TRACE_OUTPUT_DIR !== undefined) {
+      const traceOutputDirectory = path.resolve(
+        root,
+        process.env.P56_NATIVE_TRACE_OUTPUT_DIR,
+      );
+      await mkdir(traceOutputDirectory, { recursive: true });
+      await writeFile(
+        path.join(traceOutputDirectory, `${arm}.json`),
+        JSON.stringify(diagnostics.nativeInvocations ?? []),
+      );
+    }
     const final = captured.at(-1);
     const targetTransitions = [];
     for (const observation of hooks.targets) {
@@ -2593,6 +2604,8 @@ try {
       const retained = JSON.parse(await readFile(interimPath, "utf8"));
       if (
         (retained.replayHarnessSha256 === replayHarnessSha256 ||
+          retained.replayHarnessSha256 ===
+            "b895951798e677643be5d93451f5bc62dd8a333f96b7f57600d3e5aa8fe06719" ||
           retained.replayHarnessSha256 ===
             "ea723f44e10a3bb5631beaa11734682e9322818dd9b79de67ad797ffec52eeb6" ||
           retained.replayHarnessSha256 ===

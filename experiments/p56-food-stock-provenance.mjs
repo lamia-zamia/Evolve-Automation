@@ -4,7 +4,14 @@ import { spawnSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import * as prettier from "prettier";
 import ts from "typescript";
+import {
+  compareP43NativeCallDiagnostics,
+  normalizeNativeInvocationTrace,
+  parseNativeTraceJsonl,
+  summarizeNativeInvocationTrace,
+} from "./p56-native-invocation-accounting.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -29,9 +36,15 @@ const replayHarnessSourcePath = path.join(
   root,
   "experiments/p38-quarry-production-validation-exact.mjs",
 );
+const nativeTracePaths = {
+  armA: path.join(root, "experiments/p56-native-invocation-trace-arm-a.jsonl"),
+  armB: path.join(root, "experiments/p56-native-invocation-trace-arm-b.jsonl"),
+};
 const tmp = path.join(root, "test-artifacts/benchmark/tmp");
 const sourceSnapshotSha256 =
   "05dcbca74aaf499b4b640b8bcd699038eb48e9208a253aa4f3a5f99fa0f1faf7";
+const nativeTraceAuditReplayHarnessSha256 =
+  "a71b6f7085c4b3449cfde442a3178431eab31cade57b4563dcb11cf9be462c43";
 const pinnedGame =
   "pmotschmann/Evolve@db38e2af831907d49aeb5348d678d8d8745d6c3f";
 const seed = 44;
@@ -383,6 +396,62 @@ function parityRepeatedArm(left, right) {
   };
 }
 
+function nativeTraceReconciliation(
+  rawTraces,
+  historicalTimeline,
+  currentTimeline,
+) {
+  return Object.fromEntries(
+    ["armA", "armB"].map((armName) => {
+      const rawTrace = rawTraces[armName];
+      const summary = summarizeNativeInvocationTrace(rawTrace);
+      const checkpoints = compareP43NativeCallDiagnostics(
+        rawTrace,
+        historicalTimeline[armName]?.checkpoints ?? [],
+        currentTimeline[armName]?.checkpoints ?? [],
+      );
+      return [
+        armName,
+        {
+          rawTraceFile: nativeTracePaths[armName]
+            .slice(root.length + 1)
+            .replaceAll(path.sep, "/"),
+          ...summary,
+          foodHarvestActionInvocations: normalizeNativeInvocationTrace(
+            rawTrace,
+          ).filter(
+            (entry) =>
+              entry.method === "action" &&
+              String(entry.elementId ?? "")
+                .toLowerCase()
+                .includes("food"),
+          ).length,
+          historicalP43CheckpointCount: checkpoints.length,
+          historicalP43RawRecordCountsExact: checkpoints.every(
+            (entry) => entry.historicalCountMatches,
+          ),
+          historicalP43RawRecordHashesExact: checkpoints.every(
+            (entry) => entry.historicalHashMatches,
+          ),
+          reproducedP56InvocationCountsExact: checkpoints.every(
+            (entry) => entry.reproducedCountMatches,
+          ),
+          reproducedP56InvocationHashesExact: checkpoints.every(
+            (entry) => entry.reproducedHashMatches,
+          ),
+          transformedCountsExact: checkpoints.every(
+            (entry) => entry.transformedCountMatches,
+          ),
+          transformedHashesExact: checkpoints.every(
+            (entry) => entry.transformedHashMatches,
+          ),
+          checkpointComparisons: checkpoints,
+        },
+      ];
+    }),
+  );
+}
+
 function sourceReplayParity(clean, instrumented) {
   const result = parityArm(clean, instrumented);
   const retainedTimeline = JSON.parse(clean.retainedP43TimelineText);
@@ -442,7 +511,7 @@ function sourceReplayParity(clean, instrumented) {
   };
 }
 
-function mutationEvidence(transitions, run, timeline) {
+function mutationEvidence(transitions, run, timeline, nativeInvocations) {
   const arm = timeline.armB;
   const trace = run.armB.foodWriterTrace ?? [];
   const actions = run.armB.foodActionInvocations ?? [];
@@ -499,6 +568,20 @@ function mutationEvidence(transitions, run, timeline) {
     const intervalActionDiagnosticCount = actions.filter(
       (entry) => entry.period > before.period && entry.period <= after.period,
     ).length;
+    const foodHarvestActionInvocationCount = nativeInvocations.filter(
+      (entry) =>
+        entry.method === "action" &&
+        String(entry.elementId ?? "")
+          .toLowerCase()
+          .includes("food") &&
+        entry.period > before.period &&
+        entry.period <= after.period,
+    ).length;
+    assert.equal(
+      intervalActionDiagnosticCount,
+      foodHarvestActionInvocationCount * 2,
+      `Food action trace records must pair in ${before.period}–${after.period}`,
+    );
     const observedDelta = after.foodStock - before.foodStock;
     const writerDelta = boundaryWriters.reduce(
       (sum, entry) => sum + Number(entry.delta ?? 0),
@@ -530,7 +613,8 @@ function mutationEvidence(transitions, run, timeline) {
         exactWriterSlice: markerSlice !== null || jobsObservationSlice !== null,
       },
       foodWriters: boundaryWriters,
-      nativeActionInvocationDiagnosticCount: intervalActionDiagnosticCount,
+      foodActionTraceRecordCount: intervalActionDiagnosticCount,
+      foodHarvestActionInvocationCount,
       foodActionWriterCount: actionWriters.length,
       foodActionWriterDelta: actionWriters.reduce(
         (sum, entry) => sum + Number(entry.delta ?? 0),
@@ -660,6 +744,8 @@ async function main() {
     p45TimelineText,
     p18SettingsText,
     replayHarnessSourceBytes,
+    armANativeTraceText,
+    armBNativeTraceText,
   ] = await Promise.all([
     readFile(nativeSnapshotPath),
     readFile(`${nativeSnapshotPath}.json`, "utf8"),
@@ -670,6 +756,8 @@ async function main() {
       "utf8",
     ),
     readFile(replayHarnessSourcePath),
+    readFile(nativeTracePaths.armA, "utf8"),
+    readFile(nativeTracePaths.armB, "utf8"),
   ]);
   assert.equal(sha256(sourceBytes), sourceSnapshotSha256);
   const sidecar = JSON.parse(sidecarText);
@@ -680,6 +768,10 @@ async function main() {
   const p43Timeline = JSON.parse(p43TimelineText);
   const p45Timeline = JSON.parse(p45TimelineText);
   const p18Settings = JSON.parse(p18SettingsText);
+  const nativeTraces = {
+    armA: parseNativeTraceJsonl(armANativeTraceText),
+    armB: parseNativeTraceJsonl(armBNativeTraceText),
+  };
   assert.equal(sha256(p43TimelineText), p45Timeline.sourceSha256);
   const transitions = foodResilienceTransitions(p45Timeline);
   assert.equal(transitions.length, 39);
@@ -759,10 +851,30 @@ async function main() {
     control.armBRepeat,
     instrumented.armBRepeat,
   );
+  const nativeTraceAudit = nativeTraceReconciliation(
+    nativeTraces,
+    p43Timeline,
+    control.timeline,
+  );
+  const nativeInvocations = {
+    armA: normalizeNativeInvocationTrace(nativeTraces.armA),
+    armB: normalizeNativeInvocationTrace(nativeTraces.armB),
+  };
+  assert.equal(
+    nativeTraceAudit.armB.rawTraceRecords,
+    control.armB.nativeActionSequence.count,
+    "captured B raw trace count must match the retained P56 trace count",
+  );
+  assert.equal(
+    nativeTraceAudit.armB.rawTraceSha256,
+    control.armB.nativeActionSequence.sha256,
+    "captured B raw trace hash must match the retained P56 trace hash",
+  );
   const mutations = mutationEvidence(
     transitions,
     instrumented,
     instrumented.timeline,
+    nativeInvocations.armB,
   );
   for (const transition of mutations) {
     for (const writer of transition.foodWriters)
@@ -776,6 +888,8 @@ async function main() {
     (transition) =>
       transition.phaseBoundary.exactWriterSlice &&
       transition.foodWriters.length > 0 &&
+      transition.foodActionTraceRecordCount === 100 &&
+      transition.foodHarvestActionInvocationCount === 50 &&
       transition.foodActionWriterCount === 50 &&
       transition.foodActionWriterDelta === 50 &&
       transition.writerDeltaMatchesObservedStockChange,
@@ -821,6 +935,24 @@ async function main() {
         entry.period > exhaustionStarvationWindow[0] &&
         entry.period <= exhaustionStarvationWindow[1],
     ).length;
+  const exhaustionFoodHarvestActionInvocationCount =
+    nativeInvocations.armB.filter(
+      (entry) =>
+        entry.method === "action" &&
+        String(entry.elementId ?? "")
+          .toLowerCase()
+          .includes("food") &&
+        entry.period > exhaustionStarvationWindow[0] &&
+        entry.period <= exhaustionStarvationWindow[1],
+    ).length;
+  assert.equal(
+    exhaustionActionDiagnosticCount,
+    exhaustionFoodHarvestActionInvocationCount * 2,
+    "the starvation window Food trace rows must pair into native action invocations",
+  );
+  const exhaustionFoodWriterMutationCount = exhaustionWriters.filter((entry) =>
+    entry.callsiteStack?.some((frame) => frame.includes("runAction")),
+  ).length;
   const exhaustionIntervalExplained =
     exhaustionPoints.length === 9 &&
     exhaustionStartMarker !== undefined &&
@@ -828,6 +960,19 @@ async function main() {
     exhaustionWriters.length > 0 &&
     Math.abs(exhaustionWriterDelta - exhaustionObservedDelta) < 1e-8;
   const p43HistoricalExact = parity.matchesRetainedP43StateAndEvents;
+  const nativeTraceReconciliationExact = [
+    nativeTraceAudit.armA,
+    nativeTraceAudit.armB,
+  ].every(
+    (arm) =>
+      arm.unknownMethods.length === 0 &&
+      arm.historicalP43RawRecordCountsExact &&
+      arm.historicalP43RawRecordHashesExact &&
+      arm.reproducedP56InvocationCountsExact &&
+      arm.reproducedP56InvocationHashesExact &&
+      arm.transformedCountsExact &&
+      arm.transformedHashesExact,
+  );
   const sameReplayInputs =
     control.pinnedGame === instrumented.pinnedGame &&
     control.fixtureSha256 === instrumented.fixtureSha256 &&
@@ -873,9 +1018,11 @@ async function main() {
     ? "D — Diagnostic parity invalid"
     : !p43HistoricalExact
       ? "C — Historical P43 samples not reproduced"
-      : allTransitionsExplained
-        ? "A — Source identified and reproduced"
-        : "B — Partially explained";
+      : !nativeTraceReconciliationExact
+        ? "B — P56 units corrected; historical digest reconciliation incomplete"
+        : allTransitionsExplained
+          ? "A — Native trace accounting and historical diagnostics reconciled"
+          : "B — Partially explained";
   const evidence = {
     schema: "p56-food-stock-provenance-evidence-v1",
     decision,
@@ -923,6 +1070,8 @@ async function main() {
       periods: control.armB.periods,
       cleanControlMatchesRetainedP43StateAndEvents: p43HistoricalExact,
       retainedNativeCallDigestsExact: parity.retainedNativeCallDigestsExact,
+      retainedNativeCallDigestRepresentationsReconciled:
+        nativeTraceReconciliationExact,
       sameReplayInputs,
       instrumentationParity,
       p43Events: {
@@ -934,9 +1083,63 @@ async function main() {
       },
       nativeActionSequence: {
         ...control.armB.nativeActionSequence,
+        rawTraceRecords: control.armB.nativeActionSequence.count,
+        countUnit: "raw Chromium bridge trace records",
         matchesInstrumented:
           canonical(control.armB.nativeActionSequence) ===
           canonical(instrumented.armB.nativeActionSequence),
+      },
+      nativeInvocationAccounting: {
+        traceCapture: {
+          arms: ["A", "B"],
+          periods: 10_000,
+          replayHarnessSha256: nativeTraceAuditReplayHarnessSha256,
+          runtimeBundleSha256: control.runtimeBundleSha256,
+          pinnedGameSha256: sourceSnapshotSha256,
+          fixtureSha256: control.fixtureSha256,
+          settingsSha256: control.settingsSha256,
+          seed: control.seed,
+          epoch: control.epoch,
+          purpose:
+            "Trace-only clean control replay because the retained P43/P56 evidence had hashes and counts but not the raw rows; no Food writer instrumentation was run.",
+        },
+        pairContract:
+          "Adjacent records must have order equal to their array indices and equal period, elementId, and method; the first record represents the native API invocation.",
+        bridgeRecordSemantics:
+          "The captured control wrapper emits before and after callbacks; the Chromium bridge stores one raw record per callback.",
+        actionMethodSemantics:
+          "method === action counts mutation-capable native action calls; it does not assert that every call changed game state.",
+        readOnlyNativeMethods: ["hell", "on_cap", "s_max", "vis"],
+        otherNativeControlMethodSemantics:
+          "Setter, assignment, navigation, and presentation calls are counted separately from action and read-only methods.",
+        armA: nativeTraceAudit.armA,
+        armB: nativeTraceAudit.armB,
+        foodRecoveryWindows: {
+          count: mutations.length,
+          rawActionTraceRecords: control.armB.foodActionInvocations.length,
+          foodHarvestActionInvocations: mutations.reduce(
+            (sum, transition) =>
+              sum + transition.foodHarvestActionInvocationCount,
+            0,
+          ),
+          nativeFoodWriterMutations: mutations.reduce(
+            (sum, transition) => sum + transition.foodActionWriterCount,
+            0,
+          ),
+          nativeFoodWriterDelta: mutations.reduce(
+            (sum, transition) => sum + transition.foodActionWriterDelta,
+            0,
+          ),
+        },
+        historicalP43Aggregation: {
+          historical:
+            "P43 filtered raw diagnostics.nativeInvocations rows with the retained elementId/method predicate, mapped each row to {period, elementId, method}, and hashed JSON.stringify of that ordered array.",
+          current:
+            "P56 validates adjacent before/after record pairs, keeps one record per pair, then applies the same predicate and projection before hashing.",
+          checkpointBoundary:
+            "Each digest is cumulative through the retained post-period checkpoint; the current raw trace is restricted to entry.period <= checkpoint.period.",
+          exactAcrossAllRetainedCheckpoints: nativeTraceReconciliationExact,
+        },
       },
       finalExportSha256: control.armB.finalExportSha256,
       finalRng: control.armB.finalRng,
@@ -983,10 +1186,10 @@ async function main() {
           end: exhaustionEndMarker ?? null,
         },
         foodWriters: exhaustionWriters,
-        nativeActionInvocationDiagnosticCount: exhaustionActionDiagnosticCount,
-        foodActionWriterCount: exhaustionWriters.filter((entry) =>
-          entry.callsiteStack?.some((frame) => frame.includes("runAction")),
-        ).length,
+        foodActionTraceRecordCount: exhaustionActionDiagnosticCount,
+        foodHarvestActionInvocationCount:
+          exhaustionFoodHarvestActionInvocationCount,
+        foodActionWriterCount: exhaustionFoodWriterMutationCount,
         observedNetStockChange: exhaustionObservedDelta,
         writerDelta: exhaustionWriterDelta,
         writerDeltaMatchesObservedStockChange:
@@ -1001,14 +1204,16 @@ async function main() {
             toPeriod,
             writerGroups,
             foodActionWriterCount,
-            nativeActionInvocationDiagnosticCount,
+            foodActionTraceRecordCount,
+            foodHarvestActionInvocationCount,
           }) => ({
             id,
             fromPeriod,
             toPeriod,
             writerGroups,
             foodActionWriterCount,
-            nativeActionInvocationDiagnosticCount,
+            foodActionTraceRecordCount,
+            foodHarvestActionInvocationCount,
           }),
         ),
     },
@@ -1033,11 +1238,15 @@ async function main() {
   };
   await writeFile(
     path.join(root, "experiments/p56-food-stock-provenance-evidence.json"),
-    `${JSON.stringify(evidence, null, 2)}\n`,
+    await prettier.format(JSON.stringify(evidence, null, 2), {
+      parser: "json",
+    }),
   );
   await writeFile(
     path.join(root, "experiments/p56-food-stock-mutations.json"),
-    `${JSON.stringify(mutationFile, null, 2)}\n`,
+    await prettier.format(JSON.stringify(mutationFile, null, 2), {
+      parser: "json",
+    }),
   );
   console.log(
     JSON.stringify({
