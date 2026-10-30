@@ -52,7 +52,10 @@ import { createP42ConstructionPriorityEvidence } from "./p42-construction-priori
 import { createP43FoodSafeJobsEvidence } from "./p43-food-safe-jobs-evidence.mjs";
 import { createP51ConstructionJobsHandoffEvidence } from "./p51-construction-jobs-handoff-evidence.mjs";
 import { createP52IndependentConstructionJobsIdentityEvidence } from "./p52-independent-construction-jobs-identity-evidence.mjs";
-import { createP541ActivationLifecycleEvidence } from "./p54-1-activation-lifecycle-correction-evidence.mjs";
+import {
+  createP541ActivationLifecycleEvidence,
+  nativeTraceCalls,
+} from "./p54-1-activation-lifecycle-correction-evidence.mjs";
 import { planJobs } from "../src/domain/civic/jobs.ts";
 import { analyzeEconomicGoalDependencies } from "../src/domain/progression/economic-goal-dependencies.ts";
 
@@ -1047,7 +1050,9 @@ async function capture(session, period, arm) {
     starved: state.stats?.starved ?? null,
     deaths: state.stats?.died ?? null,
   };
-  const relevantNativeCalls = (diagnostics.nativeInvocations ?? [])
+  const nativeTraceRows = diagnostics.nativeInvocations ?? [];
+  const nativeApiInvocations = nativeTraceCalls(nativeTraceRows);
+  const relevantNativeCalls = nativeApiInvocations
     .filter(
       (entry) =>
         /^civ-/.test(entry.elementId ?? "") ||
@@ -1062,6 +1067,23 @@ async function capture(session, period, arm) {
       elementId,
       method,
     }));
+  const nativeTraceRowsAtPeriod = nativeTraceRows.filter(
+    (entry) => entry.period === period,
+  );
+  const nativeApiInvocationsAtPeriod = nativeApiInvocations.filter(
+    (entry) => entry.period === period,
+  );
+  const buildQueueSetDataTraceRows = nativeTraceRows.filter(
+    (entry) => entry.elementId === "buildQueue" && entry.method === "setData",
+  );
+  const buildQueueSetDataInvocations = nativeApiInvocations.filter(
+    (entry) => entry.elementId === "buildQueue" && entry.method === "setData",
+  );
+  const buildQueueSetDataTraceRowsAtPeriod = buildQueueSetDataTraceRows.filter(
+    (entry) => entry.period === period,
+  );
+  const buildQueueSetDataInvocationsAtPeriod =
+    buildQueueSetDataInvocations.filter((entry) => entry.period === period);
   return {
     period,
     saveSha256: hash(await session.exportSave()),
@@ -1080,32 +1102,25 @@ async function capture(session, period, arm) {
       ? {
           p54: {
             ...native.p51.p54,
-            nativeInvocationCount: (diagnostics.nativeInvocations ?? []).length,
+            nativeInvocationTraceRowsCount: nativeTraceRows.length,
+            nativeApiInvocationCount: nativeApiInvocations.length,
             nativeInvocationSequenceSha256: hash(
-              JSON.stringify(diagnostics.nativeInvocations ?? []),
+              JSON.stringify(nativeTraceRows),
             ),
-            nativeInvocationPeriod: (
-              diagnostics.nativeInvocations ?? []
-            ).filter((entry) => entry.period === period),
-            nativeInvocationPeriodCount: (
-              diagnostics.nativeInvocations ?? []
-            ).filter((entry) => entry.period === period).length,
+            nativeInvocationTraceRowsAtPeriod: nativeTraceRowsAtPeriod,
+            nativeInvocationTraceRowsAtPeriodCount:
+              nativeTraceRowsAtPeriod.length,
+            nativeApiInvocationsAtPeriodCount:
+              nativeApiInvocationsAtPeriod.length,
             nativeInvocationSequence:
-              period === 720 || period === 719
-                ? (diagnostics.nativeInvocations ?? [])
-                : undefined,
-            nativePriceProbeCount: (diagnostics.nativeInvocations ?? []).filter(
-              (entry) =>
-                entry.elementId === "buildQueue" && entry.method === "setData",
-            ).length,
-            periodNativePriceProbeCount: (
-              diagnostics.nativeInvocations ?? []
-            ).filter(
-              (entry) =>
-                entry.period === period &&
-                entry.elementId === "buildQueue" &&
-                entry.method === "setData",
-            ).length,
+              period === 720 || period === 719 ? nativeTraceRows : undefined,
+            buildQueueSetDataTraceRowsCount: buildQueueSetDataTraceRows.length,
+            buildQueueSetDataNativeApiInvocationsCount:
+              buildQueueSetDataInvocations.length,
+            buildQueueSetDataTraceRowsAtPeriodCount:
+              buildQueueSetDataTraceRowsAtPeriod.length,
+            buildQueueSetDataNativeApiInvocationsAtPeriodCount:
+              buildQueueSetDataInvocationsAtPeriod.length,
           },
         }
       : {}),

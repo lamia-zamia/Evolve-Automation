@@ -49,17 +49,19 @@ The ordinary native Quarry build initializes Quarry job controls in C and D-earl
 
 ## Cost and retained evidence
 
-| Arm            | Local pending checks | P53 hook reads | Whole-run root reads vs A | Reservation samples | Native price checks | p720 `buildQueue.setData` calls |
-| -------------- | -------------------: | -------------: | ------------------------: | ------------------: | ------------------: | ------------------------------: |
-| A              |                  180 |              0 |                         0 |                   0 |                   0 |                             104 |
-| C              |                    0 |            182 |                         5 |                   1 |                   2 |                             104 |
-| D-early        |                  182 |              0 |                         5 |                   1 |                   2 |                             104 |
-| D-early-repeat |                  182 |              0 |                         5 |                   1 |                   2 |                             104 |
-| D-late         |                  181 |              0 |                         9 |                   1 |                   1 |                             110 |
+| Arm            | Local pending checks | P53 hook reads | Whole-run root reads vs A | Reservation samples | P53 current-price checks | p720 `setData` trace rows | p720 native API invocations |
+| -------------- | -------------------: | -------------: | ------------------------: | ------------------: | -----------------------: | ------------------------: | --------------------------: |
+| A              |                  180 |              0 |                         0 |                   0 |                        0 |                       104 |                          52 |
+| C              |                    0 |            182 |                         5 |                   1 |                        2 |                       104 |                          52 |
+| D-early        |                  182 |              0 |                         5 |                   1 |                        2 |                       104 |                          52 |
+| D-early-repeat |                  182 |              0 |                         5 |                   1 |                        2 |                       104 |                          52 |
+| D-late         |                  181 |              0 |                         9 |                   1 |                        1 |                       110 |                          55 |
 
-The source reports whole-run root-count deltas separately from operation-scoped context, reservation, and price/control counters. The 104 `buildQueue.setData` calls are the full p720 native API count, including ordinary UI/game updates; they are not the price-probe count. The required two probes are measured at the Construction native-control authority boundary.
+The source reports whole-run root-count deltas separately from operation-scoped context, reservation, and price/control counters. The Chromium invocation bridge emits two trace rows per native API invocation. The derivation validates each adjacent pair, then reports both units: 104 raw rows are 52 `buildQueue.setData` calls; D-late's 110 rows are 55 calls. These totals include ordinary game/UI activity. The P53 current-price checks are separate Construction-authority probes: two in C and D-early, two in the repeat, and one in D-late.
 
-For D-early, retained evidence was 1,284 UTF-16 bytes for the request, 3,786 for activation samples, 714 for the cycle-89 publication sample, 208 for request lifecycle samples, 8,334 for P54 metrics, and 1,028 for P53 owner events. The request was consumed and its pending reference released. D-late retained one pending request reference after rejection. Synchronous timing readings were 0 ms at the observed clock resolution, so this experiment makes no CPU-savings claim.
+This correction was rederived from retained `test-artifacts/benchmark/tmp/p54-1-activation-lifecycle-correction-interim.json` (SHA-256 `ab0ad75a4f2402e13095146119fbd3e67d9d1c6255544a6ca10d789041bbc278`) with `node experiments/p54-1-rederive-count-accounting.mjs`; it did not replay the historical gameplay. P54 and P53 evidence files were left unchanged.
+
+For D-early, retained evidence was 1,284 UTF-16 bytes for the request, 3,786 for activation samples, 714 for the cycle-89 publication sample, 208 for request lifecycle samples, 8,334 for P54 metrics, and 1,028 for P53 owner events. The request was consumed and its pending reference released. D-late retained one pending request reference after rejection at p720; the exact replay stopped there with zero expiry events, before its later expiry, so that expiry was not observed. Synchronous timing readings were 0 ms at the observed clock resolution, so this experiment makes no CPU-savings claim.
 
 ## Verification and limits
 

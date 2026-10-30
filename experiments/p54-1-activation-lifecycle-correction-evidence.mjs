@@ -7,15 +7,16 @@ const at = (arm, period) =>
   arm?.checkpoints?.find((checkpoint) => checkpoint.period === period);
 const owner = (checkpoint) => checkpoint?.native?.p51?.p53;
 const metrics = (checkpoint) => checkpoint?.p54?.metrics ?? {};
-const nativeCalls = (checkpoint) => {
-  const trace = checkpoint?.p54?.nativeInvocationSequence ?? [];
+export function nativeTraceCalls(trace) {
   assert.equal(trace.length % 2, 0, "native trace must contain call pairs");
   const calls = [];
   for (let index = 0; index < trace.length; index += 2) {
     const call = trace[index];
     const result = trace[index + 1];
     assert.ok(
-      call.period === result.period &&
+      call.order === index &&
+        result.order === index + 1 &&
+        call.period === result.period &&
         call.elementId === result.elementId &&
         call.method === result.method,
       `native trace pair ${index / 2} must identify one native call`,
@@ -24,7 +25,38 @@ const nativeCalls = (checkpoint) => {
     calls.push(normalized);
   }
   return calls;
-};
+}
+
+export function countNativeTraceCalls(trace, matches = () => true) {
+  const calls = nativeTraceCalls(trace);
+  const rawTraceRows = trace.filter(matches).length;
+  const nativeApiInvocations = calls.filter(matches).length;
+  assert.equal(
+    rawTraceRows,
+    nativeApiInvocations * 2,
+    "each counted native API invocation must have two matching trace rows",
+  );
+  return { rawTraceRows, nativeApiInvocations };
+}
+
+const nativeCalls = (checkpoint) =>
+  nativeTraceCalls(checkpoint?.p54?.nativeInvocationSequence ?? []);
+const relevantNativeCalls = (checkpoint) =>
+  nativeCalls(checkpoint)
+    .filter(
+      (entry) =>
+        /^civ-/.test(entry.elementId ?? "") ||
+        (entry.method === "action" &&
+          (/^(undefined-food|city-lumber|undefined-stone)$/.test(
+            entry.elementId ?? "",
+          ) ||
+            /^(tech-|city-)/.test(entry.elementId ?? ""))),
+    )
+    .map(({ period, elementId, method }) => ({
+      period,
+      elementId,
+      method,
+    }));
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const hashValue = (value) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -87,7 +119,7 @@ function preIntervention(checkpoint) {
     saveSha256: checkpoint?.saveSha256,
     state: checkpoint?.state,
     controlUsage: checkpoint?.controlUsage,
-    gameplayActions: checkpoint?.nativeCalls,
+    gameplayActions: relevantNativeCalls(checkpoint),
     nativeTraceSha256: checkpoint?.p54?.nativeInvocationSequenceSha256,
     randomCalls: checkpoint?.randomCalls,
     rngState: checkpoint?.rngState,
@@ -157,10 +189,16 @@ function lifecycleCost(checkpoint, reference) {
     },
     reservationEvidenceReads: m.reservationEvidenceSamples ?? 0,
     nativePriceProbeCalls: m.nativePriceProbeCalls ?? 0,
-    buildQueueSetDataCalls:
+    buildQueueSetDataControlUsage:
       checkpoint?.controlUsage?.["buildQueue.setData"] ?? null,
-    totalBuildQueueSetDataCallsAtP720:
-      checkpoint?.p54?.periodNativePriceProbeCount ?? null,
+    p53CurrentPriceCheckInvocations: m.nativePriceProbeCalls ?? 0,
+    buildQueueSetDataAtP720: countNativeTraceCalls(
+      checkpoint?.p54?.nativeInvocationSequence ?? [],
+      (entry) =>
+        entry.period === 720 &&
+        entry.elementId === "buildQueue" &&
+        entry.method === "setData",
+    ),
     retainedBytes: {
       requestJsonUtf16: requestBytes,
       activationModeSamplesUtf16: activationBytes,
@@ -217,8 +255,8 @@ export function createP541ActivationLifecycleEvidence({
       {
         exact: same(preReference, preIntervention(periods[719])),
         gameplayActionsEqual: same(
-          checkpoints.A[719].nativeCalls,
-          periods[719].nativeCalls,
+          relevantNativeCalls(checkpoints.A[719]),
+          relevantNativeCalls(periods[719]),
         ),
         nativeTraceEqual:
           checkpoints.A[719].p54?.nativeInvocationSequenceSha256 ===
@@ -429,13 +467,31 @@ export function createP541ActivationLifecycleEvidence({
   const externalP42ReservationUnused =
     DEarly720.native.p51.p42OwnerCycleApplied === false &&
     externalP42ReservationReads === 0;
+  const setDataAtP720 = Object.fromEntries(
+    Object.entries({
+      A: A720,
+      C: C720,
+      "D-early": DEarly720,
+      "D-early-repeat": DEarlyRepeat720,
+      "D-late": DLate720,
+    }).map(([name, checkpoint]) => [
+      name,
+      countNativeTraceCalls(
+        checkpoint.p54?.nativeInvocationSequence ?? [],
+        (entry) =>
+          entry.period === 720 &&
+          entry.elementId === "buildQueue" &&
+          entry.method === "setData",
+      ),
+    ]),
+  );
   const cAndEarlyPriceChecks = {
-    C: metrics(C720).nativeControlAuthorityReads ?? 0,
-    "D-early": metrics(DEarly720).nativeControlAuthorityReads ?? 0,
-    CBuildQueueSetDataCallsAtP720:
-      C720.p54?.periodNativePriceProbeCount ?? null,
-    DEarlyBuildQueueSetDataCallsAtP720:
-      DEarly720.p54?.periodNativePriceProbeCount ?? null,
+    C: metrics(C720).nativePriceProbeCalls ?? 0,
+    "D-early": metrics(DEarly720).nativePriceProbeCalls ?? 0,
+    buildQueueSetDataAtP720: {
+      C: setDataAtP720.C,
+      "D-early": setDataAtP720["D-early"],
+    },
   };
   const quarryConflictPlan = (checkpoint) =>
     checkpoint.native.p51.p40ConstructionEvents?.find(
@@ -453,8 +509,11 @@ export function createP541ActivationLifecycleEvidence({
     purchaseDEarly.verifiedPostcondition &&
     cAndEarlyPriceChecks.C === 2 &&
     cAndEarlyPriceChecks["D-early"] === 2 &&
-    cAndEarlyPriceChecks.CBuildQueueSetDataCallsAtP720 ===
-      DEarly720.p54?.periodNativePriceProbeCount &&
+    cAndEarlyPriceChecks.buildQueueSetDataAtP720.C.nativeApiInvocations ===
+      cAndEarlyPriceChecks.buildQueueSetDataAtP720["D-early"]
+        .nativeApiInvocations &&
+    cAndEarlyPriceChecks.buildQueueSetDataAtP720.C.nativeApiInvocations ===
+      52 &&
     (metrics(C720).reservationEvidenceSamples ?? 0) > 0 &&
     (metrics(DEarly720).reservationEvidenceSamples ?? 0) > 0 &&
     ordinaryFarmIntentPreserved &&
@@ -585,6 +644,13 @@ export function createP541ActivationLifecycleEvidence({
         ownerDecision: purchaseDLate.decision,
         nativeStatePreserved: lateNativeStatePreserved,
         rejectedForPublicationTiming: lateRejectedForPublicationTiming,
+        requestLifecycleAtStop: {
+          replayStopPeriod: DLate720.period,
+          pendingRequestReferences:
+            metrics(DLate720).pendingRequestReferences ?? 0,
+          expiryEventsObserved: metrics(DLate720).requestExpiredEvents ?? 0,
+          laterExpiryObserved: false,
+        },
       },
       minimumLeadTime:
         "The P53 request must be installed before cycle 89's successful finish so that finish can capture the source-backed publication identity scoped to cycle 90. The contract specifies no fixed number of game periods: D-early arrived 12 periods before the finish at p712; D-late arrived 7 periods afterward and failed closed.",
@@ -600,7 +666,8 @@ export function createP541ActivationLifecycleEvidence({
       "D-early": purchaseDEarly,
       sameConstructionOwnedDecision: p53DecisionEquivalent,
       sameNativeQuarryDebit: debitEquivalent,
-      nativePriceChecks: cAndEarlyPriceChecks,
+      p53CurrentPriceCheckInvocations: cAndEarlyPriceChecks,
+      buildQueueSetDataAtP720: setDataAtP720,
       bothRequiredPriceChecksRetained:
         cAndEarlyPriceChecks.C === 2 && cAndEarlyPriceChecks["D-early"] === 2,
       p41ReservationSamples: {
@@ -665,6 +732,11 @@ export function createP541ActivationLifecycleEvidence({
         "D-late": hashValue(DLateCalls),
       },
       fullNativeTraceCEqualsDEarly: same(CCalls, DEarlyCalls),
+      pairAccounting: {
+        rowsPerNativeApiInvocation: 2,
+        adjacentPairsAndOrderValidated: true,
+        buildQueueSetDataAtP720: setDataAtP720,
+      },
       gameplayActionsAtP720: gameplayActions,
       period720GameplayActions: p720GameplayActions,
       gameplayActionEquality: {
@@ -680,7 +752,7 @@ export function createP541ActivationLifecycleEvidence({
       measurementClock: "performance.now() monotonic browser clock",
       byArm: armCosts,
       measurementLimit:
-        "nativePriceProbeCalls counts the two P53 execution-authority probes. totalBuildQueueSetDataCallsAtP720 is the entire native API call count at p720 (104 here) and includes ordinary UI/game updates. Synchronous durations were below the observed clock resolution, so no CPU savings or percent overhead is inferred.",
+        "P53 current-price checks are counted by the Construction authority metric. The p720 buildQueue.setData trace contains two raw rows per native API invocation: 104 rows are 52 calls, including ordinary UI/game updates. Trace pairs are validated before counting. Synchronous durations were below the observed clock resolution, so no CPU savings or percent overhead is inferred.",
     },
     isolation: {
       gatherActionsAdded: 0,
@@ -713,6 +785,9 @@ export function createP541ActivationLifecycleEvidence({
       productionAllocatorChanged: false,
       userInterfaceChanged: false,
       arbitraryLateRequestsSupported: false,
+      D_latePendingReferenceRetainedAtStop:
+        metrics(DLate720).pendingRequestReferences === 1,
+      exactReplayStoppedBeforeLaterExpiry: DLate720.period === 720,
       nextFeatureOrAuthorityExperimentAuthorized: false,
     },
   };
