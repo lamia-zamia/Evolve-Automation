@@ -1,6 +1,6 @@
 # P56 — Native Food-stock discontinuity provenance
 
-**Decision: A — Source identified and reproduced.** The transitions to exactly 50 are produced by the existing automation `Gather` path invoking the pinned game's ordinary Food harvest action 50 times when its Food stock is empty. Each call adds one Food for this Standard Human replay. The +50 is a batch of 50 native `modRes("Food", 1, true)` mutations, not a native fixed-50 grant, starvation reward, market transfer, or sampling artifact.
+**Decision: A — Native trace accounting and historical diagnostics reconciled.** The transitions to exactly 50 are produced by the existing automation `Gather` path invoking the pinned game's ordinary Food harvest action 50 times when its Food stock is empty. Each call adds one Food for this Standard Human replay. The +50 is a batch of 50 native `modRes("Food", 1, true)` mutations, not a native fixed-50 grant, starvation reward, market transfer, or sampling artifact.
 
 No production allocation, Jobs policy, Construction authority, resource behavior, or native-game checkout was changed. P56 only adds an experiment harness, a temporary instrumented copy of the pinned native snapshot, regressions, and evidence. The independent renderer CPU gate remains unresolved.
 
@@ -49,11 +49,36 @@ The same mechanism therefore explains repeated retained transitions, including t
 
 The clean and instrumented replays use the same pinned game, authentic fixture, settings, seed, epoch, runtime/policy bundles, P38 policy, P43 trace input, and replay harness. Only the temporary native snapshot differs. The wrapper calls the original function with the original arguments and receiver, and observes amounts around that call. Direct assignment probes retain the original statement and record only when its resolved target is the native Food resource.
 
-The paired replay used harness SHA-256 `b895951798e677643be5d93451f5bc62dd8a333f96b7f57600d3e5aa8fe06719`. The final checked-in harness SHA-256 is `2d5afdb7d5d35d149cb0b74b7d7f53fd40ff7c3194bd293acc16575c06b73e85`; it differs only by the final Prettier whitespace formatting pass. Both hashes are retained in the machine-readable evidence.
+The paired replay used harness SHA-256 `b895951798e677643be5d93451f5bc62dd8a333f96b7f57600d3e5aa8fe06719`. The final checked-in harness SHA-256 recorded with the original replay is `2d5afdb7d5d35d149cb0b74b7d7f53fd40ff7c3194bd293acc16575c06b73e85`; it differs only by the final Prettier whitespace formatting pass. Both hashes remain in machine evidence.
 
-Control versus instrumented, both B repeats, and the cross-repeat comparison have **123/123 exact checkpoints**. Checkpoint comparisons include native game state/save digest, production rows, action usage, random-call count/state, and native action-sequence digest. They also match all 1,161 P43 events, final exports, final RNG, and the full 108,698-entry native action sequence (SHA-256 `5e53745422c5194643d1d98012fb4bddd31aa3ec456466d124ef06a059c3b4be`). Worker assignments and Construction/Research state are included in the matched event/checkpoint data. The instrumented path has zero Food-trace overflow and zero trace errors.
+The retained P43/P56 evidence had checkpoint counts and hashes but not raw trace rows. To reconstruct the historical digest inputs, a trace-only clean-control capture replayed arms A and B for 10,000 periods with the pinned fixture, settings, seed, epoch, and runtime bundle. No Food writer instrumentation ran. Its harness SHA-256 is `a71b6f7085c4b3449cfde442a3178431eab31cade57b4563dcb11cf9be462c43`; the complete traces are retained below. Arm B's reconstructed raw sequence matches the original P56 trace hash exactly.
 
-The clean control also matches the retained P43 state and event timeline at all 123 checkpoints and 1,161 events after excluding the old `nativeCallsCount`/`nativeCallsSha256` diagnostic fields. Those legacy fields are not byte-identical: for example, at p8 the retained count is 22 and the reproduced count is 11, with different hashes. This is the retained runner's call-trace aggregation difference; it is not a state, action-sequence, RNG, export, worker, Construction, or Research divergence. Current clean and instrumented runs match each other on those diagnostics exactly.
+Control versus instrumented, both B repeats, and the cross-repeat comparison have **123/123 exact checkpoints**. Checkpoint comparisons include native game state/save digest, production rows, action usage, random-call count/state, and native action-sequence digest. They also match all 1,161 P43 events, final exports, final RNG, and the complete B raw trace. The original 108,698-record trace hash is preserved as SHA-256 `5e53745422c5194643d1d98012fb4bddd31aa3ec456466d124ef06a059c3b4be`. Worker assignments and Construction/Research state are included in the matched event/checkpoint data. The instrumented path has zero Food-trace overflow and zero trace errors.
+
+### Native trace units
+
+The Chromium bridge stores one record for each callback from the pinned control wrapper. The wrapper emits a `before` and an `after` callback for every native control method invocation, so the full trace has two adjacent records per invocation. The reusable normalizer checks array order, period, element ID, and method for every pair, then retains one record per invocation.
+
+| P56 B counter                                                |   Count | Unit                                                                                  |
+| ------------------------------------------------------------ | ------: | ------------------------------------------------------------------------------------- |
+| Raw trace                                                    | 108,698 | Bridge records; original hash above                                                   |
+| Validated native API invocations                             |  54,349 | Adjacent record pairs                                                                 |
+| Native `action` method invocations                           |   2,149 | Mutation-capable action calls; this is not a claim that every call changed game state |
+| Read-only native calls                                       |  12,270 | `hell`, `on_cap`, `s_max`, and `vis` methods                                          |
+| Other native control method calls                            |  39,930 | `setData`, `setDefault`, `swapTab`, `add`, and `sub`                                  |
+| Food harvest actions in the 39 recovery windows              |   1,950 | 50 validated `undefined-food.action` invocations per window                           |
+| Food action trace rows in those windows                      |   3,900 | Raw before/after records; 100 per window                                              |
+| Food mutations recorded by the native writer instrumentation |   1,950 | 50 `modRes("Food", 1, true)` writes per window; total delta +1,950                    |
+
+The counters in the derived mutation evidence now use `foodActionTraceRecordCount` for raw records, `foodHarvestActionInvocationCount` for validated actions, and `foodActionWriterCount` for changed Food amounts observed by writer instrumentation. The complete raw A and B audit traces are retained in [arm A](p56-native-invocation-trace-arm-a.jsonl) and [arm B](p56-native-invocation-trace-arm-b.jsonl).
+
+### P43 historical diagnostic reconciliation
+
+P43's original aggregation filtered raw `diagnostics.nativeInvocations` rows with the retained method/action predicate, projected each matching row to `{period, elementId, method}`, and hashed that ordered array. P56 validates each adjacent pair first and then applies the same filter and projection to one record per invocation. The checkpoint boundaries and filter are unchanged.
+
+For both retained arms, all **123/123 checkpoint counts and hashes** match under both representations. The reproducible transformation is: preserve each adjacent pair's first row, then apply the current P43 filter/projection. At p8, the historical count of 22 and hash `b446b56b6d7347a7212b1ba64293f575437ac6ce3a22325f1ebd5658ba64b2c8` reconstruct exactly from raw pairs; normalization yields 11 invocations and hash `d5afb6b10146bd41bb1dbaba7fc3a3b2c83fc6cfa215ca98244aee78a4829d39`. At p10000, arm A reconciles 10,714 raw rows to 5,357 invocations, and arm B reconciles 6,862 raw rows to 3,431 invocations. Every reconstructed historical digest and normalized current digest matches its retained checkpoint. The discrepancy is paired bridge-record representation; the replay has no additional or missing native API invocations.
+
+The clean control also matches the retained P43 state and event timeline at all 123 checkpoints and 1,161 events. Current clean and instrumented runs match each other on the normalized diagnostics exactly.
 
 ## Food modeling and remaining boundary
 
@@ -73,7 +98,9 @@ The P45 replay establishes the provenance of this discontinuity, not the safety 
 - [P56 report](p56-food-stock-provenance.md)
 - [Machine-readable replay and parity evidence](p56-food-stock-provenance-evidence.json)
 - [Machine-readable before/after Food mutations for all 39 transitions](p56-food-stock-mutations.json)
+- [Complete raw native invocation traces for both P43 arms](p56-native-invocation-trace-arm-a.jsonl) and [arm B](p56-native-invocation-trace-arm-b.jsonl)
 - [Bounded snapshot instrumentation and deterministic replay harness](p56-food-stock-provenance.mjs)
 - [Parity, source-transform, and writer-attribution regression](../tests/experiments/p56-food-stock-provenance-test.mjs)
+- [Native trace pairing, filter, count, and digest reconciliation regression](../tests/experiments/p56-native-invocation-accounting-test.mjs)
 
 No production allocator work follows this report. The unresolved ≤2% renderer CPU gate remains a separate production blocker.

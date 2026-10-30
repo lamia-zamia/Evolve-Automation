@@ -3296,7 +3296,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.75872493330205,
@@ -6203,7 +6204,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 45.98772429333325,
@@ -8922,7 +8924,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 50,
@@ -11528,7 +11531,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.877631100000116,
@@ -14259,7 +14263,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 47.11852916666665,
@@ -17122,7 +17127,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 45.0577605333334,
@@ -19721,7 +19727,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.98159524000008,
@@ -22320,7 +22327,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.673926640000104,
@@ -24963,7 +24971,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.44067641333345,
@@ -27826,7 +27835,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 46.8763348250001,
@@ -30689,7 +30699,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 46.8763348250001,
@@ -33288,7 +33299,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.673926640000104,
@@ -35887,7 +35899,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.98399375166674,
@@ -38750,7 +38763,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 45.0577605333334,
@@ -41613,7 +41627,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 46.767383626666735,
@@ -44520,7 +44535,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 46.294822888333435,
@@ -47295,7 +47311,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 47.74399336000011,
@@ -49894,7 +49911,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.692828146666784,
@@ -52537,7 +52555,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.23578048666676,
@@ -55136,7 +55155,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.673926640000104,
@@ -57911,7 +57931,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.06015554666679,
@@ -60561,7 +60582,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.04533999999991,
@@ -63160,7 +63182,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.88858666666678,
@@ -65891,7 +65914,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.5569866666665,
@@ -68622,7 +68646,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 47.12746666666669,
@@ -71309,7 +71334,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.852266666666665,
@@ -74128,7 +74154,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 47.25746666666664,
@@ -76815,7 +76842,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.11226666666673,
@@ -79590,7 +79618,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.623999999999896,
@@ -82365,7 +82394,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.623999999999896,
@@ -85228,7 +85258,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.75399999999992,
@@ -88135,7 +88166,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 47.381839999999855,
@@ -90910,7 +90942,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.623999999999896,
@@ -93641,7 +93674,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.84066666666655,
@@ -96284,7 +96318,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.581503999999946,
@@ -98927,7 +98962,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.581503999999946,
@@ -101570,7 +101606,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.581503999999946,
@@ -104301,7 +104338,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 49.3061120000002,
@@ -107076,7 +107114,8 @@
           "actionIdentity": "native Food resource action invoked by existing Gather adapter"
         }
       ],
-      "nativeActionInvocationDiagnosticCount": 100,
+      "foodActionTraceRecordCount": 100,
+      "foodHarvestActionInvocationCount": 50,
       "foodActionWriterCount": 50,
       "foodActionWriterDelta": 50,
       "writerDelta": 48.428650666666556,
