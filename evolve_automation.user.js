@@ -8433,9 +8433,7 @@
 
   // src/domain/progression/research/research.ts
   function planResearch(input) {
-    let tech = input.techs.find(
-      (candidate) => candidate.affordable && !candidate.hasCostConflict && !candidate.hasTechConflict
-    );
+    let eligible = (candidate) => candidate.affordable && !candidate.hasCostConflict && !candidate.hasTechConflict && candidate.mutationUncertain !== !0, madGoalCandidate = input.madGoalCandidate, tech = madGoalCandidate?.id === "tech-mad" && eligible(madGoalCandidate) ? madGoalCandidate : input.techs.find(eligible);
     return tech === void 0 ? null : Object.freeze({ index: tech.index, techId: tech.id });
   }
 
@@ -8444,19 +8442,41 @@
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
-    let measure = createPhaseMeasure(dependencies.diagnostics), startIndex = 0;
+    let measure = createPhaseMeasure(dependencies.diagnostics), startIndex = 0, madPriorityAttempted = !1;
     for (; ; ) {
       let observation = measure(
         "autoResearch.read",
         () => dependencies.reader.read(startIndex)
-      ), decision = measure(
+      );
+      if (observation.available === !1) return SUCCEEDED3;
+      let decision = measure(
         "autoResearch.plan",
         () => planResearch(observation)
       );
-      if (decision === null)
-        return SUCCEEDED3;
+      if (decision === null) return SUCCEEDED3;
+      let madPriorityDecision = !1, madGoalCandidate;
+      if (startIndex === 0 && !madPriorityAttempted && decision.techId !== "tech-mad" && dependencies.reader.readMadGoalCandidate !== void 0) {
+        madPriorityAttempted = !0, madGoalCandidate = dependencies.reader.readMadGoalCandidate();
+        let candidate = madGoalCandidate;
+        if (candidate !== void 0) {
+          let prioritized = measure(
+            "autoResearch.plan",
+            () => planResearch({ ...observation, madGoalCandidate: candidate })
+          );
+          prioritized?.techId === "tech-mad" && (decision = prioritized, madPriorityDecision = !0);
+        }
+      }
       dependencies.onSelection?.(
-        Object.freeze({ decision, observed: observation.techs })
+        Object.freeze({
+          decision,
+          observed: madGoalCandidate === void 0 || observation.techs.some(
+            (candidate) => candidate.index === madGoalCandidate?.index
+          ) ? observation.techs : Object.freeze(
+            [...observation.techs, madGoalCandidate].sort(
+              (left, right) => left.index - right.index
+            )
+          )
+        })
       );
       let result = measure(
         "autoResearch.execute",
@@ -8467,9 +8487,9 @@
           decision,
           disposition: result.disposition
         })
-      ), result.outcome.status !== "succeeded" || result.disposition !== "candidate-rejected")
+      ), (result.disposition === "no-observed-research" || result.outcome.status === "rejected" && result.outcome.failure.code === "research-click-failed") && dependencies.onUncertainMutation?.(decision), result.outcome.status !== "succeeded" || result.disposition !== "candidate-rejected")
         return result.outcome;
-      startIndex = decision.index + 1;
+      madPriorityDecision ? (startIndex = 0, madPriorityAttempted = !0) : startIndex = decision.index + 1;
     }
   }
 
@@ -8491,7 +8511,8 @@
 
   // src/adapters/evolve/progression/research/captured-research.ts
   var NOTHING_OFFERED = Object.freeze({
-    techs: Object.freeze([])
+    techs: Object.freeze([]),
+    available: !1
   });
   function executionResult(outcome, disposition) {
     return Object.freeze({ outcome, disposition });
@@ -8507,6 +8528,64 @@
         decision.status === "conflict" ? decision.conflict.code : `unavailable: ${decision.reason}${decision.field === void 0 ? "" : ` (${decision.field})`}`
       ), decision;
     }
+    function readTechView(tech, index) {
+      if (dependencies.isMutationUncertain?.(tech.elementId) === !0)
+        return Object.freeze({
+          index,
+          id: tech.elementId,
+          affordable: !1,
+          hasCostConflict: !1,
+          hasTechConflict: !1,
+          mutationUncertain: !0
+        });
+      let resourceSample = tech.nativeAffordable ? resources.readResources(Object.keys(tech.cost)) : void 0, resourceAffordable = resourceSample === void 0 ? void 0 : canAfford(resourceSample, tech.cost), affordable = tech.nativeAffordable && resourceAffordable === !0, costConflictEvidence = "not-evaluated", costConflictRejected = !1, exclusionEvidence = "not-evaluated", reservationReason, exclusionReason;
+      if (affordable) {
+        let conflict = conflicts.evaluate(tech.cost);
+        costConflictRejected = conflict.status !== "none", costConflictEvidence = conflict.status === "none" && "evidence" in conflict && conflict.evidence === "unavailable" ? "unavailable" : conflict.status, reservationReason = conflict.status === "conflict" ? `${conflict.conflict.targetCause}:${conflict.conflict.targetName}` : conflict.status === "unavailable" || "evidence" in conflict && conflict.evidence === "unavailable" ? "reservation or holdings evidence unavailable" : void 0;
+      }
+      let techConflict = !1;
+      if (affordable) {
+        let decision = readTechConflict(tech);
+        exclusionEvidence = decision.status === "none" ? "none" : decision.status === "conflict" ? "excluded" : "unavailable", exclusionReason = decision.status === "conflict" ? decision.conflict.code : decision.status === "unavailable" ? `unavailable:${decision.reason}${decision.field === void 0 ? "" : `:${decision.field}`}` : void 0, techConflict = decision.status !== "none";
+      }
+      return Object.freeze({
+        index,
+        id: tech.elementId,
+        affordable,
+        // Match the legacy gate: a reservation only matters for an otherwise affordable purchase.
+        hasCostConflict: affordable && costConflictRejected,
+        hasTechConflict: affordable && techConflict,
+        ...dependencies.observeOwner === !0 ? {
+          nativeAffordable: tech.nativeAffordable,
+          offerGeneration: tech.generation,
+          offerObservationId: tech.offerObservationId,
+          offerSetIdentity: tech.offerSetIdentity,
+          offerCost: tech.cost,
+          resourceAffordable,
+          ...resourceSample === void 0 ? {} : {
+            observedResources: Object.freeze(
+              Object.fromEntries(
+                Array.from(
+                  resourceSample.resources.entries(),
+                  ([id, resource]) => [
+                    id,
+                    Object.freeze({
+                      amount: resource.amount,
+                      max: resource.max,
+                      rateOfChange: resource.rateOfChange
+                    })
+                  ]
+                )
+              )
+            )
+          },
+          costConflictEvidence,
+          exclusionEvidence,
+          ...reservationReason === void 0 ? {} : { reservationReason },
+          ...exclusionReason === void 0 ? {} : { exclusionReason }
+        } : {}
+      });
+    }
     let reader = Object.freeze({
       read(startIndex) {
         if (!Number.isSafeInteger(startIndex) || startIndex < 0)
@@ -8518,60 +8597,31 @@
         for (let index = startIndex; index < offered.length; index++) {
           let tech = offered[index];
           if (tech === void 0) continue;
-          let resourceSample = tech.nativeAffordable ? resources.readResources(Object.keys(tech.cost)) : void 0, resourceAffordable = resourceSample === void 0 ? void 0 : canAfford(resourceSample, tech.cost), affordable = tech.nativeAffordable && resourceAffordable === !0, costConflictEvidence = "not-evaluated", costConflictRejected = !1, exclusionEvidence = "not-evaluated", reservationReason, exclusionReason;
-          if (affordable) {
-            let conflict = conflicts.evaluate(tech.cost);
-            costConflictRejected = conflict.status !== "none", costConflictEvidence = conflict.status === "none" && "evidence" in conflict && conflict.evidence === "unavailable" ? "unavailable" : conflict.status, reservationReason = conflict.status === "conflict" ? `${conflict.conflict.targetCause}:${conflict.conflict.targetName}` : conflict.status === "unavailable" || "evidence" in conflict && conflict.evidence === "unavailable" ? "reservation or holdings evidence unavailable" : void 0;
-          }
-          let techConflict = !1;
-          if (affordable) {
-            let decision = readTechConflict(tech);
-            exclusionEvidence = decision.status === "none" ? "none" : decision.status === "conflict" ? "excluded" : "unavailable", exclusionReason = decision.status === "conflict" ? decision.conflict.code : decision.status === "unavailable" ? `unavailable:${decision.reason}${decision.field === void 0 ? "" : `:${decision.field}`}` : void 0, techConflict = decision.status !== "none";
-          }
-          let view = Object.freeze({
-            index,
-            id: tech.elementId,
-            affordable,
-            // Match the legacy gate: what a reservation is saving for only matters for something
-            // that could otherwise be bought right now.
-            hasCostConflict: affordable && costConflictRejected,
-            // The same applies to exclusions: an unaffordable technology is not a decision yet, and
-            // sampling guard and achievement facts for it would be work the cycle cannot use.
-            hasTechConflict: affordable && techConflict,
-            ...dependencies.observeOwner === !0 ? {
-              nativeAffordable: tech.nativeAffordable,
-              offerGeneration: tech.generation,
-              offerObservationId: tech.offerObservationId,
-              offerSetIdentity: tech.offerSetIdentity,
-              offerCost: tech.cost,
-              resourceAffordable,
-              ...resourceSample === void 0 ? {} : {
-                observedResources: Object.freeze(
-                  Object.fromEntries(
-                    Array.from(
-                      resourceSample.resources.entries(),
-                      ([id, resource]) => [
-                        id,
-                        Object.freeze({
-                          amount: resource.amount,
-                          max: resource.max,
-                          rateOfChange: resource.rateOfChange
-                        })
-                      ]
-                    )
-                  )
-                )
-              },
-              costConflictEvidence,
-              exclusionEvidence,
-              ...reservationReason === void 0 ? {} : { reservationReason },
-              ...exclusionReason === void 0 ? {} : { exclusionReason }
-            } : {}
-          });
-          if (techs.push(view), view.affordable && !view.hasCostConflict && !view.hasTechConflict)
+          let view = readTechView(tech, index);
+          if (techs.push(view), view.affordable && !view.hasCostConflict && !view.hasTechConflict && view.mutationUncertain !== !0)
             break;
         }
-        return Object.freeze({ techs: Object.freeze(techs) });
+        return Object.freeze({ techs: Object.freeze(techs), available: !0 });
+      },
+      readMadGoalCandidate() {
+        if (offered === void 0 || dependencies.currentRootGeneration !== void 0 && dependencies.readRootGeneration?.() !== dependencies.currentRootGeneration)
+          return;
+        let currentRoot = rootState.readRoot();
+        if (currentRoot === void 0 || currentRoot !== dependencies.currentRoot || dependencies.currentRootGeneration !== void 0 && dependencies.readRootGeneration?.() !== dependencies.currentRootGeneration || readProperty(readProperty(currentRoot, "tech"), "mad") !== 0)
+          return;
+        let settings = dependencies.readSettings();
+        if (readProperty(settings, "prestigeType") !== "mad" || readProperty(settings, "autoResearch") !== !0 || readProperty(settings, "autoPrestige") !== !0)
+          return;
+        let index = offered.findIndex(
+          (candidate) => candidate.elementId === "tech-mad"
+        );
+        if (index < 0) return;
+        let tech = offered[index];
+        if (tech === void 0 || tech.grantTechnology !== "mad" || !Number.isFinite(tech.grantLevel) || tech.grantLevel <= 0)
+          return;
+        let handle = controls2.resolve(tech.elementId);
+        if (!(handle === void 0 || handle.generation !== tech.generation || !handle.methods.includes("action")) && !(dependencies.currentRootGeneration !== void 0 && dependencies.readRootGeneration?.() !== dependencies.currentRootGeneration))
+          return readTechView(tech, index);
       }
     }), executor = Object.freeze({
       execute(decision) {
@@ -8586,6 +8636,16 @@
                 index: decision.index,
                 actualTechId: tech?.elementId ?? null
               }
+            ),
+            "stopped"
+          );
+        let currentRoot = rootState.readRoot();
+        if (currentRoot === void 0 || currentRoot !== dependencies.currentRoot || dependencies.currentRootGeneration !== void 0 && dependencies.readRootGeneration?.() !== dependencies.currentRootGeneration)
+          return executionResult(
+            stale(
+              "stale-research-root",
+              "the game replaced its root after this offer snapshot",
+              { techId: decision.techId }
             ),
             "stopped"
           );
@@ -8607,8 +8667,17 @@
             ),
             "stopped"
           );
+        if (dependencies.currentRootGeneration !== void 0 && dependencies.readRootGeneration?.() !== dependencies.currentRootGeneration)
+          return executionResult(
+            stale(
+              "stale-research-root",
+              "the game replaced its root before the native action",
+              { techId: decision.techId }
+            ),
+            "stopped"
+          );
         let before = readCapturedTechnologyLevel(
-          rootState.readRoot(),
+          currentRoot,
           tech.grantTechnology
         );
         if (before === void 0 || !Number.isFinite(tech.grantLevel))
@@ -8620,12 +8689,17 @@
             ),
             "stopped"
           );
+        if (before >= tech.grantLevel)
+          return executionResult(SUCCEEDED, "candidate-rejected");
         let manaStockBefore, result = controls2.invoke(handle, "action");
         if (!result.ok)
           return executionResult(
             result.reason === "stale-control" ? stale("stale-research-control", result.detail ?? result.reason, {
               techId: decision.techId
-            }) : rejected("research-click-failed", result.detail ?? result.reason),
+            }) : rejected(
+              result.reason === "threw" ? "research-click-failed" : "research-invocation-not-started",
+              result.detail ?? result.reason
+            ),
             "stopped"
           );
         let after = readCapturedTechnologyLevel(
@@ -9569,19 +9643,50 @@
       rootState,
       readSettings: dependencies.readSettings,
       resources
-    }), reportedRejections = /* @__PURE__ */ new Set(), testInterventionRootObserved = !1, testInterventionDisabled = !1, testInterventionComplete = !1, onRejected = (techId, reason) => {
+    }), reportedRejections = /* @__PURE__ */ new Set(), uncertainMutations = /* @__PURE__ */ new Map(), rootIdentities = /* @__PURE__ */ new WeakMap(), nextRootIdentity = 0, identifyRoot = (root) => {
+      if (root === null || typeof root != "object" && typeof root != "function")
+        return;
+      let object = root, existing = rootIdentities.get(object);
+      if (existing !== void 0) return existing;
+      let identity = ++nextRootIdentity;
+      return rootIdentities.set(object, identity), identity;
+    }, rootGeneration = 0;
+    rootState.subscribeRootReplaced(() => {
+      rootGeneration += 1;
+    });
+    let testInterventionRootObserved = !1, testInterventionDisabled = !1, testInterventionComplete = !1, onRejected = (techId, reason) => {
       if (onUnavailable === void 0) return;
       let message = `${techId}: research excluded (${reason})`;
       reportedRejections.has(message) || (reportedRejections.add(message), onUnavailable(message));
     };
     return Object.freeze({
       runCycle() {
-        if (lastOwnerOffers = void 0, rootState.readRoot() === void 0) return NOT_CAPTURED2;
-        let testOnlyIntervention;
+        lastOwnerOffers = void 0;
+        let currentRootGeneration = rootGeneration, currentRoot = rootState.readRoot();
+        if (currentRoot === void 0) return NOT_CAPTURED2;
+        let currentRootIdentity = identifyRoot(currentRoot), testOnlyIntervention;
         offeredThisCycle = sharedReadOfferedTechs === void 0 ? catalog.read()?.offered : sharedReadOfferedTechs(), lastOwnerOffers = offeredThisCycle;
+        for (let [actionId, mutation] of uncertainMutations) {
+          if (mutation.rootIdentity !== void 0 && currentRootIdentity !== void 0 && mutation.rootIdentity !== currentRootIdentity) {
+            uncertainMutations.delete(actionId);
+            continue;
+          }
+          if (mutation.grantTechnology !== void 0 && mutation.grantLevel !== void 0) {
+            let grant = readCapturedTechnologyLevel(
+              currentRoot,
+              mutation.grantTechnology
+            );
+            grant !== void 0 && grant >= mutation.grantLevel && uncertainMutations.delete(actionId);
+          }
+        }
         try {
           let { reader, executor } = createCapturedResearchAdapter({
             rootState,
+            currentRoot,
+            currentRootGeneration,
+            readRootGeneration: () => rootGeneration,
+            readSettings: dependencies.readSettings,
+            isMutationUncertain: (actionId) => uncertainMutations.has(actionId),
             offered: offeredThisCycle,
             resources,
             conflicts,
@@ -9596,6 +9701,17 @@
             executor,
             diagnostics,
             ...dependencies.onOwnerSelection === void 0 ? {} : { onSelection: dependencies.onOwnerSelection },
+            onUncertainMutation: ({ index, techId }) => {
+              let offer = offeredThisCycle?.[index];
+              uncertainMutations.set(
+                techId,
+                Object.freeze({
+                  rootIdentity: currentRootIdentity,
+                  grantTechnology: offer?.elementId === techId ? offer.grantTechnology : void 0,
+                  grantLevel: offer?.elementId === techId ? offer.grantLevel : void 0
+                })
+              );
+            },
             ...diagnostics?.readPerformanceEnabled() === !0 || testOnlyIntervention !== void 0 ? {
               onSelectionResult: (result) => {
                 result.decision.techId === testOnlyIntervention?.targetActionId && (result.disposition === "researched" ? testInterventionComplete = !0 : testInterventionDisabled = !0), dependencies.onOwnerSelectionResult?.(result);
