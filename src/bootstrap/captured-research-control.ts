@@ -8,6 +8,7 @@
 
 import { runResearchAutomation } from "../application/research.ts";
 import { planResearch } from "../domain/progression/research/research.ts";
+import { canAfford } from "../domain/game-world.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
@@ -33,6 +34,8 @@ import type { TickDiagnostics } from "../ports/tick.ts";
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
 import type { ResearchInput } from "../domain/progression/research/research.ts";
+import type { GatherMaterialTarget } from "../ports/gather-resources.ts";
+import { readProperty } from "../adapters/validation.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
@@ -53,6 +56,9 @@ export interface CapturedResearchControlDependencies {
   readonly panels: GamePanelWorkspace;
   /** Optional shared offer snapshot source supplied by a surrounding composition root. */
   readonly readOfferedTechs?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
+  /** Current cached offer snapshot only; unlike readOfferedTechs, this never samples the panel. */
+  readonly readCurrentOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports successful captured research after the technology state changed. */
@@ -90,6 +96,8 @@ export interface CapturedResearchControlDependencies {
 export interface CapturedResearchControl {
   /** Runs one research cycle. Safe to call before the game has created its state. */
   runCycle(): CommandExecutionOutcome;
+  /** Current material shortage of the Research owner's next eligible native offer. */
+  readMaterialGatherTarget(): GatherMaterialTarget | undefined;
   /** Test-surface-only reader for exclusions on a current native offer. */
   readCurrentOfferEligibility?(
     actionId: string,
@@ -128,6 +136,7 @@ export function createCapturedResearchControl(
   const onUnavailable = dependencies.onUnavailable;
   const onActivity = dependencies.onActivity;
   const sharedReadOfferedTechs = dependencies.readOfferedTechs;
+  const readCurrentOfferedTechs = dependencies.readCurrentOfferedTechs;
   const resources = createCapturedResourceSource(rootState);
   const costs = createCapturedActionCostReader({
     rootState,
@@ -225,7 +234,115 @@ export function createCapturedResearchControl(
     onUnavailable(message);
   };
 
+  const readMaterialGatherTarget = (): GatherMaterialTarget | undefined => {
+    const settings = dependencies.readSettings();
+    if (readProperty(settings, "autoResearch") !== true) return undefined;
+    const root = rootState.readRoot();
+    const offers = offeredThisCycle ?? readCurrentOfferedTechs?.();
+    if (root === undefined || offers === undefined) return undefined;
+    const rootGenerationAtRead = rootGeneration;
+    const materialIds = ["Lumber", "Stone", "Chrysotile"] as const;
+
+    for (const offer of offers) {
+      if (uncertainMutations.has(offer.elementId)) continue;
+      const nativeControl = controls.resolve(offer.elementId);
+      if (
+        nativeControl === undefined ||
+        !nativeControl.methods.includes("action") ||
+        nativeControl.generation !== offer.generation
+      )
+        continue;
+      if (techConflicts.evaluate(offer).status !== "none") continue;
+      const sample = resources.readResources(Object.keys(offer.cost));
+      if (sample === undefined) continue;
+      if (offer.nativeAffordable && canAfford(sample, offer.cost))
+        return undefined;
+
+      let unsupportedShortage = false;
+      for (const [resourceId, price] of Object.entries(offer.cost)) {
+        if (!Number.isFinite(price) || price < 0) {
+          unsupportedShortage = true;
+          break;
+        }
+        if (
+          price === 0 ||
+          materialIds.includes(resourceId as (typeof materialIds)[number])
+        )
+          continue;
+        const held = sample.resources.get(resourceId);
+        if (held === undefined || held.amount < price) {
+          unsupportedShortage = true;
+          break;
+        }
+      }
+      if (unsupportedShortage) continue;
+
+      let selectedResource: (typeof materialIds)[number] | undefined;
+      let selectedPrice: number | undefined;
+      for (const resourceId of materialIds) {
+        const price = offer.cost[resourceId];
+        if (price === undefined || price <= 0) continue;
+        const held = sample.resources.get(resourceId);
+        if (held === undefined || (held.max > 0 && held.max < price)) {
+          unsupportedShortage = true;
+          break;
+        }
+        if (held.amount < price && selectedResource === undefined) {
+          selectedResource = resourceId;
+          selectedPrice = price;
+        }
+      }
+      if (
+        unsupportedShortage ||
+        selectedResource === undefined ||
+        selectedPrice === undefined
+      )
+        continue;
+
+      const actionId = offer.elementId;
+      const resourceId = selectedResource;
+      const quantity = selectedPrice;
+      const targetGeneration = offer.generation;
+      const targetCost = offer.cost;
+      const isCurrent = () => {
+        const currentSettings = dependencies.readSettings();
+        const currentRoot = rootState.readRoot();
+        const currentOffer = (
+          offeredThisCycle ?? readCurrentOfferedTechs?.()
+        )?.find((candidate) => candidate.elementId === actionId);
+        const currentControl = controls.resolve(actionId);
+        const currentSample = resources.readResources(Object.keys(targetCost));
+        return (
+          readProperty(currentSettings, "autoResearch") === true &&
+          rootGeneration === rootGenerationAtRead &&
+          currentRoot === root &&
+          currentOffer !== undefined &&
+          currentOffer.generation === targetGeneration &&
+          Object.keys(targetCost).length ===
+            Object.keys(currentOffer.cost).length &&
+          Object.entries(targetCost).every(
+            ([id, price]) => currentOffer.cost[id] === price,
+          ) &&
+          currentControl?.methods.includes("action") === true &&
+          currentControl.generation === targetGeneration &&
+          currentSample !== undefined &&
+          techConflicts.evaluate(currentOffer).status === "none"
+        );
+      };
+      return Object.freeze({
+        source: "research",
+        targetId: actionId,
+        resourceId,
+        quantity,
+        generation: targetGeneration,
+        isCurrent,
+      });
+    }
+    return undefined;
+  };
+
   return Object.freeze({
+    readMaterialGatherTarget,
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {

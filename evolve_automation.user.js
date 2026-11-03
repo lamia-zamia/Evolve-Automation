@@ -9607,7 +9607,7 @@
       mountSuppression,
       panels,
       diagnostics
-    } = dependencies, onUnavailable = dependencies.onUnavailable, onActivity = dependencies.onActivity, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
+    } = dependencies, onUnavailable = dependencies.onUnavailable, onActivity = dependencies.onActivity, sharedReadOfferedTechs = dependencies.readOfferedTechs, readCurrentOfferedTechs = dependencies.readCurrentOfferedTechs, resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
       controls: controls2,
       ...dependencies.readComputedRequirementsContext === void 0 ? {} : {
@@ -9660,6 +9660,64 @@
       reportedRejections.has(message) || (reportedRejections.add(message), onUnavailable(message));
     };
     return Object.freeze({
+      readMaterialGatherTarget: () => {
+        let settings = dependencies.readSettings();
+        if (readProperty(settings, "autoResearch") !== !0) return;
+        let root = rootState.readRoot(), offers = offeredThisCycle ?? readCurrentOfferedTechs?.();
+        if (root === void 0 || offers === void 0) return;
+        let rootGenerationAtRead = rootGeneration, materialIds = ["Lumber", "Stone", "Chrysotile"];
+        for (let offer of offers) {
+          if (uncertainMutations.has(offer.elementId)) continue;
+          let nativeControl = controls2.resolve(offer.elementId);
+          if (nativeControl === void 0 || !nativeControl.methods.includes("action") || nativeControl.generation !== offer.generation || techConflicts.evaluate(offer).status !== "none") continue;
+          let sample = resources.readResources(Object.keys(offer.cost));
+          if (sample === void 0) continue;
+          if (offer.nativeAffordable && canAfford(sample, offer.cost))
+            return;
+          let unsupportedShortage = !1;
+          for (let [resourceId2, price] of Object.entries(offer.cost)) {
+            if (!Number.isFinite(price) || price < 0) {
+              unsupportedShortage = !0;
+              break;
+            }
+            if (price === 0 || materialIds.includes(resourceId2))
+              continue;
+            let held = sample.resources.get(resourceId2);
+            if (held === void 0 || held.amount < price) {
+              unsupportedShortage = !0;
+              break;
+            }
+          }
+          if (unsupportedShortage) continue;
+          let selectedResource, selectedPrice;
+          for (let resourceId2 of materialIds) {
+            let price = offer.cost[resourceId2];
+            if (price === void 0 || price <= 0) continue;
+            let held = sample.resources.get(resourceId2);
+            if (held === void 0 || held.max > 0 && held.max < price) {
+              unsupportedShortage = !0;
+              break;
+            }
+            held.amount < price && selectedResource === void 0 && (selectedResource = resourceId2, selectedPrice = price);
+          }
+          if (unsupportedShortage || selectedResource === void 0 || selectedPrice === void 0)
+            continue;
+          let actionId = offer.elementId, resourceId = selectedResource, quantity = selectedPrice, targetGeneration = offer.generation, targetCost = offer.cost;
+          return Object.freeze({
+            source: "research",
+            targetId: actionId,
+            resourceId,
+            quantity,
+            generation: targetGeneration,
+            isCurrent: () => {
+              let currentSettings = dependencies.readSettings(), currentRoot = rootState.readRoot(), currentOffer = (offeredThisCycle ?? readCurrentOfferedTechs?.())?.find((candidate) => candidate.elementId === actionId), currentControl = controls2.resolve(actionId), currentSample = resources.readResources(Object.keys(targetCost));
+              return readProperty(currentSettings, "autoResearch") === !0 && rootGeneration === rootGenerationAtRead && currentRoot === root && currentOffer !== void 0 && currentOffer.generation === targetGeneration && Object.keys(targetCost).length === Object.keys(currentOffer.cost).length && Object.entries(targetCost).every(
+                ([id, price]) => currentOffer.cost[id] === price
+              ) && currentControl?.methods.includes("action") === !0 && currentControl.generation === targetGeneration && currentSample !== void 0 && techConflicts.evaluate(currentOffer).status === "none";
+            }
+          });
+        }
+      },
       runCycle() {
         lastOwnerOffers = void 0;
         let currentRootGeneration = rootGeneration, currentRoot = rootState.readRoot();
@@ -12602,6 +12660,7 @@
       mountSuppression,
       panels,
       readOfferedTechs: () => sampleOfferedTechs("auto-research"),
+      readCurrentOfferedTechs,
       ...dependencies.readResearchTestIntervention === void 0 ? {} : {
         readTestOnlyIntervention: dependencies.readResearchTestIntervention
       },
@@ -12699,6 +12758,7 @@
       },
       establishConstructionOrdering: construction.establishOrdering,
       runResearchCycle: () => research.runCycle(),
+      readResearchMaterialGatherTarget: research.readMaterialGatherTarget,
       readOfferedTechs: readCurrentOfferedTechs,
       sampleOfferedTechs,
       readGrantedTechs: () => lastGranted,
@@ -15350,7 +15410,18 @@
     stone: Object.freeze(["city-stone", "undefined-stone"]),
     chrysotile: Object.freeze(["city-chrysotile"]),
     slaughter: Object.freeze(["city-slaughter"])
-  }), DEFAULT_CLICK_LIMIT = 50;
+  }), DEFAULT_CLICK_LIMIT = 50, PRODUCTION_GATHER_CLICK_BUDGET = 10;
+  function parseMaterialTarget(value) {
+    let source = readProperty(value, "source"), targetId = readProperty(value, "targetId"), resourceId = readProperty(value, "resourceId"), quantity = readProperty(value, "quantity"), generation = readProperty(value, "generation"), isCurrent = readProperty(value, "isCurrent");
+    return (source === "research" || source === "construction") && typeof targetId == "string" && targetId.length > 0 && (resourceId === "Lumber" || resourceId === "Stone" || resourceId === "Chrysotile") && typeof quantity == "number" && Number.isFinite(quantity) && quantity > 0 && typeof generation == "number" && Number.isSafeInteger(generation) && generation >= 0 && typeof isCurrent == "function" ? Object.freeze({
+      source,
+      targetId,
+      resourceId,
+      quantity,
+      generation,
+      isCurrent
+    }) : void 0;
+  }
   function numberValue(value) {
     return Number(value);
   }
@@ -15438,6 +15509,8 @@
     controls: controls2,
     readSettings,
     onSkipped,
+    readMaterialTarget,
+    readRootGeneration,
     readTestIntervention
   }) {
     let reportSkipped = onSkipped ?? (() => {
@@ -15456,13 +15529,21 @@
           Chrysotile: readResource(root, "Chrysotile"),
           Furs: readResource(root, "Furs"),
           Mana: readResource(root, "Mana")
-        }), race = readProperty(root, "race"), stopped = !(settingsValue.buildingAlwaysClick === !0) && readTechLevel(root, GATHER_BOOTSTRAP_TECHNOLOGY) >= 1, controlsByAction = Object.freeze({
+        }), race = readProperty(root, "race"), alwaysClick = settingsValue.buildingAlwaysClick === !0, stopped = !alwaysClick && readTechLevel(root, GATHER_BOOTSTRAP_TECHNOLOGY) >= 1, controlsByAction = Object.freeze({
           food: readControl(controls2, "food"),
           lumber: readControl(controls2, "lumber"),
           stone: readControl(controls2, "stone"),
           chrysotile: readControl(controls2, "chrysotile"),
           slaughter: readControl(controls2, "slaughter")
-        }), foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, resourceClaimLedger, testIntervention, testStandardResearchTarget, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
+        }), productionTarget, productionResourceControlGeneration;
+        if (stopped && (settingsValue.autoBuild === !0 || alwaysClick) && readMaterialTarget !== void 0)
+          try {
+            let candidate = parseMaterialTarget(readMaterialTarget()), sourceAllowed = candidate?.source === "research" ? settingsValue.autoResearch === !0 : candidate?.source === "construction" && settingsValue.autoBuild === !0, actionId = candidate?.resourceId === "Lumber" ? "lumber" : candidate?.resourceId === "Stone" ? "stone" : "chrysotile", controlId = controlsByAction[actionId], handle = controlId === void 0 ? void 0 : controls2.resolve(controlId);
+            candidate !== void 0 && sourceAllowed && handle?.methods.includes("action") === !0 && typeof handle.generation == "number" && Number.isSafeInteger(handle.generation) && candidate.quantity <= resources[candidate.resourceId].maxQuantity && resources[candidate.resourceId].currentQuantity < candidate.quantity && candidate.isCurrent() && (productionTarget = candidate, productionResourceControlGeneration = handle.generation);
+          } catch {
+            productionTarget = void 0, productionResourceControlGeneration = void 0;
+          }
+        let foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, resourceClaimLedger, testIntervention, testStandardResearchTarget, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
           stopped,
           resourcesPerClick: Number(
             (readStrongMultiplier(root) * (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1)).toFixed(1)
@@ -15474,6 +15555,13 @@
           foodConjuring,
           materialConjuring,
           ...resourceClaimLedger === void 0 ? {} : { resourceClaimLedger },
+          ...productionTarget === void 0 ? {} : {
+            productionTarget: Object.freeze({
+              resourceId: productionTarget.resourceId,
+              quantity: productionTarget.quantity,
+              clickBudget: PRODUCTION_GATHER_CLICK_BUDGET
+            })
+          },
           fursUnlocked: !!readProperty(furs, "display"),
           clickable: Object.freeze({
             food: controlsByAction.food !== void 0,
@@ -15490,6 +15578,11 @@
           foodConjuring,
           materialConjuring,
           manaQuantity: resources.Mana.currentQuantity,
+          rootGeneration: readRootGeneration?.(),
+          ...productionTarget === void 0 || productionResourceControlGeneration === void 0 ? {} : {
+            productionTarget,
+            productionResourceControlGeneration
+          },
           ...testIntervention === void 0 ? {} : { testIntervention }
         }), input;
       }
@@ -15503,6 +15596,11 @@
           );
         if (rootState.readRoot() !== active.root)
           return stale("gather-root-changed", "captured game root changed");
+        if (active.rootGeneration !== void 0 && readRootGeneration?.() !== active.rootGeneration)
+          return stale(
+            "gather-root-generation-changed",
+            "captured game root generation changed"
+          );
         let claimActionObserver = void 0, previousIndex = -1, remainingClaimSpend = active.resourceClaimLedger?.spendableStock ?? 1 / 0;
         for (let operation2 of decision.operations) {
           let actionIndex = ACTION_ORDER.indexOf(operation2.actionId);
@@ -15529,6 +15627,16 @@
                 "gather-control-stale",
                 `captured control disappeared for ${operation2.actionId}`
               );
+            if (operation2.productionTarget === !0) {
+              let target = active.productionTarget, settingsValue = readSettings(), targetPermission = target?.source === "research" ? readProperty(settingsValue, "autoResearch") === !0 : target?.source === "construction" && readProperty(settingsValue, "autoBuild") === !0, expectedActionId = target?.resourceId === "Lumber" ? "lumber" : target?.resourceId === "Stone" ? "stone" : "chrysotile";
+              if (target === void 0 || readProperty(settingsValue, "autoBuild") !== !0 && readProperty(settingsValue, "buildingAlwaysClick") !== !0 || !targetPermission || operation2.actionId !== expectedActionId || handle.generation !== active.productionResourceControlGeneration || target.isCurrent() !== !0)
+                return stale(
+                  "gather-production-target-stale",
+                  "current owner permission, target, or Gather control changed"
+                );
+              if (currentQuantity(rootState.readRoot(), target.resourceId) >= target.quantity)
+                break;
+            }
             for (let index = 0; index < operation2.amount; index += 1) {
               let beforeClickRoot = rootState.readRoot();
               if (beforeClickRoot !== active.root)
@@ -15539,7 +15647,15 @@
               let manaBefore = readResource(
                 beforeClickRoot,
                 "Mana"
-              ).currentQuantity, expectedManaSpend = (operation2.actionId === "food" ? active.foodConjuring : active.materialConjuring) && manaBefore >= 1, proposedManaSpend = expectedManaSpend ? 1 : 0;
+              ).currentQuantity, productionTargetStockBefore = operation2.productionTarget === !0 && active.productionTarget !== void 0 ? currentQuantity(
+                beforeClickRoot,
+                active.productionTarget.resourceId
+              ) : void 0, expectedManaSpend = (operation2.actionId === "food" ? active.foodConjuring : active.materialConjuring) && manaBefore >= 1, proposedManaSpend = expectedManaSpend ? 1 : 0;
+              if (operation2.productionTarget === !0 && expectedManaSpend)
+                return stale(
+                  "gather-production-mana-protected",
+                  `production-targeted ${operation2.actionId} would spend protected Mana`
+                );
               if (active.resourceClaimLedger !== void 0 && expectedManaSpend && remainingClaimSpend < 1)
                 return typeof claimActionObserver == "function" && claimActionObserver(
                   Object.freeze({
@@ -15578,6 +15694,37 @@
                   "gather-click-failed",
                   result.detail ?? result.reason
                 );
+              if (operation2.productionTarget === !0) {
+                let target = active.productionTarget, afterTargetRoot = rootState.readRoot();
+                if (target === void 0 || afterTargetRoot !== active.root || active.rootGeneration !== void 0 && readRootGeneration?.() !== active.rootGeneration)
+                  return stale(
+                    "gather-production-root-changed",
+                    "captured game root changed after production-target Gather"
+                  );
+                let resourceAfter = currentQuantity(
+                  afterTargetRoot,
+                  target.resourceId
+                ), manaAfter = readResource(
+                  afterTargetRoot,
+                  "Mana"
+                ).currentQuantity;
+                if (!Number.isFinite(resourceAfter) || productionTargetStockBefore === void 0 || resourceAfter <= productionTargetStockBefore)
+                  return stale(
+                    "gather-production-stock-postcondition",
+                    `production-target ${operation2.actionId} did not increase ${target.resourceId}`
+                  );
+                if (!Number.isFinite(manaAfter) || Math.abs(manaAfter - manaBefore) > 1e-9)
+                  return stale(
+                    "gather-production-mana-postcondition",
+                    `Mana changed during production-target ${operation2.actionId}`
+                  );
+                if (target.isCurrent() !== !0)
+                  return stale(
+                    "gather-production-target-invalidated",
+                    "current Research or Construction target changed during Gather"
+                  );
+                if (resourceAfter >= target.quantity) break;
+              }
               if (active.resourceClaimLedger !== void 0) {
                 let afterClickRoot = rootState.readRoot();
                 if (afterClickRoot !== active.root)
@@ -15749,6 +15896,44 @@
           afterAction: Object.freeze(afterAction)
         })
       );
+    }
+    if (input.stopped && input.productionTarget !== void 0) {
+      let target = input.productionTarget, actionId = target.resourceId === "Lumber" ? "lumber" : target.resourceId === "Stone" ? "stone" : "chrysotile", resource = input.resources[target.resourceId], current = quantities[target.resourceId];
+      if (input.clickable[actionId] && Number.isFinite(target.quantity) && target.quantity > 0 && target.quantity <= resource.maxQuantity && current < target.quantity && Number.isSafeInteger(target.clickBudget) && target.clickBudget > 0 && input.resourcesPerClick > 0) {
+        let amount = Math.min(
+          Math.ceil((target.quantity - current) / input.resourcesPerClick),
+          target.clickBudget,
+          input.clickLimit
+        );
+        if (amount > 0) {
+          let after = Math.min(
+            current + amount * input.resourcesPerClick,
+            resource.maxQuantity
+          );
+          operations.push(
+            Object.freeze({
+              actionId,
+              amount,
+              preserveMana: !0,
+              productionTarget: !0,
+              beforeAction: Object.freeze([
+                Object.freeze({
+                  resourceId: target.resourceId,
+                  expectedQuantity: current,
+                  quantity: current
+                })
+              ]),
+              afterAction: Object.freeze([
+                Object.freeze({
+                  resourceId: target.resourceId,
+                  expectedQuantity: current,
+                  quantity: after
+                })
+              ])
+            })
+          );
+        }
+      }
     }
     if (!input.stopped && input.clickable.slaughter) {
       let amount = Math.min(
@@ -61231,10 +61416,58 @@ Only continue if you trust the source. Injected code:
       readReservedQuantityExcludingMech: readCapturedMechReservation
     }), capturedMechRandom = createBrowserRandomSource();
     ensureCapturedBuildingControls = progression.ensureBuildControls;
-    let gatherResources = createCapturedGatherResourcesControl({
+    let readGatherMaterialTarget = () => {
+      let settings = settingsStore.readRaw(), root = pageCapture2.rootState.readRoot();
+      if (!(!isRecord(settings) || !isRecord(root))) {
+        if (settings.autoBuild === !0) {
+          let target = null;
+          try {
+            target = cycleConstructionObservations.readSavingTarget();
+          } catch {
+          }
+          if (target !== null) {
+            let costIdentity = (cost) => JSON.stringify(
+              Object.entries(cost).sort(
+                ([left], [right]) => left.localeCompare(right)
+              )
+            ), identity = costIdentity(target.cost), rootGeneration = progression.readRootGeneration();
+            for (let resourceId of ["Lumber", "Stone", "Chrysotile"]) {
+              let quantity = target.cost[resourceId], resource = readProperty(
+                readProperty(root, "resource"),
+                resourceId
+              ), amount = Number(readProperty(resource, "amount"));
+              if (typeof quantity != "number" || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(amount) || amount >= quantity)
+                continue;
+              let targetName = target.name;
+              return Object.freeze({
+                source: "construction",
+                targetId: targetName,
+                resourceId,
+                quantity,
+                generation: rootGeneration,
+                isCurrent: () => {
+                  let currentSettings = settingsStore.readRaw();
+                  if (pageCapture2.rootState.readRoot() !== root || progression.readRootGeneration() !== rootGeneration || readProperty(currentSettings, "autoBuild") !== !0)
+                    return !1;
+                  try {
+                    let current = cycleConstructionObservations.readSavingTarget();
+                    return current !== null && current.name === targetName && costIdentity(current.cost) === identity;
+                  } catch {
+                    return !1;
+                  }
+                }
+              });
+            }
+          }
+        }
+        return settings.autoResearch === !0 ? progression.readResearchMaterialGatherTarget() : void 0;
+      }
+    }, gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => settingsStore.readRaw()
+      readSettings: () => settingsStore.readRaw(),
+      readMaterialTarget: readGatherMaterialTarget,
+      readRootGeneration: progression.readRootGeneration
     }), refreshResourceClaim = (ownerObservation) => {
     }, tax = createCapturedTaxControl({
       rootState: pageCapture2.rootState,

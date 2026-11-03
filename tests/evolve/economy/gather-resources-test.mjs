@@ -444,4 +444,40 @@ assert.equal(
   "bootstrap does not implicitly spend Mana through Conjuring",
 );
 
+const productionTarget = planGatherResources(
+  makeInput({
+    stopped: true,
+    clickLimit: 50,
+    productionTarget: {
+      resourceId: "Stone",
+      quantity: 10,
+      clickBudget: 10,
+    },
+    clickable: { ...makeInput().clickable, stone: true },
+    resources: {
+      ...makeInput().resources,
+      Stone: { currentQuantity: 0, maxQuantity: 200 },
+    },
+  }),
+);
+assert.deepEqual(
+  productionTarget?.operations.map(
+    ({ actionId, amount, preserveMana, productionTarget: targeted }) => ({
+      actionId,
+      amount,
+      preserveMana,
+      productionTarget: targeted,
+    }),
+  ),
+  [
+    {
+      actionId: "stone",
+      amount: 10,
+      preserveMana: true,
+      productionTarget: true,
+    },
+  ],
+  "the production target gathers only a bounded current material shortage",
+);
+
 console.log("Gather resource planning matches native Conjuring budgets");

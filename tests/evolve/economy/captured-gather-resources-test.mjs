@@ -1701,4 +1701,172 @@ assert.equal(
 );
 assert.equal(bootstrapClicks, clicksBeforeGenerationChange);
 
+const productionRoot = {
+  resource: {
+    Food: { amount: 40, max: 100 },
+    Lumber: { amount: 95, max: 200 },
+    Stone: { amount: 0, max: 200 },
+    Chrysotile: { amount: 0, max: 200 },
+    Furs: { amount: 0, max: 100, display: false },
+    Mana: { amount: 0, max: 100 },
+  },
+  race: {},
+  tech: { primitive: 1 },
+  genes: {},
+  queue: { display: false, queue: [] },
+  r_queue: { display: false, queue: [] },
+};
+let productionTargetCurrent = true;
+let productionClicks = 0;
+let productionRootGeneration = 4;
+let productionPrice = 10;
+let productionSource = "research";
+const productionGatherHandle = {
+  elementId: "undefined-stone",
+  generation: 6,
+  methods: ["action"],
+};
+const productionControls = {
+  resolve: (id) =>
+    id === productionGatherHandle.elementId
+      ? productionGatherHandle
+      : undefined,
+  invoke(handle, method) {
+    assert.equal(method, "action");
+    assert.equal(handle, productionGatherHandle);
+    productionRoot.resource.Stone.amount += 1;
+    productionClicks += 1;
+    return { ok: true, value: false };
+  },
+};
+const productionRootState = {
+  readRoot: () => productionRoot,
+  isReactivitySuppressed: () => false,
+  subscribeRootReplaced: () => () => {},
+};
+const productionSettings = {
+  buildingAlwaysClick: false,
+  autoBuild: true,
+  autoResearch: true,
+  autoTrigger: false,
+  prestigeType: "mad",
+  buildingClickPerTick: 50,
+};
+const productionAdapter = createCapturedGatherResourcesAdapter({
+  rootState: productionRootState,
+  controls: productionControls,
+  readSettings: () => productionSettings,
+  readRootGeneration: () => productionRootGeneration,
+  readMaterialTarget: () => {
+    const targetPrice = productionPrice;
+    return {
+      source: productionSource,
+      targetId: productionSource === "research" ? "tech-sundial" : "city-farm",
+      resourceId: "Stone",
+      quantity: targetPrice,
+      generation: 12,
+      isCurrent: () =>
+        productionTargetCurrent && productionPrice === targetPrice,
+    };
+  },
+});
+const productionInput = productionAdapter.reader.read();
+assert.equal(productionInput.stopped, true);
+assert.deepEqual(productionInput.productionTarget, {
+  resourceId: "Stone",
+  quantity: 10,
+  clickBudget: 10,
+});
+const productionDecision = planGatherResources(productionInput);
+assert.equal(productionDecision.operations[0].amount, 10);
+assert.deepEqual(productionAdapter.executor.execute(productionDecision), {
+  status: "succeeded",
+});
+assert.equal(productionClicks, 10);
+assert.equal(productionRoot.resource.Stone.amount, 10);
+assert.equal(productionRoot.resource.Mana.amount, 0);
+
+productionRoot.resource.Stone.amount = 0;
+productionTargetCurrent = true;
+const staleProductionDecision = planGatherResources(
+  productionAdapter.reader.read(),
+);
+const staleProductionClicks = productionClicks;
+productionTargetCurrent = false;
+assert.equal(
+  productionAdapter.executor.execute(staleProductionDecision).status,
+  "stale",
+  "a stale native target prevents production gathering",
+);
+assert.equal(productionClicks, staleProductionClicks);
+
+productionTargetCurrent = true;
+const reboundProductionDecision = planGatherResources(
+  productionAdapter.reader.read(),
+);
+productionGatherHandle.generation += 1;
+assert.equal(
+  productionAdapter.executor.execute(reboundProductionDecision).status,
+  "stale",
+  "a rebound Gather control prevents production gathering",
+);
+assert.equal(productionClicks, staleProductionClicks);
+productionGatherHandle.generation -= 1;
+
+const repricedProductionDecision = planGatherResources(
+  productionAdapter.reader.read(),
+);
+productionPrice = 12;
+assert.equal(
+  productionAdapter.executor.execute(repricedProductionDecision).status,
+  "stale",
+  "a changed native price invalidates the captured production target",
+);
+assert.equal(productionClicks, staleProductionClicks);
+productionPrice = 10;
+const replacedProductionRootDecision = planGatherResources(
+  productionAdapter.reader.read(),
+);
+productionRootGeneration += 1;
+assert.equal(
+  productionAdapter.executor.execute(replacedProductionRootDecision).status,
+  "stale",
+  "a changed native root generation invalidates the production target",
+);
+assert.equal(productionClicks, staleProductionClicks);
+productionRootGeneration -= 1;
+
+productionSettings.autoResearch = false;
+assert.equal(
+  productionAdapter.reader.read().productionTarget,
+  undefined,
+  "disabled Research permission cannot authorize gathering toward a Research offer",
+);
+productionSettings.autoResearch = true;
+productionSettings.autoBuild = false;
+productionSettings.buildingAlwaysClick = true;
+productionSource = "construction";
+assert.equal(
+  productionAdapter.reader.read().productionTarget,
+  undefined,
+  "disabled Construction permission cannot authorize a Construction gather target",
+);
+productionSettings.autoBuild = true;
+productionSettings.buildingAlwaysClick = false;
+productionSource = "research";
+
+productionRoot.tech.conjuring = 2;
+productionRoot.resource.Mana.amount = 1;
+const productionManaProtectedDecision = planGatherResources(
+  productionAdapter.reader.read(),
+);
+assert.equal(
+  productionAdapter.executor.execute(productionManaProtectedDecision).failure
+    .code,
+  "gather-production-mana-protected",
+  "production gathering will not spend Mana through native Conjuring",
+);
+assert.equal(productionRoot.resource.Mana.amount, 1);
+assert.equal(productionClicks, staleProductionClicks);
+
 console.log("captured-gather-resources ok");

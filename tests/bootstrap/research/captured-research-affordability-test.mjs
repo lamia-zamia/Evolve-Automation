@@ -14,6 +14,7 @@ function decide({
   const invocations = [];
   const adapter = createCapturedResearchAdapter({
     rootState: { readRoot: () => root },
+    currentRoot: root,
     offered: [
       {
         elementId: "tech-test",

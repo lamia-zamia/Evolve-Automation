@@ -25,6 +25,12 @@ export interface GatherResourcesInput {
   readonly fursUnlocked: boolean;
   /** Test-only callers may provide an admitted-claim budget; ordinary sessions omit it. */
   readonly resourceClaimLedger?: Readonly<ResourceClaimLedger>;
+  /** A bounded production shortage admitted by the current Research or Construction owner. */
+  readonly productionTarget?: Readonly<{
+    readonly resourceId: "Lumber" | "Stone" | "Chrysotile";
+    readonly quantity: number;
+    readonly clickBudget: number;
+  }>;
   /** Explicit, test-surface-only Research target supplied to the existing Gather owner. */
   readonly testOnlyStoneTarget?: Readonly<{
     quantity: number;
@@ -79,6 +85,8 @@ export interface GatherOperation {
   readonly bootstrap?: boolean;
   /** Test-only Construction responses must use ordinary clicks and preserve Mana. */
   readonly preserveMana?: boolean;
+  /** The action is collecting only the current native Research/Construction shortage. */
+  readonly productionTarget?: boolean;
   /** Test-surface provenance for a material shortage authorized by one validated Construction target. */
   readonly constructionProvenance?: Readonly<{
     readonly actionId: string;
@@ -482,6 +490,62 @@ export function planGatherResources(
         }),
       );
       quantities[resourceId] = quantity;
+    }
+  }
+
+  if (input.stopped && input.productionTarget !== undefined) {
+    const target = input.productionTarget;
+    const actionId =
+      target.resourceId === "Lumber"
+        ? "lumber"
+        : target.resourceId === "Stone"
+          ? "stone"
+          : "chrysotile";
+    const resource = input.resources[target.resourceId];
+    const current = quantities[target.resourceId];
+    if (
+      input.clickable[actionId] &&
+      Number.isFinite(target.quantity) &&
+      target.quantity > 0 &&
+      target.quantity <= resource.maxQuantity &&
+      current < target.quantity &&
+      Number.isSafeInteger(target.clickBudget) &&
+      target.clickBudget > 0 &&
+      input.resourcesPerClick > 0
+    ) {
+      const amount = Math.min(
+        Math.ceil((target.quantity - current) / input.resourcesPerClick),
+        target.clickBudget,
+        input.clickLimit,
+      );
+      if (amount > 0) {
+        const after = Math.min(
+          current + amount * input.resourcesPerClick,
+          resource.maxQuantity,
+        );
+        operations.push(
+          Object.freeze({
+            actionId,
+            amount,
+            preserveMana: true,
+            productionTarget: true,
+            beforeAction: Object.freeze([
+              Object.freeze({
+                resourceId: target.resourceId,
+                expectedQuantity: current,
+                quantity: current,
+              }),
+            ]),
+            afterAction: Object.freeze([
+              Object.freeze({
+                resourceId: target.resourceId,
+                expectedQuantity: current,
+                quantity: after,
+              }),
+            ]),
+          }),
+        );
+      }
     }
   }
 

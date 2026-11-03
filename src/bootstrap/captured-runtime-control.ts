@@ -151,6 +151,7 @@ import type {
   ConstructionReadoutSnapshot,
   SavingTarget,
 } from "../ports/game-construction-observations.ts";
+import type { GatherMaterialTarget } from "../ports/gather-resources.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedOuterFleetControl } from "./captured-fleet-outer-control.ts";
@@ -2811,10 +2812,82 @@ export function startCapturedRuntime({
   });
   const capturedMechRandom = createBrowserRandomSource();
   ensureCapturedBuildingControls = progression.ensureBuildControls;
+  const readGatherMaterialTarget = (): GatherMaterialTarget | undefined => {
+    const settings = settingsStore.readRaw();
+    const root = pageCapture.rootState.readRoot();
+    if (!isRecord(settings) || !isRecord(root)) return undefined;
+    if (settings["autoBuild"] === true) {
+      let target: SavingTarget | null = null;
+      try {
+        target = cycleConstructionObservations.readSavingTarget();
+      } catch {
+        // No completed Construction ordering is not evidence of a current target.
+      }
+      if (target !== null) {
+        const costIdentity = (cost: Readonly<Record<string, number>>) =>
+          JSON.stringify(
+            Object.entries(cost).sort(([left], [right]) =>
+              left.localeCompare(right),
+            ),
+          );
+        const identity = costIdentity(target.cost);
+        const rootGeneration = progression.readRootGeneration();
+        for (const resourceId of ["Lumber", "Stone", "Chrysotile"] as const) {
+          const quantity = target.cost[resourceId];
+          const resource = readProperty(
+            readProperty(root, "resource"),
+            resourceId,
+          );
+          const amount = Number(readProperty(resource, "amount"));
+          if (
+            typeof quantity !== "number" ||
+            !Number.isFinite(quantity) ||
+            quantity <= 0 ||
+            !Number.isFinite(amount) ||
+            amount >= quantity
+          )
+            continue;
+          const targetName = target.name;
+          const isCurrent = () => {
+            const currentSettings = settingsStore.readRaw();
+            if (
+              pageCapture.rootState.readRoot() !== root ||
+              progression.readRootGeneration() !== rootGeneration ||
+              readProperty(currentSettings, "autoBuild") !== true
+            )
+              return false;
+            try {
+              const current = cycleConstructionObservations.readSavingTarget();
+              return (
+                current !== null &&
+                current.name === targetName &&
+                costIdentity(current.cost) === identity
+              );
+            } catch {
+              return false;
+            }
+          };
+          return Object.freeze({
+            source: "construction",
+            targetId: targetName,
+            resourceId,
+            quantity,
+            generation: rootGeneration,
+            isCurrent,
+          });
+        }
+      }
+    }
+    return settings["autoResearch"] === true
+      ? progression.readResearchMaterialGatherTarget()
+      : undefined;
+  };
   const gatherResources = createCapturedGatherResourcesControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    readMaterialTarget: readGatherMaterialTarget,
+    readRootGeneration: progression.readRootGeneration,
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {

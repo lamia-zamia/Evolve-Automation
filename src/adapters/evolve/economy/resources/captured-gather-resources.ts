@@ -25,6 +25,7 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GatherResourcesReader } from "../../../../ports/gather-resources.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { GatherMaterialTarget } from "../../../../ports/gather-resources.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
@@ -65,6 +66,9 @@ interface CapturedGatherSession {
   readonly foodConjuring: boolean;
   readonly materialConjuring: boolean;
   readonly manaQuantity: number;
+  readonly rootGeneration: number | undefined;
+  readonly productionTarget?: GatherMaterialTarget;
+  readonly productionResourceControlGeneration?: number;
   readonly testIntervention?: unknown;
   readonly testStandardResearchTarget?: TestStandardResearchTarget;
   readonly testStandardConstructionTarget?: TestStandardConstructionTarget;
@@ -114,8 +118,44 @@ export interface CapturedGatherResourcesDependencies {
   /** Script settings have already crossed storage as unknown and are validated here. */
   readonly readSettings: () => unknown;
   readonly onSkipped?: (key: string, reason: string) => void;
+  /** Current native material shortage from the existing Research or Construction owner. */
+  readonly readMaterialTarget?: () => GatherMaterialTarget | undefined;
+  readonly readRootGeneration?: () => number;
   /** Test-surface-only intervention read by the existing Gather owner. */
   readonly readTestIntervention?: () => unknown;
+}
+
+const PRODUCTION_GATHER_CLICK_BUDGET = 10;
+
+function parseMaterialTarget(value: unknown): GatherMaterialTarget | undefined {
+  const source = readProperty(value, "source");
+  const targetId = readProperty(value, "targetId");
+  const resourceId = readProperty(value, "resourceId");
+  const quantity = readProperty(value, "quantity");
+  const generation = readProperty(value, "generation");
+  const isCurrent = readProperty(value, "isCurrent");
+  return (source === "research" || source === "construction") &&
+    typeof targetId === "string" &&
+    targetId.length > 0 &&
+    (resourceId === "Lumber" ||
+      resourceId === "Stone" ||
+      resourceId === "Chrysotile") &&
+    typeof quantity === "number" &&
+    Number.isFinite(quantity) &&
+    quantity > 0 &&
+    typeof generation === "number" &&
+    Number.isSafeInteger(generation) &&
+    generation >= 0 &&
+    typeof isCurrent === "function"
+    ? Object.freeze({
+        source,
+        targetId,
+        resourceId,
+        quantity,
+        generation,
+        isCurrent: isCurrent as () => boolean,
+      })
+    : undefined;
 }
 
 function numberValue(value: unknown): number {
@@ -396,6 +436,8 @@ export function createCapturedGatherResourcesAdapter({
   controls,
   readSettings,
   onSkipped,
+  readMaterialTarget,
+  readRootGeneration,
   readTestIntervention,
 }: CapturedGatherResourcesDependencies): {
   readonly reader: GatherResourcesReader;
@@ -437,6 +479,48 @@ export function createCapturedGatherResourcesAdapter({
         chrysotile: readControl(controls, "chrysotile"),
         slaughter: readControl(controls, "slaughter"),
       });
+      let productionTarget: GatherMaterialTarget | undefined;
+      let productionResourceControlGeneration: number | undefined;
+      if (
+        stopped &&
+        (settingsValue["autoBuild"] === true || alwaysClick) &&
+        readMaterialTarget !== undefined
+      ) {
+        try {
+          const candidate = parseMaterialTarget(readMaterialTarget());
+          const sourceAllowed =
+            candidate?.source === "research"
+              ? settingsValue["autoResearch"] === true
+              : candidate?.source === "construction" &&
+                settingsValue["autoBuild"] === true;
+          const actionId =
+            candidate?.resourceId === "Lumber"
+              ? "lumber"
+              : candidate?.resourceId === "Stone"
+                ? "stone"
+                : "chrysotile";
+          const controlId = controlsByAction[actionId];
+          const handle =
+            controlId === undefined ? undefined : controls.resolve(controlId);
+          if (
+            candidate !== undefined &&
+            sourceAllowed &&
+            handle?.methods.includes("action") === true &&
+            typeof handle.generation === "number" &&
+            Number.isSafeInteger(handle.generation) &&
+            candidate.quantity <= resources[candidate.resourceId].maxQuantity &&
+            resources[candidate.resourceId].currentQuantity <
+              candidate.quantity &&
+            candidate.isCurrent()
+          ) {
+            productionTarget = candidate;
+            productionResourceControlGeneration = handle.generation;
+          }
+        } catch {
+          productionTarget = undefined;
+          productionResourceControlGeneration = undefined;
+        }
+      }
       const foodConjuring = readTechLevel(root, "conjuring") >= 1;
       const materialConjuring = readTechLevel(root, "conjuring") >= 2;
       let resourceClaimLedger:
@@ -932,6 +1016,15 @@ export function createCapturedGatherResourcesAdapter({
         foodConjuring,
         materialConjuring,
         ...(resourceClaimLedger === undefined ? {} : { resourceClaimLedger }),
+        ...(productionTarget === undefined
+          ? {}
+          : {
+              productionTarget: Object.freeze({
+                resourceId: productionTarget.resourceId,
+                quantity: productionTarget.quantity,
+                clickBudget: PRODUCTION_GATHER_CLICK_BUDGET,
+              }),
+            }),
         ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
         readProperty(
@@ -1058,6 +1151,14 @@ export function createCapturedGatherResourcesAdapter({
         foodConjuring,
         materialConjuring,
         manaQuantity: resources.Mana.currentQuantity,
+        rootGeneration: readRootGeneration?.(),
+        ...(productionTarget === undefined ||
+        productionResourceControlGeneration === undefined
+          ? {}
+          : {
+              productionTarget,
+              productionResourceControlGeneration,
+            }),
         ...(testIntervention === undefined ? {} : { testIntervention }),
         ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
@@ -1107,6 +1208,14 @@ export function createCapturedGatherResourcesAdapter({
       if (rootState.readRoot() !== active.root) {
         return stale("gather-root-changed", "captured game root changed");
       }
+      if (
+        active.rootGeneration !== undefined &&
+        readRootGeneration?.() !== active.rootGeneration
+      )
+        return stale(
+          "gather-root-generation-changed",
+          "captured game root generation changed",
+        );
       if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true
@@ -1180,6 +1289,40 @@ export function createCapturedGatherResourcesAdapter({
               "gather-control-stale",
               `captured control disappeared for ${operation.actionId}`,
             );
+          }
+          if (operation.productionTarget === true) {
+            const target = active.productionTarget;
+            const settingsValue = readSettings();
+            const targetPermission =
+              target?.source === "research"
+                ? readProperty(settingsValue, "autoResearch") === true
+                : target?.source === "construction" &&
+                  readProperty(settingsValue, "autoBuild") === true;
+            const expectedActionId =
+              target?.resourceId === "Lumber"
+                ? "lumber"
+                : target?.resourceId === "Stone"
+                  ? "stone"
+                  : "chrysotile";
+            if (
+              target === undefined ||
+              (readProperty(settingsValue, "autoBuild") !== true &&
+                readProperty(settingsValue, "buildingAlwaysClick") !== true) ||
+              !targetPermission ||
+              operation.actionId !== expectedActionId ||
+              handle.generation !==
+                active.productionResourceControlGeneration ||
+              target.isCurrent() !== true
+            )
+              return stale(
+                "gather-production-target-stale",
+                "current owner permission, target, or Gather control changed",
+              );
+            if (
+              currentQuantity(rootState.readRoot(), target.resourceId) >=
+              target.quantity
+            )
+              break;
           }
           if (
             typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
@@ -1297,12 +1440,25 @@ export function createCapturedGatherResourcesAdapter({
               beforeClickRoot,
               "Mana",
             ).currentQuantity;
+            const productionTargetStockBefore =
+              operation.productionTarget === true &&
+              active.productionTarget !== undefined
+                ? currentQuantity(
+                    beforeClickRoot,
+                    active.productionTarget.resourceId,
+                  )
+                : undefined;
             const conjuring =
               operation.actionId === "food"
                 ? active.foodConjuring
                 : active.materialConjuring;
             const expectedManaSpend = conjuring && manaBefore >= 1;
             const proposedManaSpend = expectedManaSpend ? 1 : 0;
+            if (operation.productionTarget === true && expectedManaSpend)
+              return stale(
+                "gather-production-mana-protected",
+                `production-targeted ${operation.actionId} would spend protected Mana`,
+              );
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
               __EA_TEST_SURFACE_ENABLED__ === true &&
@@ -1363,6 +1519,51 @@ export function createCapturedGatherResourcesAdapter({
                     "gather-click-failed",
                     result.detail ?? result.reason,
                   );
+            }
+            if (operation.productionTarget === true) {
+              const target = active.productionTarget;
+              const afterTargetRoot = rootState.readRoot();
+              if (
+                target === undefined ||
+                afterTargetRoot !== active.root ||
+                (active.rootGeneration !== undefined &&
+                  readRootGeneration?.() !== active.rootGeneration)
+              )
+                return stale(
+                  "gather-production-root-changed",
+                  "captured game root changed after production-target Gather",
+                );
+              const resourceAfter = currentQuantity(
+                afterTargetRoot,
+                target.resourceId,
+              );
+              const manaAfter = readResource(
+                afterTargetRoot,
+                "Mana",
+              ).currentQuantity;
+              if (
+                !Number.isFinite(resourceAfter) ||
+                productionTargetStockBefore === undefined ||
+                resourceAfter <= productionTargetStockBefore
+              )
+                return stale(
+                  "gather-production-stock-postcondition",
+                  `production-target ${operation.actionId} did not increase ${target.resourceId}`,
+                );
+              if (
+                !Number.isFinite(manaAfter) ||
+                Math.abs(manaAfter - manaBefore) > 1e-9
+              )
+                return stale(
+                  "gather-production-mana-postcondition",
+                  `Mana changed during production-target ${operation.actionId}`,
+                );
+              if (target.isCurrent() !== true)
+                return stale(
+                  "gather-production-target-invalidated",
+                  "current Research or Construction target changed during Gather",
+                );
+              if (resourceAfter >= target.quantity) break;
             }
             if (
               typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&

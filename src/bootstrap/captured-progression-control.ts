@@ -56,6 +56,7 @@ import type { ConstructionObservations } from "../ports/game-construction-observ
 import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
+import type { GatherMaterialTarget } from "../ports/gather-resources.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
@@ -265,6 +266,9 @@ export interface CapturedProgressionControl {
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly establishConstructionOrdering: () => boolean;
   readonly runResearchCycle: () => CommandExecutionOutcome;
+  /** The current Research owner's next eligible material shortage; reads no new catalog. */
+  readonly readResearchMaterialGatherTarget: () =>
+    GatherMaterialTarget | undefined;
   readonly readResearchActionEligibility?: (
     actionId: string,
   ) => "eligible" | "excluded" | "unavailable" | "not-offered";
@@ -1151,6 +1155,7 @@ export function createCapturedProgressionControl(
     mountSuppression,
     panels,
     readOfferedTechs: () => sampleOfferedTechs("auto-research"),
+    readCurrentOfferedTechs,
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true &&
     dependencies.onResearchOwnerOffersForTest !== undefined
@@ -1344,6 +1349,7 @@ export function createCapturedProgressionControl(
     },
     establishConstructionOrdering: construction.establishOrdering,
     runResearchCycle: () => research.runCycle(),
+    readResearchMaterialGatherTarget: research.readMaterialGatherTarget,
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true &&
     research.readCurrentOfferEligibility !== undefined

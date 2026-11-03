@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { planGatherResources } from "../../../src/domain/economy/resources/gather-resources.ts";
 
 globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
 const { createCapturedResearchControl } =
   await import("../../../src/bootstrap/captured-research-control.ts");
+const { createCapturedGatherResourcesAdapter } =
+  await import("../../../src/adapters/evolve/economy/resources/captured-gather-resources.ts");
 import { installVueCapture } from "../../../src/adapters/evolve/vue-capture.ts";
 import { withControlCaptureAuthority } from "../../support/fixtures/control-capture-fixture.mjs";
 
@@ -16,6 +19,7 @@ function makePage({
   resources,
   tech = { primitive: 3 },
   queue = [],
+  researchQueue = [],
   actionModes = {},
   invokeFailures = {},
   settings = {},
@@ -26,6 +30,8 @@ function makePage({
   onOwnerSelectionResult,
   readTestOnlyIntervention,
   readTestShadowObserver,
+  readOfferedTechs,
+  readCurrentOfferedTechs,
 }) {
   const vue = {
     reactive: (target) => target,
@@ -46,7 +52,7 @@ function makePage({
     resource: {},
     city: {},
     queue: { display: queue.length > 0, queue: [...queue] },
-    r_queue: { queue: [] },
+    r_queue: { display: researchQueue.length > 0, queue: [...researchQueue] },
   };
   const rootReplacementListeners = new Set();
   let researchDraws = 0;
@@ -232,6 +238,10 @@ function makePage({
       drawnActions,
       mountSuppression,
       panels,
+      ...(readOfferedTechs === undefined ? {} : { readOfferedTechs }),
+      ...(readCurrentOfferedTechs === undefined
+        ? {}
+        : { readCurrentOfferedTechs }),
       readSettings: () => ({ ...DEFAULT_CONFLICT_SETTINGS, ...settings }),
       onUnavailable: (reason) => unavailable.push(reason),
       onActivity: (activityEntry) => activity.push(activityEntry.message),
@@ -317,6 +327,163 @@ const MAD_AUTHORIZED_SETTINGS = {
   autoResearch: true,
   autoPrestige: true,
 };
+
+{
+  let page;
+  let researchOfferReads = 0;
+  const currentSundialOffer = Object.freeze({
+    elementId: "tech-sundial",
+    grantTechnology: "sundial",
+    grantLevel: 1,
+    generation: 1,
+    nativeAffordable: false,
+    cost: Object.freeze({ Lumber: 8, Stone: 10 }),
+  });
+  page = makePage({
+    offered: [
+      {
+        id: "tech-sundial",
+        title: "Sundial",
+        grant: "sundial",
+        cost: { Lumber: 8, Stone: 10 },
+      },
+    ],
+    resources: {
+      Lumber: { amount: 95, max: 200 },
+      Stone: { amount: 0, max: 200 },
+      Mana: { amount: 0, max: 100 },
+    },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    readOfferedTechs: () => {
+      researchOfferReads += 1;
+      return [currentSundialOffer];
+    },
+    readCurrentOfferedTechs: () => page?.control.readLastOwnerOffers(),
+  });
+  assert.equal(page.control.readMaterialGatherTarget(), undefined);
+  assert.equal(
+    researchOfferReads,
+    0,
+    "Gather target discovery does not request a catalog when no current snapshot exists",
+  );
+  assert.equal(page.control.runCycle().status, "succeeded");
+  const drawsBeforeTargetRead = page.researchDraws;
+  const readsBeforeTarget = researchOfferReads;
+  const target = page.control.readMaterialGatherTarget();
+  assert.deepEqual(
+    target === undefined
+      ? undefined
+      : {
+          source: target.source,
+          targetId: target.targetId,
+          resourceId: target.resourceId,
+          quantity: target.quantity,
+        },
+    {
+      source: "research",
+      targetId: "tech-sundial",
+      resourceId: "Stone",
+      quantity: 10,
+    },
+    "the Research owner exposes its current native material shortage",
+  );
+  assert.equal(
+    page.researchDraws,
+    drawsBeforeTargetRead,
+    "the Gather target reuses the current Research offer without another panel draw",
+  );
+  assert.equal(
+    researchOfferReads,
+    readsBeforeTarget,
+    "the Gather target reads the current cached offer instead of invoking the sampling path",
+  );
+  assert.equal(target.isCurrent(), true);
+  page.root.resource.Stone.amount = 10;
+  assert.equal(
+    target.isCurrent(),
+    true,
+    "the admitted offer remains current when Gather reaches its current price",
+  );
+}
+
+{
+  let page;
+  const currentOffer = () => [
+    Object.freeze({
+      elementId: "tech-sundial",
+      grantTechnology: "sundial",
+      grantLevel: 1,
+      generation: 1,
+      nativeAffordable: (page?.root.resource.Stone.amount ?? 0) >= 10,
+      cost: Object.freeze({ Lumber: 8, Stone: 10 }),
+    }),
+  ];
+  page = makePage({
+    offered: [
+      {
+        id: "tech-sundial",
+        title: "Sundial",
+        grant: "sundial",
+        cost: { Lumber: 8, Stone: 10 },
+      },
+    ],
+    resources: {
+      Lumber: { amount: 95, max: 200 },
+      Stone: { amount: 0, max: 200 },
+      Mana: { amount: 0, max: 100 },
+    },
+    tech: { primitive: 3, r_queue: 1 },
+    researchQueue: [{ id: "tech-sundial", label: "Sundial", req: true }],
+    settings: MAD_AUTHORIZED_SETTINGS,
+    readOfferedTechs: currentOffer,
+    readCurrentOfferedTechs: () => page?.control.readLastOwnerOffers(),
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+
+  page.controls.set("undefined-stone", {
+    generation: 1,
+    methods: {
+      action() {
+        page.root.resource.Stone.amount += 1;
+        return true;
+      },
+    },
+  });
+  const gatherSettings = {
+    ...DEFAULT_CONFLICT_SETTINGS,
+    ...MAD_AUTHORIZED_SETTINGS,
+    autoBuild: true,
+    buildingAlwaysClick: false,
+    buildingClickPerTick: 50,
+  };
+  const gather = createCapturedGatherResourcesAdapter({
+    rootState: { readRoot: () => page.root },
+    controls: page.registry,
+    readSettings: () => gatherSettings,
+    readRootGeneration: () => 1,
+    readMaterialTarget: () => page.control.readMaterialGatherTarget(),
+  });
+  const gatherInput = gather.reader.read();
+  assert.deepEqual(gatherInput.productionTarget, {
+    resourceId: "Stone",
+    quantity: 10,
+    clickBudget: 10,
+  });
+  assert.deepEqual(gather.executor.execute(planGatherResources(gatherInput)), {
+    status: "succeeded",
+  });
+  assert.equal(page.root.resource.Stone.amount, 10);
+
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    [],
+    "the Research owner still honors the queued Research reservation after Gather reaches its price",
+  );
+  assert.equal(page.root.resource.Stone.amount, 10);
+  assert.equal(page.root.tech.sundial, undefined);
+}
 
 {
   const observations = [];
