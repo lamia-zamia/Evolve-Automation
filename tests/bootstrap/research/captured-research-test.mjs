@@ -17,6 +17,7 @@ function makePage({
   tech = { primitive: 3 },
   queue = [],
   actionModes = {},
+  invokeFailures = {},
   settings = {},
   race = {},
   stats = {},
@@ -34,7 +35,7 @@ function makePage({
   const vueCapture = installVueCapture({ Vue: vue });
   const emitBinding = (elementId) =>
     vue.createApp({ el: `#${elementId}`, methods: { action() {} } });
-  const root = {
+  let root = {
     settings: { civTabs: 4, animated: true, qAny: false },
     // No `gods`: upstream creates it lazily and carries it across a race replacement only
     // conditionally, so the absent case is the default here and a test that needs one says so.
@@ -47,7 +48,8 @@ function makePage({
     queue: { display: queue.length > 0, queue: [...queue] },
     r_queue: { queue: [] },
   };
-  let rootReplacementListener;
+  const rootReplacementListeners = new Set();
+  let researchDraws = 0;
   for (const [id, resource] of Object.entries(resources)) {
     root.resource[id] = { display: true, max: -1, diff: 0, ...resource };
   }
@@ -59,7 +61,10 @@ function makePage({
     generation: 1,
     methods: {
       swapTab(index) {
-        if (index === 3) for (const entry of drawn()) emitBinding(entry.id);
+        if (index === 3) {
+          researchDraws += 1;
+          for (const entry of drawn()) emitBinding(entry.id);
+        }
         return index;
       },
     },
@@ -131,6 +136,13 @@ function makePage({
       }
       const target = control.methods[method];
       if (target === undefined) return { ok: false, reason: "unknown-method" };
+      const invokeFailure = invokeFailures[handle.elementId];
+      if (invokeFailure !== undefined)
+        return {
+          ok: false,
+          reason: invokeFailure,
+          detail: "injected preflight failure",
+        };
       try {
         return { ok: true, value: target(...args) };
       } catch (error) {
@@ -198,7 +210,9 @@ function makePage({
   const unavailable = [];
   const activity = [];
   return {
-    root,
+    get root() {
+      return root;
+    },
     clicks,
     controls,
     registry,
@@ -208,10 +222,8 @@ function makePage({
         readRoot: () => root,
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: (listener) => {
-          rootReplacementListener = listener;
-          return () => {
-            rootReplacementListener = undefined;
-          };
+          rootReplacementListeners.add(listener);
+          return () => rootReplacementListeners.delete(listener);
         },
       },
       mechanics,
@@ -230,7 +242,16 @@ function makePage({
       readTestShadowObserver,
     }),
     activity,
-    emitRootReplacement: () => rootReplacementListener?.(),
+    get researchDraws() {
+      return researchDraws;
+    },
+    emitRootReplacement: () => {
+      for (const listener of [...rootReplacementListeners]) listener();
+    },
+    replaceRoot: (nextRoot) => {
+      root = nextRoot;
+      for (const listener of [...rootReplacementListeners]) listener();
+    },
   };
 }
 
@@ -281,6 +302,20 @@ const MANA_RESEARCH = {
   title: "Shadow Mana Research",
   grant: "shadow_mana",
   cost: { Mana: 25 },
+};
+
+// Synthetic offer used only to exercise the live-authority decision path.
+const MAD_RESEARCH = {
+  id: "tech-mad",
+  title: "MAD Research",
+  grant: "mad",
+  cost: { Knowledge: 100 },
+};
+
+const MAD_AUTHORIZED_SETTINGS = {
+  prestigeType: "mad",
+  autoResearch: true,
+  autoPrestige: true,
 };
 
 {
@@ -389,6 +424,342 @@ const MANA_RESEARCH = {
 }
 
 // --- a real research, with the Research tab never rendered by the player ----
+
+// MAD remains available through the legacy first-eligible path when it is already first.
+{
+  const page = makePage({
+    offered: [MAD_RESEARCH, THEOLOGY],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+  });
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad"]);
+}
+
+// Synthetic offer order and root values: the authorized MAD goal selects the later native offer.
+{
+  let selection;
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    onOwnerSelection: (value) => {
+      selection = value;
+    },
+    onOwnerSelectionResult: () => {},
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-mad"]);
+  assert.equal(page.root.tech.mad, 1);
+  assert.equal(page.root.tech.theology, undefined);
+  assert.equal(page.researchDraws, 1, "the current offer snapshot is reused");
+  assert.deepEqual(
+    selection.observed.map((candidate) => candidate.id),
+    ["tech-theology", "tech-mad"],
+    "the exact targeted candidate is included in the selection evidence",
+  );
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad", "tech-theology"]);
+  assert.equal(
+    page.researchDraws,
+    2,
+    "the next purchase uses a fresh offer draw",
+  );
+}
+
+// Missing live authorization facts preserve the ordinary first-eligible selection.
+for (const scenario of [
+  {
+    name: "missing native tech.mad",
+    tech: { primitive: 3 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+  },
+  {
+    name: "wrong selected prestige",
+    tech: { primitive: 3, mad: 0 },
+    settings: { ...MAD_AUTHORIZED_SETTINGS, prestigeType: "bioseed" },
+  },
+  {
+    name: "auto-Research disabled",
+    tech: { primitive: 3, mad: 0 },
+    settings: { ...MAD_AUTHORIZED_SETTINGS, autoResearch: false },
+  },
+  {
+    name: "auto-prestige disabled",
+    tech: { primitive: 3, mad: 0 },
+    settings: { ...MAD_AUTHORIZED_SETTINGS, autoPrestige: false },
+  },
+]) {
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: scenario.tech,
+    settings: scenario.settings,
+  });
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology"], scenario.name);
+}
+
+// An explicit player prohibition on MAD remains stronger than the goal preference.
+{
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: {
+      ...MAD_AUTHORIZED_SETTINGS,
+      researchIgnore: ["tech-mad"],
+    },
+  });
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.equal(page.root.tech.mad, 0);
+}
+
+// The native offer can exist while resource affordability fails; Theology then remains selected.
+{
+  const page = makePage({
+    offered: [THEOLOGY, { ...MAD_RESEARCH, cost: { Knowledge: 1500 } }],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+  });
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+}
+
+// An existing MAD grant means the native goal priority is not available.
+{
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 1 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+  });
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+}
+
+// An invoked synthetic no-op is uncertain; the same MAD action is never invoked next cycle.
+{
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    actionModes: { "tech-mad": "no-op" },
+  });
+  page.control.runCycle();
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad", "tech-theology"]);
+}
+
+// A thrown synthetic native action is also quarantined across scheduler cycles.
+{
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    actionModes: { "tech-mad": "throw" },
+  });
+  assert.equal(page.control.runCycle().status, "rejected");
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad", "tech-theology"]);
+}
+
+// An unrelated unresolved action does not suppress a freshly authorized MAD priority.
+{
+  const settings = {
+    prestigeType: "none",
+    autoResearch: true,
+    autoPrestige: false,
+  };
+  const actionModes = { "tech-theology": "throw" };
+  const page = makePage({
+    offered: [THEOLOGY, MINING, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 10_000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings,
+    actionModes,
+  });
+  assert.equal(page.control.runCycle().status, "rejected");
+  Object.assign(settings, MAD_AUTHORIZED_SETTINGS);
+  delete actionModes["tech-theology"];
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology", "tech-mad"]);
+}
+
+// A later native grant observation reconciles an earlier no-op and leaves fresh MAD selection live.
+{
+  const settings = {
+    prestigeType: "none",
+    autoResearch: true,
+    autoPrestige: false,
+  };
+  const actionModes = { "tech-theology": "no-op" };
+  const page = makePage({
+    offered: [THEOLOGY, MINING, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 10_000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings,
+    actionModes,
+  });
+  page.control.runCycle();
+  assert.equal(
+    page.control.readMutationUncertainForTest?.("tech-theology"),
+    true,
+  );
+  Object.assign(settings, MAD_AUTHORIZED_SETTINGS);
+  page.root.tech.theology = 1;
+  delete actionModes["tech-theology"];
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology", "tech-mad"]);
+  assert.equal(
+    page.control.readMutationUncertainForTest?.("tech-theology"),
+    false,
+  );
+}
+
+// A same-object reactivity replacement invalidates the selection but does not release ambiguity.
+{
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    actionModes: { "tech-mad": "throw" },
+  });
+  page.control.runCycle();
+  page.emitRootReplacement();
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad", "tech-theology"]);
+}
+
+// A genuinely new root has independent mutation state and can use its freshly captured offer.
+{
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    actionModes: { "tech-mad": "throw" },
+  });
+  page.control.runCycle();
+  const nextRoot = structuredClone(page.root);
+  page.replaceRoot(nextRoot);
+  page.controls.get("tech-mad").methods.action = () => {
+    page.clicks.push("tech-mad");
+    nextRoot.tech.mad = 1;
+  };
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad", "tech-mad"]);
+}
+
+// A control redraw or root replacement after selection makes the captured decision stale.
+{
+  let page;
+  let invalidateOnce = true;
+  page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    onOwnerSelection: () => {
+      if (!invalidateOnce) return;
+      invalidateOnce = false;
+      page.controls.get("tech-mad").generation += 1;
+    },
+  });
+  page.control.runCycle();
+  assert.deepEqual(
+    page.clicks,
+    [],
+    "the superseded MAD control is never invoked",
+  );
+}
+{
+  let page;
+  let replaceOnce = true;
+  page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    onOwnerSelection: () => {
+      if (!replaceOnce) return;
+      replaceOnce = false;
+      page.emitRootReplacement();
+    },
+  });
+  page.control.runCycle();
+  assert.deepEqual(
+    page.clicks,
+    [],
+    "same-root replacement blocks a stale invoke",
+  );
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad"]);
+}
+
+// A grant arriving after selection is detected before invoking the retained action.
+{
+  let page;
+  let grantOnce = true;
+  page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    onOwnerSelection: () => {
+      if (!grantOnce) return;
+      grantOnce = false;
+      page.root.tech.mad = 1;
+    },
+  });
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.equal(page.root.resource.Knowledge.amount, 100);
+}
+
+// Registry failures that occur before Reflect.apply are not quarantined as mutations.
+for (const reason of [
+  "unknown-control",
+  "unknown-method",
+  "reconciliation-required",
+]) {
+  const invokeFailures = { "tech-mad": reason };
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    invokeFailures,
+  });
+  assert.equal(page.control.runCycle().status, "rejected", reason);
+  assert.deepEqual(page.clicks, [], reason);
+  delete invokeFailures["tech-mad"];
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad"], reason);
+}
+
+// A grant that reached native state after an ambiguous MAD return is never clicked again.
+{
+  const page = makePage({
+    offered: [THEOLOGY, MAD_RESEARCH],
+    resources: { Knowledge: { amount: 1000 } },
+    tech: { primitive: 3, mad: 0 },
+    settings: MAD_AUTHORIZED_SETTINGS,
+    actionModes: { "tech-mad": "no-op" },
+  });
+  page.control.runCycle();
+  assert.equal(page.control.readMutationUncertainForTest?.("tech-mad"), true);
+  page.root.tech.mad = 1;
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-mad", "tech-theology"]);
+  assert.equal(page.control.readMutationUncertainForTest?.("tech-mad"), false);
+}
 
 {
   const page = makePage({

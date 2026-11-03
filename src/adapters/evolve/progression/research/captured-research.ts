@@ -36,11 +36,19 @@ import type { CapturedTechConflictReader } from "./captured-tech-conflicts.ts";
 import { readCapturedTechnologyLevel } from "../../captured-tech-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
+import { readProperty } from "../../../validation.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 export interface CapturedResearchDependencies {
   readonly rootState: GameRootStateSource;
+  /** Root identity captured immediately before this cycle's native offer snapshot. */
+  readonly currentRoot: unknown;
+  /** Root replacement event generation captured with `currentRoot`. */
+  readonly currentRootGeneration?: number;
+  readonly readRootGeneration?: () => number;
+  readonly readSettings: () => unknown;
+  readonly isMutationUncertain?: (actionId: string) => boolean;
   /** This cycle's offered technologies, or `undefined` when the catalog could not be read. */
   readonly offered: readonly Readonly<OfferedTech>[] | undefined;
   readonly resources: GameResourceSource;
@@ -77,6 +85,7 @@ export interface CapturedResearchAdapter {
 
 const NOTHING_OFFERED: ResearchInput = Object.freeze({
   techs: Object.freeze([]),
+  available: false,
 });
 
 function executionResult(
@@ -161,6 +170,111 @@ export function createCapturedResearchAdapter(
     return decision;
   }
 
+  function readTechView(
+    tech: Readonly<OfferedTech>,
+    index: number,
+  ): ResearchTechView {
+    if (dependencies.isMutationUncertain?.(tech.elementId) === true)
+      return Object.freeze({
+        index,
+        id: tech.elementId,
+        affordable: false,
+        hasCostConflict: false,
+        hasTechConflict: false,
+        mutationUncertain: true,
+      });
+    const resourceSample = tech.nativeAffordable
+      ? resources.readResources(Object.keys(tech.cost))
+      : undefined;
+    const resourceAffordable =
+      resourceSample === undefined
+        ? undefined
+        : canAfford(resourceSample, tech.cost);
+    const affordable = tech.nativeAffordable && resourceAffordable === true;
+    let costConflictEvidence:
+      "none" | "conflict" | "unavailable" | "not-evaluated" = "not-evaluated";
+    let costConflictRejected = false;
+    let exclusionEvidence:
+      "none" | "excluded" | "unavailable" | "not-evaluated" = "not-evaluated";
+    let reservationReason: string | undefined;
+    let exclusionReason: string | undefined;
+    if (affordable) {
+      const conflict = conflicts.evaluate(tech.cost);
+      costConflictRejected = conflict.status !== "none";
+      costConflictEvidence =
+        conflict.status === "none" &&
+        "evidence" in conflict &&
+        conflict.evidence === "unavailable"
+          ? "unavailable"
+          : conflict.status;
+      reservationReason =
+        conflict.status === "conflict"
+          ? `${conflict.conflict.targetCause}:${conflict.conflict.targetName}`
+          : conflict.status === "unavailable" ||
+              ("evidence" in conflict && conflict.evidence === "unavailable")
+            ? "reservation or holdings evidence unavailable"
+            : undefined;
+    }
+    let techConflict = false;
+    if (affordable) {
+      const decision = readTechConflict(tech);
+      exclusionEvidence =
+        decision.status === "none"
+          ? "none"
+          : decision.status === "conflict"
+            ? "excluded"
+            : "unavailable";
+      exclusionReason =
+        decision.status === "conflict"
+          ? decision.conflict.code
+          : decision.status === "unavailable"
+            ? `unavailable:${decision.reason}${decision.field === undefined ? "" : `:${decision.field}`}`
+            : undefined;
+      techConflict = decision.status !== "none";
+    }
+    return Object.freeze({
+      index,
+      id: tech.elementId,
+      affordable,
+      // Match the legacy gate: a reservation only matters for an otherwise affordable purchase.
+      hasCostConflict: affordable && costConflictRejected,
+      hasTechConflict: affordable && techConflict,
+      ...(dependencies.observeOwner === true
+        ? {
+            nativeAffordable: tech.nativeAffordable,
+            offerGeneration: tech.generation,
+            offerObservationId: tech.offerObservationId,
+            offerSetIdentity: tech.offerSetIdentity,
+            offerCost: tech.cost,
+            resourceAffordable,
+            ...(resourceSample === undefined
+              ? {}
+              : {
+                  observedResources: Object.freeze(
+                    Object.fromEntries(
+                      Array.from(
+                        resourceSample.resources.entries(),
+                        ([id, resource]) => [
+                          id,
+                          Object.freeze({
+                            amount: resource.amount,
+                            max: resource.max,
+                            rateOfChange: resource.rateOfChange,
+                          }),
+                        ],
+                      ),
+                    ),
+                  ),
+                }),
+            costConflictEvidence,
+            exclusionEvidence,
+            ...(reservationReason === undefined ? {} : { reservationReason }),
+            ...(exclusionReason === undefined ? {} : { exclusionReason }),
+          }
+        : {}),
+    });
+  }
+
   const reader: ResearchReader = Object.freeze({
     read(startIndex: number): ResearchInput {
       if (!Number.isSafeInteger(startIndex) || startIndex < 0) {
@@ -176,110 +290,70 @@ export function createCapturedResearchAdapter(
       for (let index = startIndex; index < offered.length; index++) {
         const tech = offered[index];
         if (tech === undefined) continue;
-        const resourceSample = tech.nativeAffordable
-          ? resources.readResources(Object.keys(tech.cost))
-          : undefined;
-        const resourceAffordable =
-          resourceSample === undefined
-            ? undefined
-            : canAfford(resourceSample, tech.cost);
-        const affordable = tech.nativeAffordable && resourceAffordable === true;
-        let costConflictEvidence:
-          "none" | "conflict" | "unavailable" | "not-evaluated" =
-          "not-evaluated";
-        let costConflictRejected = false;
-        let exclusionEvidence:
-          "none" | "excluded" | "unavailable" | "not-evaluated" =
-          "not-evaluated";
-        let reservationReason: string | undefined;
-        let exclusionReason: string | undefined;
-        if (affordable) {
-          const conflict = conflicts.evaluate(tech.cost);
-          costConflictRejected = conflict.status !== "none";
-          costConflictEvidence =
-            conflict.status === "none" &&
-            "evidence" in conflict &&
-            conflict.evidence === "unavailable"
-              ? "unavailable"
-              : conflict.status;
-          reservationReason =
-            conflict.status === "conflict"
-              ? `${conflict.conflict.targetCause}:${conflict.conflict.targetName}`
-              : conflict.status === "unavailable" ||
-                  ("evidence" in conflict &&
-                    conflict.evidence === "unavailable")
-                ? "reservation or holdings evidence unavailable"
-                : undefined;
-        }
-        let techConflict = false;
-        if (affordable) {
-          const decision = readTechConflict(tech);
-          exclusionEvidence =
-            decision.status === "none"
-              ? "none"
-              : decision.status === "conflict"
-                ? "excluded"
-                : "unavailable";
-          exclusionReason =
-            decision.status === "conflict"
-              ? decision.conflict.code
-              : decision.status === "unavailable"
-                ? `unavailable:${decision.reason}${decision.field === undefined ? "" : `:${decision.field}`}`
-                : undefined;
-          techConflict = decision.status !== "none";
-        }
-        const view = Object.freeze({
-          index,
-          id: tech.elementId,
-          affordable,
-          // Match the legacy gate: what a reservation is saving for only matters for something
-          // that could otherwise be bought right now.
-          hasCostConflict: affordable && costConflictRejected,
-          // The same applies to exclusions: an unaffordable technology is not a decision yet, and
-          // sampling guard and achievement facts for it would be work the cycle cannot use.
-          hasTechConflict: affordable && techConflict,
-          ...(dependencies.observeOwner === true
-            ? {
-                nativeAffordable: tech.nativeAffordable,
-                offerGeneration: tech.generation,
-                offerObservationId: tech.offerObservationId,
-                offerSetIdentity: tech.offerSetIdentity,
-                offerCost: tech.cost,
-                resourceAffordable,
-                ...(resourceSample === undefined
-                  ? {}
-                  : {
-                      observedResources: Object.freeze(
-                        Object.fromEntries(
-                          Array.from(
-                            resourceSample.resources.entries(),
-                            ([id, resource]) => [
-                              id,
-                              Object.freeze({
-                                amount: resource.amount,
-                                max: resource.max,
-                                rateOfChange: resource.rateOfChange,
-                              }),
-                            ],
-                          ),
-                        ),
-                      ),
-                    }),
-                costConflictEvidence,
-                exclusionEvidence,
-                ...(reservationReason === undefined
-                  ? {}
-                  : { reservationReason }),
-                ...(exclusionReason === undefined ? {} : { exclusionReason }),
-              }
-            : {}),
-        });
+        const view = readTechView(tech, index);
         techs.push(view);
-        if (view.affordable && !view.hasCostConflict && !view.hasTechConflict) {
+        if (
+          view.affordable &&
+          !view.hasCostConflict &&
+          !view.hasTechConflict &&
+          view.mutationUncertain !== true
+        ) {
           break;
         }
       }
-      return Object.freeze({ techs: Object.freeze(techs) });
+      return Object.freeze({ techs: Object.freeze(techs), available: true });
+    },
+    readMadGoalCandidate() {
+      if (
+        offered === undefined ||
+        (dependencies.currentRootGeneration !== undefined &&
+          dependencies.readRootGeneration?.() !==
+            dependencies.currentRootGeneration)
+      )
+        return undefined;
+      const currentRoot = rootState.readRoot();
+      if (
+        currentRoot === undefined ||
+        currentRoot !== dependencies.currentRoot ||
+        (dependencies.currentRootGeneration !== undefined &&
+          dependencies.readRootGeneration?.() !==
+            dependencies.currentRootGeneration) ||
+        readProperty(readProperty(currentRoot, "tech"), "mad") !== 0
+      )
+        return undefined;
+      const settings = dependencies.readSettings();
+      if (
+        readProperty(settings, "prestigeType") !== "mad" ||
+        readProperty(settings, "autoResearch") !== true ||
+        readProperty(settings, "autoPrestige") !== true
+      )
+        return undefined;
+      const index = offered.findIndex(
+        (candidate) => candidate.elementId === "tech-mad",
+      );
+      if (index < 0) return undefined;
+      const tech = offered[index];
+      if (
+        tech === undefined ||
+        tech.grantTechnology !== "mad" ||
+        !Number.isFinite(tech.grantLevel) ||
+        tech.grantLevel <= 0
+      )
+        return undefined;
+      const handle = controls.resolve(tech.elementId);
+      if (
+        handle === undefined ||
+        handle.generation !== tech.generation ||
+        !handle.methods.includes("action")
+      )
+        return undefined;
+      if (
+        dependencies.currentRootGeneration !== undefined &&
+        dependencies.readRootGeneration?.() !==
+          dependencies.currentRootGeneration
+      )
+        return undefined;
+      return readTechView(tech, index);
     },
   });
 
@@ -300,6 +374,22 @@ export function createCapturedResearchAdapter(
           "stopped",
         );
       }
+      const currentRoot = rootState.readRoot();
+      if (
+        currentRoot === undefined ||
+        currentRoot !== dependencies.currentRoot ||
+        (dependencies.currentRootGeneration !== undefined &&
+          dependencies.readRootGeneration?.() !==
+            dependencies.currentRootGeneration)
+      )
+        return executionResult(
+          stale(
+            "stale-research-root",
+            "the game replaced its root after this offer snapshot",
+            { techId: decision.techId },
+          ),
+          "stopped",
+        );
       const handle = controls.resolve(decision.techId);
       if (handle === undefined) {
         // Never silently: the game offered this technology, so a control it never bound is a
@@ -324,8 +414,21 @@ export function createCapturedResearchAdapter(
           "stopped",
         );
       }
+      if (
+        dependencies.currentRootGeneration !== undefined &&
+        dependencies.readRootGeneration?.() !==
+          dependencies.currentRootGeneration
+      )
+        return executionResult(
+          stale(
+            "stale-research-root",
+            "the game replaced its root before the native action",
+            { techId: decision.techId },
+          ),
+          "stopped",
+        );
       const before = readCapturedTechnologyLevel(
-        rootState.readRoot(),
+        currentRoot,
         tech.grantTechnology,
       );
       if (before === undefined || !Number.isFinite(tech.grantLevel)) {
@@ -338,6 +441,8 @@ export function createCapturedResearchAdapter(
           "stopped",
         );
       }
+      if (before >= tech.grantLevel)
+        return executionResult(SUCCEEDED, "candidate-rejected");
       let manaStockBefore: number | undefined;
       if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
@@ -371,7 +476,12 @@ export function createCapturedResearchAdapter(
             ? stale("stale-research-control", result.detail ?? result.reason, {
                 techId: decision.techId,
               })
-            : rejected("research-click-failed", result.detail ?? result.reason),
+            : rejected(
+                result.reason === "threw"
+                  ? "research-click-failed"
+                  : "research-invocation-not-started",
+                result.detail ?? result.reason,
+              ),
           "stopped",
         );
       }

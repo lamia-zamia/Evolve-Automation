@@ -17,6 +17,7 @@ import { createCapturedActionCostReader } from "../adapters/evolve/captured-acti
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { createCapturedResearchAdapter } from "../adapters/evolve/progression/research/captured-research.ts";
 import type { ResearchShadowObservation } from "../adapters/evolve/progression/research/captured-research.ts";
+import { readCapturedTechnologyLevel } from "../adapters/evolve/captured-tech-state.ts";
 import { createCapturedTechConflictReader } from "../adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
@@ -99,6 +100,8 @@ export interface CapturedResearchControl {
   readOwnerOfferEligibility?(
     offer: Readonly<OfferedTech>,
   ): "eligible" | "excluded" | "unavailable";
+  /** Test-surface-only view of the per-action uncertain mutation quarantine. */
+  readMutationUncertainForTest?(actionId: string): boolean;
 }
 
 const NOT_CAPTURED: CommandExecutionOutcome = Object.freeze({
@@ -184,6 +187,33 @@ export function createCapturedResearchControl(
   // do so for as long as the game keeps offering that technology, and a line per cycle would bury
   // everything else.
   const reportedRejections = new Set<string>();
+  const uncertainMutations = new Map<
+    string,
+    Readonly<{
+      rootIdentity: number | undefined;
+      grantTechnology: string | undefined;
+      grantLevel: number | undefined;
+    }>
+  >();
+  const rootIdentities = new WeakMap<object, number>();
+  let nextRootIdentity = 0;
+  const identifyRoot = (root: unknown): number | undefined => {
+    if (
+      root === null ||
+      (typeof root !== "object" && typeof root !== "function")
+    )
+      return undefined;
+    const object = root as object;
+    const existing = rootIdentities.get(object);
+    if (existing !== undefined) return existing;
+    const identity = ++nextRootIdentity;
+    rootIdentities.set(object, identity);
+    return identity;
+  };
+  let rootGeneration = 0;
+  rootState.subscribeRootReplaced(() => {
+    rootGeneration += 1;
+  });
   let testInterventionRootObserved = false;
   let testInterventionDisabled = false;
   let testInterventionComplete = false;
@@ -200,6 +230,8 @@ export function createCapturedResearchControl(
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
           readLastOwnerOffers: () => lastOwnerOffers,
+          readMutationUncertainForTest: (actionId: string) =>
+            uncertainMutations.has(actionId),
           readOwnerOfferEligibility(offer: Readonly<OfferedTech>) {
             const decision = techConflicts.evaluate(offer);
             return decision.status === "none"
@@ -226,8 +258,10 @@ export function createCapturedResearchControl(
       : {}),
     runCycle(): CommandExecutionOutcome {
       lastOwnerOffers = undefined;
+      const currentRootGeneration = rootGeneration;
       const currentRoot = rootState.readRoot();
       if (currentRoot === undefined) return NOT_CAPTURED;
+      const currentRootIdentity = identifyRoot(currentRoot);
       let testOnlyIntervention:
         Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
       if (
@@ -252,6 +286,27 @@ export function createCapturedResearchControl(
           ? catalog.read()?.offered
           : sharedReadOfferedTechs();
       lastOwnerOffers = offeredThisCycle;
+      for (const [actionId, mutation] of uncertainMutations) {
+        if (
+          mutation.rootIdentity !== undefined &&
+          currentRootIdentity !== undefined &&
+          mutation.rootIdentity !== currentRootIdentity
+        ) {
+          uncertainMutations.delete(actionId);
+          continue;
+        }
+        if (
+          mutation.grantTechnology !== undefined &&
+          mutation.grantLevel !== undefined
+        ) {
+          const grant = readCapturedTechnologyLevel(
+            currentRoot,
+            mutation.grantTechnology,
+          );
+          if (grant !== undefined && grant >= mutation.grantLevel)
+            uncertainMutations.delete(actionId);
+        }
+      }
       if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
@@ -277,6 +332,11 @@ export function createCapturedResearchControl(
       try {
         const { reader, executor } = createCapturedResearchAdapter({
           rootState,
+          currentRoot,
+          currentRootGeneration,
+          readRootGeneration: () => rootGeneration,
+          readSettings: dependencies.readSettings,
+          isMutationUncertain: (actionId) => uncertainMutations.has(actionId),
           offered: offeredThisCycle,
           resources,
           conflicts,
@@ -378,6 +438,21 @@ export function createCapturedResearchControl(
           ...(dependencies.onOwnerSelection === undefined
             ? {}
             : { onSelection: dependencies.onOwnerSelection }),
+          onUncertainMutation: ({ index, techId }) => {
+            const offer = offeredThisCycle?.[index];
+            uncertainMutations.set(
+              techId,
+              Object.freeze({
+                rootIdentity: currentRootIdentity,
+                grantTechnology:
+                  offer?.elementId === techId
+                    ? offer.grantTechnology
+                    : undefined,
+                grantLevel:
+                  offer?.elementId === techId ? offer.grantLevel : undefined,
+              }),
+            );
+          },
           ...(diagnostics?.readPerformanceEnabled() === true ||
           testOnlyIntervention !== undefined ||
           (typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&

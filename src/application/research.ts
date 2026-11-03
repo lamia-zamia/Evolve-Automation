@@ -24,6 +24,9 @@ export interface ResearchAutomationDependencies {
     | undefined;
   readonly onSelectionResult?:
     ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
+  readonly onUncertainMutation?:
+    | ((decision: Readonly<{ index: number; techId: string }>) => void)
+    | undefined;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -31,7 +34,7 @@ const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
 });
 
 /**
- * Runs ordered research attempts. Only an exact candidate-specific safe-click
+ * Runs ordered research attempts. Only a verified pre-invocation candidate
  * rejection starts another read phase; every other result stops this cycle.
  */
 export function runResearchAutomation(
@@ -39,6 +42,7 @@ export function runResearchAutomation(
 ): CommandExecutionOutcome {
   const measure = createPhaseMeasure(dependencies.diagnostics);
   let startIndex = 0;
+  let madPriorityAttempted = false;
   while (true) {
     const observation = measure("autoResearch.read", () =>
       dependencies.reader.read(startIndex),
@@ -73,15 +77,49 @@ export function runResearchAutomation(
             }),
           });
     }
-    const decision = measure("autoResearch.plan", () =>
+    if (observation.available === false) return SUCCEEDED;
+    let decision = measure("autoResearch.plan", () =>
       planResearch(observation),
     );
-    if (decision === null) {
-      return SUCCEEDED;
+    if (decision === null) return SUCCEEDED;
+
+    let madPriorityDecision = false;
+    let madGoalCandidate: ResearchInput["madGoalCandidate"] = undefined;
+    if (
+      startIndex === 0 &&
+      !madPriorityAttempted &&
+      decision.techId !== "tech-mad" &&
+      dependencies.reader.readMadGoalCandidate !== undefined
+    ) {
+      madPriorityAttempted = true;
+      madGoalCandidate = dependencies.reader.readMadGoalCandidate();
+      const candidate = madGoalCandidate;
+      if (candidate !== undefined) {
+        const prioritized = measure("autoResearch.plan", () =>
+          planResearch({ ...observation, madGoalCandidate: candidate }),
+        );
+        if (prioritized?.techId === "tech-mad") {
+          decision = prioritized;
+          madPriorityDecision = true;
+        }
+      }
     }
 
     dependencies.onSelection?.(
-      Object.freeze({ decision, observed: observation.techs }),
+      Object.freeze({
+        decision,
+        observed:
+          madGoalCandidate === undefined ||
+          observation.techs.some(
+            (candidate) => candidate.index === madGoalCandidate?.index,
+          )
+            ? observation.techs
+            : Object.freeze(
+                [...observation.techs, madGoalCandidate].sort(
+                  (left, right) => left.index - right.index,
+                ),
+              ),
+      }),
     );
 
     const result = measure("autoResearch.execute", () =>
@@ -94,11 +132,21 @@ export function runResearchAutomation(
       }),
     );
     if (
+      result.disposition === "no-observed-research" ||
+      (result.outcome.status === "rejected" &&
+        result.outcome.failure.code === "research-click-failed")
+    )
+      dependencies.onUncertainMutation?.(decision);
+    if (
       result.outcome.status !== "succeeded" ||
       result.disposition !== "candidate-rejected"
     ) {
       return result.outcome;
     }
-    startIndex = decision.index + 1;
+    if (madPriorityDecision) {
+      // A native safe-click rejection is pre-invocation, so resume the existing order once.
+      startIndex = 0;
+      madPriorityAttempted = true;
+    } else startIndex = decision.index + 1;
   }
 }

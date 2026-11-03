@@ -9,6 +9,8 @@ export interface ResearchTechView {
    * prestige fork the run is not taking, or a conflict fact the reader could not establish.
    */
   readonly hasTechConflict: boolean;
+  /** This exact action already had an uncertain invocation on the current native root. */
+  readonly mutationUncertain?: boolean;
   /** Component facts retained for observation; unknown remains distinct from a rejection. */
   readonly nativeAffordable?: boolean;
   readonly offerGeneration?: number;
@@ -42,6 +44,10 @@ export interface ResearchTechView {
  */
 export interface ResearchInput {
   readonly techs: readonly ResearchTechView[];
+  /** Targeted current MAD offer, supplied only after its live goal authority is established. */
+  readonly madGoalCandidate?: Readonly<ResearchTechView>;
+  /** False when the native offered-technology catalog could not be observed. */
+  readonly available?: boolean;
   /** Explicit test-only stop/defer outcome; never represents native rejection. */
   readonly interventionResult?: Readonly<{
     readonly index: number;
@@ -58,7 +64,7 @@ export interface ResearchDecision {
 
 export interface ResearchOwnerSelectionObservation {
   readonly decision: Readonly<ResearchDecision>;
-  /** Exact prefix observed by the existing sequential reader before the selected invocation. */
+  /** Candidate views used by this selection, including a targeted current MAD offer if checked. */
   readonly observed: readonly Readonly<ResearchTechView>[];
 }
 
@@ -82,12 +88,16 @@ export interface ResearchOwnerSelectionResult {
 export function planResearch(
   input: Readonly<ResearchInput>,
 ): ResearchDecision | null {
-  const tech = input.techs.find(
-    (candidate) =>
-      candidate.affordable &&
-      !candidate.hasCostConflict &&
-      !candidate.hasTechConflict,
-  );
+  const eligible = (candidate: Readonly<ResearchTechView>) =>
+    candidate.affordable &&
+    !candidate.hasCostConflict &&
+    !candidate.hasTechConflict &&
+    candidate.mutationUncertain !== true;
+  const madGoalCandidate = input.madGoalCandidate;
+  const tech =
+    madGoalCandidate?.id === "tech-mad" && eligible(madGoalCandidate)
+      ? madGoalCandidate
+      : input.techs.find(eligible);
   return tech === undefined
     ? null
     : Object.freeze({ index: tech.index, techId: tech.id });

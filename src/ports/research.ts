@@ -7,12 +7,14 @@ import type {
 /** Reads one ordered research phase, beginning at the supplied list index. */
 export interface ResearchReader {
   read(startIndex: number): ResearchInput;
+  /** Exact current `tech-mad` offer check using this cycle's prepared native snapshot. */
+  readMadGoalCandidate?(): ResearchInput["madGoalCandidate"];
 }
 
 /** Describes what the executor learned about the selected technology. */
 export type ResearchExecutionDisposition =
   | "researched"
-  /** The game's exact candidate-specific safe-click gate rejected this technology. */
+  /** A fresh pre-invocation check proved this exact candidate requires no action. */
   | "candidate-rejected"
   /** The command was invoked, but no research mutation was observed. */
   | "no-observed-research"
